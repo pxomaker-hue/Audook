@@ -6,12 +6,22 @@ Supports streaming from Plex, Audiobookshelf, and local files
 import vlc
 from typing import Optional, Callable, Dict, Any
 from pathlib import Path
+from urllib.parse import urlparse
+import socket
 import threading
 import time
 from datetime import datetime
 
+import requests
+
 from app.models import Audiobook
 from app.utils import logger, format_duration
+
+# Timeout (seconds) for validating that an audio source is reachable before
+# handing it to libvlc. Network sources that hang or refuse to connect have
+# been observed to crash libvlc natively (segfault, not a catchable Python
+# exception), which takes the whole Flask process down with it.
+SOURCE_VALIDATION_TIMEOUT = 5
 
 
 class VLCPlayer:
@@ -88,6 +98,67 @@ class VLCPlayer:
 
             time.sleep(0.5)
 
+    def _is_source_reachable(self, audio_file: str) -> bool:
+        """
+        Check that an audio source is reachable before handing it to libvlc.
+
+        libvlc can crash the entire process (native segfault, not a
+        catchable Python exception) when asked to open a network source
+        that is unreachable or resolves to a dead host. Validating
+        reachability first keeps that failure mode inside Python.
+        """
+        parsed = urlparse(audio_file)
+
+        if parsed.scheme in ("http", "https"):
+            try:
+                response = requests.head(
+                    audio_file,
+                    timeout=SOURCE_VALIDATION_TIMEOUT,
+                    allow_redirects=True,
+                )
+                if response.status_code >= 400:
+                    # Some streaming servers don't support HEAD; retry with a
+                    # ranged GET before giving up.
+                    response = requests.get(
+                        audio_file,
+                        timeout=SOURCE_VALIDATION_TIMEOUT,
+                        stream=True,
+                        headers={"Range": "bytes=0-0"},
+                    )
+                    response.close()
+                    if response.status_code >= 400:
+                        logger.error(
+                            f"Audio source returned HTTP {response.status_code}: {audio_file}"
+                        )
+                        return False
+                return True
+            except requests.RequestException as e:
+                logger.error(f"Audio source unreachable: {audio_file} ({e})")
+                return False
+
+        if parsed.scheme and parsed.scheme != "file":
+            # Other network schemes (smb, rtsp, ...) - fall back to a raw
+            # TCP reachability check on host/port.
+            host = parsed.hostname
+            if not host:
+                logger.error(f"Cannot determine host for audio source: {audio_file}")
+                return False
+            default_port = 445 if parsed.scheme == "smb" else 80
+            port = parsed.port or default_port
+            try:
+                with socket.create_connection((host, port), timeout=SOURCE_VALIDATION_TIMEOUT):
+                    return True
+            except OSError as e:
+                logger.error(f"Audio source unreachable: {audio_file} ({e})")
+                return False
+
+        # Local file path (no scheme, or file://)
+        local_path = parsed.path if parsed.scheme == "file" else audio_file
+        if not Path(local_path).exists():
+            logger.error(f"Audio file not found: {audio_file}")
+            return False
+        return True
+
     def play(self, audiobook: Audiobook, chapter: Dict[str, Any], start_position: float = 0.0) -> bool:
         """Play an audiobook chapter"""
         try:
@@ -104,6 +175,9 @@ class VLCPlayer:
             audio_file = chapter.get("audio_file", "")
             if not audio_file:
                 logger.error("No audio file path in chapter")
+                return False
+
+            if not self._is_source_reachable(audio_file):
                 return False
 
             # Create VLC media

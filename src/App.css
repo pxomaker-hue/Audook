@@ -43,6 +43,14 @@ body {
   color: var(--text-primary);
 }
 
+input[type="range"] {
+  accent-color: var(--accent-ink);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent-ink);
+}
+
 .app {
   display: flex;
   flex-direction: row;
