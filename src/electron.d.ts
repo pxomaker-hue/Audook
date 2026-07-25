@@ -11,6 +11,7 @@ export interface IElectronAPI {
   setVolume: (volume: number) => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
   syncServers: () => Promise<void>;
+  selectFolder: () => Promise<string | null>;
   onPlayerState: (callback: (state: any) => void) => void;
   onPlayerPosition: (callback: (data: any) => void) => void;
 }

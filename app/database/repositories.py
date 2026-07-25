@@ -66,20 +66,22 @@ class BookRepository(BaseRepository):
     def create(self, book_id: str, server_id: str, library_id: str, title: str,
                author: str = None, narrator: str = None, duration: float = 0.0,
                chapters: dict = None, cover_url: str = None, extra_metadata: dict = None) -> Book:
-        """Create a new book"""
-        book = Book(
-            id=book_id,
-            server_id=server_id,
-            library_id=library_id,
-            title=title,
-            author=author,
-            narrator=narrator,
-            duration=duration,
-            chapters=chapters or [],
-            cover_url=cover_url,
-            extra_metadata=extra_metadata
-        )
-        self.session.add(book)
+        """Create or update a book (idempotent across re-scans)"""
+        book = self.get_by_id(book_id)
+        if book is None:
+            book = Book(id=book_id)
+            self.session.add(book)
+
+        book.server_id = server_id
+        book.library_id = library_id
+        book.title = title
+        book.author = author
+        book.narrator = narrator
+        book.duration = duration
+        book.chapters = chapters or []
+        book.cover_url = cover_url
+        book.extra_metadata = extra_metadata
+
         self.session.commit()
         return book
 

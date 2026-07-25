@@ -7,10 +7,12 @@ from typing import Optional, List
 from datetime import datetime
 import threading
 import time
+import asyncio
 
 from app.database import get_session, ServerRepository, BookRepository
 from app.database.models import Server, Library, Book
 from app.clients import PlexClient, AudiobookshelfClient
+from app.local import LocalClient
 from app.utils import logger
 
 
@@ -30,6 +32,8 @@ class ServerScanner:
                 return self._scan_plex(server)
             elif server.type == "audiobookshelf":
                 return self._scan_audiobookshelf(server)
+            elif server.type == "local":
+                return self._scan_local(server)
             else:
                 logger.error(f"Unknown server type: {server.type}")
                 return False
@@ -78,10 +82,10 @@ class ServerScanner:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
             session.commit()
-            session.close()
 
-            # Update server sync time
-            server.last_sync = datetime.utcnow()
+            # Update server sync time (own session/commit, since `server` may belong to a closed session)
+            ServerRepository(session).update_sync_timestamp(server.id)
+            session.close()
 
             logger.info(f"Plex scan complete for server: {server.name}")
             return True
@@ -132,16 +136,60 @@ class ServerScanner:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
             session.commit()
-            session.close()
 
-            # Update server sync time
-            server.last_sync = datetime.utcnow()
+            # Update server sync time (own session/commit, since `server` may belong to a closed session)
+            ServerRepository(session).update_sync_timestamp(server.id)
+            session.close()
 
             logger.info(f"Audiobookshelf scan complete for server: {server.name}")
             return True
 
         except Exception as e:
             logger.error(f"Audiobookshelf scan failed: {e}")
+            return False
+
+    def _scan_local(self, server: Server) -> bool:
+        """Scan a local audiobook folder"""
+        try:
+            client = LocalClient(server.url)
+
+            if not asyncio.run(client.ping()):
+                logger.error(f"Local folder not accessible: {server.url}")
+                return False
+
+            lib_id = f"local_{server.id}"
+            audiobooks = asyncio.run(client.get_audiobooks(lib_id, limit=10000))
+
+            session = get_session()
+            book_repo = BookRepository(session)
+
+            for audiobook in audiobooks:
+                try:
+                    book_repo.create(
+                        book_id=audiobook.id,
+                        server_id=server.id,
+                        library_id=lib_id,
+                        title=audiobook.title,
+                        author=audiobook.author,
+                        narrator=audiobook.narrator,
+                        duration=audiobook.duration,
+                        chapters=audiobook.chapters,
+                        cover_url=audiobook.cover
+                    )
+                    logger.info(f"Added local audiobook: {audiobook.title}")
+                except Exception as e:
+                    logger.warning(f"Failed to add audiobook {audiobook.title}: {e}")
+
+            session.commit()
+
+            ServerRepository(session).update_sync_timestamp(server.id)
+            session.close()
+
+            logger.info(f"Local scan complete for: {server.name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Local scan failed: {e}")
             return False
 
     def scan_all_servers(self) -> bool:

@@ -12,9 +12,12 @@ from flask_cors import CORS
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository
+from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ServerRepository
 from app.services import LibraryService, PlayerService, SyncService
-from app.utils import logger
+from app.sync.scanner import scanner
+from app.clients import PlexClient, AudiobookshelfClient
+from app.local import LocalClient
+from app.utils import logger, generate_id
 
 app = Flask(__name__)
 CORS(app)
@@ -45,6 +48,133 @@ def init_services():
             logger.error(f"Failed to initialize services: {e}")
             # Continue anyway - services will be retried on next request
             pass
+
+# Server management endpoints
+def _test_server_connection(server_type, url, api_key=None, username=None, password=None):
+    """Attempt to connect to a server, return (ok, error_message)"""
+    try:
+        if server_type == "plex":
+            client = PlexClient(url, api_key)
+            return client.test_connection(), None
+        elif server_type == "audiobookshelf":
+            client = AudiobookshelfClient(url, username, password)
+            return client.test_connection(), None
+        elif server_type == "local":
+            client = LocalClient(url)
+            return asyncio.run(client.ping()), None
+        else:
+            return False, f"Unknown server type: {server_type}"
+    except Exception as e:
+        return False, str(e)
+
+
+@app.route('/api/servers', methods=['GET'])
+def get_servers():
+    try:
+        session = get_session()
+        server_repo = ServerRepository(session)
+        servers = server_repo.get_all()
+        return jsonify([{
+            'id': s.id,
+            'type': s.type,
+            'name': s.name,
+            'url': s.url,
+            'sync_enabled': s.sync_enabled,
+            'last_sync': s.last_sync.isoformat() if s.last_sync else None
+        } for s in servers])
+    except Exception as e:
+        logger.error(f"Failed to get servers: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers', methods=['POST'])
+def add_server():
+    try:
+        data = request.json or {}
+        server_type = data.get('type')
+        name = data.get('name')
+        url = data.get('url')
+
+        if server_type not in ('plex', 'audiobookshelf', 'local'):
+            return jsonify({'error': 'Type de serveur invalide'}), 400
+        if not name or not url:
+            return jsonify({'error': 'Nom et URL/chemin requis'}), 400
+
+        api_key = data.get('api_key')
+        username = data.get('username')
+        password = data.get('password')
+
+        ok, error = _test_server_connection(server_type, url, api_key, username, password)
+        if not ok:
+            return jsonify({'error': error or 'Connexion impossible'}), 400
+
+        session = get_session()
+        server_repo = ServerRepository(session)
+        server = server_repo.create(
+            server_id=generate_id(f"{server_type}_"),
+            type=server_type,
+            name=name,
+            url=url,
+            api_key=api_key,
+            username=username,
+            password=password
+        )
+
+        return jsonify({
+            'id': server.id,
+            'type': server.type,
+            'name': server.name,
+            'url': server.url
+        }), 201
+    except Exception as e:
+        logger.error(f"Failed to add server: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers/<server_id>', methods=['DELETE'])
+def delete_server(server_id):
+    try:
+        session = get_session()
+        server_repo = ServerRepository(session)
+        server_repo.delete(server_id)
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        logger.error(f"Failed to delete server: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers/<server_id>/test', methods=['POST'])
+def test_server(server_id):
+    try:
+        session = get_session()
+        server_repo = ServerRepository(session)
+        server = server_repo.get_by_id(server_id)
+        if not server:
+            return jsonify({'error': 'Serveur introuvable'}), 404
+
+        ok, error = _test_server_connection(
+            server.type, server.url, server.api_key, server.username, server.password
+        )
+        return jsonify({'connected': ok, 'error': error})
+    except Exception as e:
+        logger.error(f"Failed to test server: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers/<server_id>/scan', methods=['POST'])
+def scan_server(server_id):
+    try:
+        session = get_session()
+        server_repo = ServerRepository(session)
+        server = server_repo.get_by_id(server_id)
+        if not server:
+            return jsonify({'error': 'Serveur introuvable'}), 404
+
+        success = scanner.scan_server(server)
+        return jsonify({'status': 'scanned' if success else 'failed'})
+    except Exception as e:
+        logger.error(f"Failed to scan server: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # Library endpoints
 @app.route('/api/books', methods=['GET'])

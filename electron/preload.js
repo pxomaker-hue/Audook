@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('electron', {
   // Sync operations
   syncServers: () => ipcRenderer.invoke('sync:syncServers'),
 
+  // Native folder picker (for local audiobook folders)
+  selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+
   // Listen for player events
   onPlayerState: (callback) => {
     ipcRenderer.on('player:stateChange', (event, state) => callback(state));
