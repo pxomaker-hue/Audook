@@ -21,11 +21,10 @@ wheels/
 *.egg
 
 # Virtual environments
-.env
-.venv
-env/
 venv/
 ENV/
+env/
+.venv/
 
 # IDE
 .idea/
@@ -39,12 +38,20 @@ ENV/
 Thumbs.db
 
 # Application data
+.Audook/
 *.db
-*.sqlite
-*.sqlite3
-cache/
 *.log
 
-# Local files
-*.wav
-test_audio.wav
+# PyInstaller
+*.spec
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Local configuration
+config.json
+playback_state.json
+bookmarks.json
