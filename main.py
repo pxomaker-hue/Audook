@@ -17,28 +17,28 @@ from app.utils.config_manager import config_manager
 
 
 def main():
- """Main entry point"""
- # Create QApplication
- app = QApplication(sys.argv)
- app.setApplicationName("Audook")
- app.setOrganizationName("Audook Team")
- 
- # Create and show main window
- window = MainWindow()
- window.show()
- 
- # Start async event loop
- loop = asyncio.new_event_loop()
- asyncio.set_event_loop(loop)
- 
- # Run a timer to process async tasks
- timer = QTimer()
- timer.timeout.connect(lambda: loop.run_until_complete(asyncio.sleep(0)))
- timer.start(100)
- 
- # Execute application
- sys.exit(app.exec())
+    """Main entry point"""
+    # Create QApplication
+    app = QApplication(sys.argv)
+    app.setApplicationName("Audook")
+    app.setOrganizationName("Audook Team")
+
+    # Create and show main window
+    window = MainWindow()
+    window.show()
+
+    # Start async event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # Run a timer to process async tasks
+    timer = QTimer()
+    timer.timeout.connect(lambda: loop.run_until_complete(asyncio.sleep(0)))
+    timer.start(100)
+
+    # Execute application
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
- main()
+    main()
