@@ -154,7 +154,7 @@ class LibraryService:
             duration=db_book.duration,
             chapters=db_book.chapters or [],
             source=db_book.server.type if db_book.server else "unknown",
-            cover_url=db_book.cover_url,
+            cover=db_book.cover_url,
             narrator=db_book.narrator,
-            description=db_book.extra_metadata.get("description") if db_book.extra_metadata else None
+            description=db_book.description
         )

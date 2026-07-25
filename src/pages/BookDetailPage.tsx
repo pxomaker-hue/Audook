@@ -58,6 +58,16 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
+  const handlePlayChapter = async (chapterIndex: number) => {
+    if (book) {
+      try {
+        await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+      } catch (error) {
+        console.error('Failed to play chapter:', error);
+      }
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -248,18 +258,24 @@ const BookDetailPage: React.FC = () => {
             {book.chapters.map((chapter, index) => (
               <div
                 key={chapter.id}
+                onClick={() => handlePlayChapter(index)}
                 style={{
                   padding: '12px 15px',
                   borderBottom: index < book.chapters.length - 1 ? '1px solid var(--border)' : 'none',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  gap: '10px'
                 }}
               >
-                <span style={{ color: 'var(--text-primary)' }}>
-                  {index + 1}. {chapter.title}
+                <span style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <Play size={14} style={{ flexShrink: 0, color: 'var(--text-secondary)' }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {index + 1}. {chapter.title}
+                  </span>
                 </span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '12px', flexShrink: 0 }}>
                   {Math.floor(chapter.duration / 60)}m
                 </span>
               </div>

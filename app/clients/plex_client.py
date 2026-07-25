@@ -63,15 +63,20 @@ class PlexClient:
             return []
 
     def get_audiobooks(self, library_id: str) -> List[Dict[str, Any]]:
-        """Get audiobooks from a library"""
+        """Get audiobooks from a library.
+
+        Plex organizes audiobooks as Artist=Author / Album=Book / Track=Chapter.
+        Each album is returned as one audiobook (not the whole artist, which
+        would otherwise flatten every book by that author into a single item).
+        """
         try:
             audiobooks = []
 
-            # Get artists (audiobooks) from the section
             for artist in self.server.library.sectionByID(int(library_id)).all():
-                audiobook = self._parse_audiobook(artist)
-                if audiobook:
-                    audiobooks.append(audiobook)
+                for album in artist.albums():
+                    audiobook = self._parse_audiobook(album, artist.title)
+                    if audiobook:
+                        audiobooks.append(audiobook)
 
             logger.info(f"Found {len(audiobooks)} audiobooks in library {library_id}")
             return audiobooks
@@ -80,55 +85,56 @@ class PlexClient:
             logger.error(f"Failed to get audiobooks: {e}")
             return []
 
-    def _parse_audiobook(self, artist) -> Dict[str, Any]:
-        """Parse Plex artist (audiobook) to standard format"""
+    def _parse_audiobook(self, album, author_name: str) -> Optional[Dict[str, Any]]:
+        """Parse a Plex album (audiobook) to standard format"""
         try:
-            # Get all albums (books) from this artist
-            albums = artist.albums()
+            tracks = sorted(album.tracks(), key=lambda t: t.index or 0)
 
-            book_data = {
-                "id": f"plex_artist_{artist.key}",
-                "title": artist.title,
-                "author": artist.title,
+            chapters = []
+            total_duration = 0.0
+            for idx, track in enumerate(tracks):
+                duration = (track.duration or 0) / 1000.0
+                total_duration += duration
+
+                chapters.append({
+                    "id": f"plex_track_{track.ratingKey}",
+                    "title": track.title or f"Chapter {idx + 1}",
+                    "index": idx,
+                    "duration": duration,
+                    "audio_file": self._get_streaming_url(track)
+                })
+
+            return {
+                "id": f"plex_album_{album.ratingKey}",
+                "title": album.title,
+                "author": author_name,
                 "narrator": None,
-                "cover_url": artist.thumb,
-                "chapters": [],
-                "duration": 0.0
+                "description": album.summary or None,
+                "cover_url": self._get_image_url(album.thumb),
+                "chapters": chapters,
+                "duration": total_duration
             }
-
-            # Process each album/book
-            for album in albums:
-                tracks = album.tracks()
-                for track in tracks:
-                    chapter = {
-                        "id": f"plex_track_{track.key}",
-                        "title": track.title,
-                        "index": track.index - 1 if track.index else 0,
-                        "duration": track.duration / 1000.0 if track.duration else 0.0,
-                        "audio_file": self._get_streaming_url(track)
-                    }
-                    book_data["chapters"].append(chapter)
-                    book_data["duration"] += chapter["duration"]
-
-            return book_data
 
         except Exception as e:
             logger.error(f"Failed to parse audiobook: {e}")
             return None
 
-    def _get_streaming_url(self, track) -> str:
+    def _get_image_url(self, thumb_path: Optional[str]) -> Optional[str]:
+        """Build an absolute, authenticated URL for a Plex-relative image path"""
+        if not thumb_path:
+            return None
+        return f"{self.url}{thumb_path}?X-Plex-Token={self.token}"
+
+    def _get_streaming_url(self, track) -> Optional[str]:
         """Get streaming URL for a track"""
         try:
-            # Plex streaming URL format
-            # /library/metadata/{key}/transcode/universal/start.mp3
             media = track.media[0] if track.media else None
             if media and media.parts:
                 part = media.parts[0]
-                file_path = part.file
-
-                # Create streaming URL
-                url = f"{self.url}/library/parts/{part.id}/file.mp3?X-Plex-Token={self.token}"
-                return url
+                # part.key is already the correct, fully-formed download path
+                # (e.g. /library/parts/8341/1784986739/file.mp3) - do not
+                # reconstruct it manually, it has more segments than just the id.
+                return f"{self.url}{part.key}?X-Plex-Token={self.token}"
         except Exception as e:
             logger.error(f"Failed to get streaming URL: {e}")
 

@@ -73,6 +73,7 @@ class ServerScanner:
                             title=audiobook["title"],
                             author=audiobook.get("author"),
                             narrator=audiobook.get("narrator"),
+                            description=audiobook.get("description"),
                             duration=audiobook["duration"],
                             chapters=audiobook.get("chapters", []),
                             cover_url=audiobook.get("cover_url")
@@ -126,6 +127,7 @@ class ServerScanner:
                             title=audiobook["title"],
                             author=audiobook.get("author"),
                             narrator=audiobook.get("narrator"),
+                            description=audiobook.get("description"),
                             duration=audiobook["duration"],
                             chapters=audiobook.get("chapters", []),
                             cover_url=audiobook.get("cover_url"),
@@ -172,6 +174,7 @@ class ServerScanner:
                         title=audiobook.title,
                         author=audiobook.author,
                         narrator=audiobook.narrator,
+                        description=audiobook.description,
                         duration=audiobook.duration,
                         chapters=audiobook.chapters,
                         cover_url=audiobook.cover

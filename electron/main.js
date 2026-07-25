@@ -93,16 +93,29 @@ app.on('ready', () => {
   createMenu();
 });
 
+function killPythonBackend() {
+  if (!pythonProcess || pythonProcess.killed) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    // child.kill() is unreliable on Windows for processes that spawn their
+    // own threads (VLC). taskkill with /T kills the whole process tree.
+    spawn('taskkill', ['/pid', pythonProcess.pid, '/f', '/t']);
+  } else {
+    pythonProcess.kill();
+  }
+}
+
 app.on('window-all-closed', () => {
+  killPythonBackend();
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
-
-  // Kill Python process
-  if (pythonProcess) {
-    pythonProcess.kill();
-  }
 });
+
+app.on('before-quit', killPythonBackend);
 
 app.on('activate', () => {
   if (mainWindow === null) {

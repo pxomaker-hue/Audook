@@ -16,8 +16,13 @@ class PlayerService:
         self.current_chapter_index: int = 0
         self._on_position_changed: Optional[Callable] = None
 
-    def start_playbook(self, audiobook: Audiobook, device_id: str = "audook_windows") -> bool:
-        """Start playing an audiobook"""
+    def start_playbook(
+        self,
+        audiobook: Audiobook,
+        device_id: str = "audook_windows",
+        chapter_index: Optional[int] = None,
+    ) -> bool:
+        """Start playing an audiobook, optionally jumping straight to a given chapter"""
         try:
             if not audiobook or not audiobook.chapters:
                 logger.error("No audiobook or chapters to play")
@@ -25,8 +30,12 @@ class PlayerService:
 
             self.current_audiobook = audiobook
 
-            # Load saved progress
-            chapter_idx, position = progress_manager.load_progress(audiobook)
+            if chapter_index is not None:
+                chapter_idx = max(0, min(chapter_index, len(audiobook.chapters) - 1))
+                position = 0.0
+            else:
+                # Load saved progress
+                chapter_idx, position = progress_manager.load_progress(audiobook)
             self.current_chapter_index = chapter_idx
 
             # Start session

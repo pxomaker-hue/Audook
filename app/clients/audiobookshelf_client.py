@@ -85,8 +85,19 @@ class AudiobookshelfClient:
             response.raise_for_status()
 
             audiobooks = []
-            for book in response.json().get("results", []):
-                audiobook = self._parse_audiobook(book, library_id)
+            for item in response.json().get("results", []):
+                # The list endpoint only returns summary media (no audioFiles/chapters),
+                # so fetch the full item to get the actual track list.
+                item_id = item.get("id")
+                try:
+                    detail_response = self.session.get(f"{self.url}/api/items/{item_id}")
+                    detail_response.raise_for_status()
+                    full_item = detail_response.json()
+                except Exception as e:
+                    logger.warning(f"Failed to fetch item details for {item_id}: {e}")
+                    continue
+
+                audiobook = self._parse_audiobook(full_item, library_id)
                 if audiobook:
                     audiobooks.append(audiobook)
 
@@ -128,18 +139,30 @@ class AudiobookshelfClient:
 
                 chapter = {
                     "id": audio_file.get("ino", f"abs_file_{idx}"),
-                    "title": audio_file.get("metadata", {}).get("title", f"Chapter {idx + 1}"),
+                    "title": audio_file.get("metaTags", {}).get("tagTitle") or f"Chapter {idx + 1}",
                     "index": idx,
                     "duration": duration,
                     "audio_file": self._get_streaming_url(library_id, book_id, audio_file.get("ino"))
                 }
                 chapters.append(chapter)
 
+            # The full item endpoint (/api/items/{id}) returns authors/narrators/series
+            # as arrays of {id, name}, unlike the library list endpoint which flattens
+            # them into authorName/narratorName strings. Support both shapes.
+            authors = metadata.get("authors") or []
+            author = ", ".join(a["name"] for a in authors if a.get("name")) or metadata.get("authorName") or "Unknown Author"
+
+            narrators = metadata.get("narrators") or []
+            narrator = ", ".join(n["name"] for n in narrators if n.get("name")) or metadata.get("narratorName") or None
+
+            series = metadata.get("series") or []
+            series_names = ", ".join(s["name"] for s in series if s.get("name")) if isinstance(series, list) else series
+
             audiobook = {
                 "id": f"abs_{book_id}",
                 "title": metadata.get("title", "Unknown"),
-                "author": metadata.get("authorName", "Unknown Author"),
-                "narrator": metadata.get("narratorName"),
+                "author": author,
+                "narrator": narrator,
                 "description": metadata.get("description"),
                 "cover_url": self._get_cover_url(library_id, book_id),
                 "chapters": chapters,
@@ -148,7 +171,7 @@ class AudiobookshelfClient:
                     "genre": metadata.get("genres", []),
                     "language": metadata.get("language"),
                     "publish_year": metadata.get("publishedYear"),
-                    "series": metadata.get("series")
+                    "series": series_names
                 }
             }
 

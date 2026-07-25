@@ -70,28 +70,21 @@ class VLCPlayer:
     def _position_update_loop(self):
         """Continuously update position while playing"""
         while not self._stop_update_thread:
-            if self._is_playing and not self._is_paused and self.player.is_playing():
+            if self._is_playing and not self._is_paused:
                 try:
-                    # Get current position from VLC
-                    media = self.player.get_media_list()
-                    if media and media.count() > 0:
-                        current_media = self.player.get_media()
-                        if current_media:
-                            # Position in milliseconds
-                            position_ms = current_media.get_duration()
-                            if position_ms > 0:
-                                # Calculate actual position
-                                player_pos = self.player.get_media_player().get_time()
-                                if player_pos >= 0:
-                                    self._position = player_pos / 1000.0  # Convert to seconds
-                                    self._duration = position_ms / 1000.0
+                    media_player = self.player.get_media_player()
+                    if media_player and media_player.is_playing():
+                        length_ms = media_player.get_length()
+                        time_ms = media_player.get_time()
+                        if length_ms > 0 and time_ms >= 0:
+                            self._position = time_ms / 1000.0
+                            self._duration = length_ms / 1000.0
 
-                                    # Notify position change
-                                    if self._on_position_change:
-                                        try:
-                                            self._on_position_change(self._position)
-                                        except Exception as e:
-                                            logger.error(f"Position callback error: {e}")
+                            if self._on_position_change:
+                                try:
+                                    self._on_position_change(self._position)
+                                except Exception as e:
+                                    logger.error(f"Position callback error: {e}")
 
                 except Exception as e:
                     logger.error(f"Error updating position: {e}")

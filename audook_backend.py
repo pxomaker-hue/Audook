@@ -254,10 +254,12 @@ def play_book():
     try:
         data = request.json
         book_id = data.get('book_id')
+        chapter_index = data.get('chapter_index')
         audiobook = library_service.get_book_by_id(book_id)
         if not audiobook:
             return jsonify({'error': 'Book not found'}), 404
-        player_service.start_playbook(audiobook)
+        if not player_service.start_playbook(audiobook, chapter_index=chapter_index):
+            return jsonify({'error': 'La lecture a échoué (voir les logs du serveur)'}), 500
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to play book: {e}")
@@ -332,6 +334,7 @@ def get_player_state():
             'is_paused': player_service.is_paused(),
             'position': player_service.get_current_position(),
             'duration': player_service.get_current_duration(),
+            'currentChapterIndex': player_service.current_chapter_index,
             'currentBook': {
                 'id': book.id,
                 'title': book.title,

@@ -64,7 +64,7 @@ class BookRepository(BaseRepository):
     """Operations on Book model"""
 
     def create(self, book_id: str, server_id: str, library_id: str, title: str,
-               author: str = None, narrator: str = None, duration: float = 0.0,
+               author: str = None, narrator: str = None, description: str = None, duration: float = 0.0,
                chapters: dict = None, cover_url: str = None, extra_metadata: dict = None) -> Book:
         """Create or update a book (idempotent across re-scans)"""
         book = self.get_by_id(book_id)
@@ -77,6 +77,7 @@ class BookRepository(BaseRepository):
         book.title = title
         book.author = author
         book.narrator = narrator
+        book.description = description
         book.duration = duration
         book.chapters = chapters or []
         book.cover_url = cover_url
