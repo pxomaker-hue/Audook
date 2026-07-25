@@ -17,7 +17,7 @@ if __name__ == '__main__':
     project_dir = Path(__file__).parent.absolute()
 
     opts = [
-        str(project_dir / 'main.py'),
+        str(project_dir / 'audook.py'),
         '--name=Audook',
         '--windowed',
         '--onefile',
@@ -31,11 +31,11 @@ if __name__ == '__main__':
         '--hidden-import=PyQt6.QtCore',
         '--hidden-import=PyQt6.QtGui',
         '--hidden-import=PyQt6.QtWidgets',
-        '--hidden-import=pygame',
-        '--hidden-import=pygame.mixer',
-        '--hidden-import=pydantic',
-        '--hidden-import=httpx',
+        '--hidden-import=sqlalchemy',
+        '--hidden-import=sqlalchemy.orm',
+        '--hidden-import=vlc',
         '--hidden-import=requests',
+        '--hidden-import=plexapi',
     ]
 
     run(opts)
