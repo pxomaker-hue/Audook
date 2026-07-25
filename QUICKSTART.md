@@ -1,165 +1,97 @@
-# 🎧 Audook - Quick Start Guide
+# Audook Electron - Guide de démarrage rapide
 
-## Installation
+## 🚀 Installation rapide
 
+### Prérequis
+- **Node.js** 16+ (télécharger depuis https://nodejs.org/)
+- **Python** 3.8+ (déjà installé)
+- **pip** (gestionnaire de paquets Python)
+
+### 1. Installation des dépendances
+
+**Dépendances Python** :
 ```bash
-# Installer les dépendances
-pip install -r requirements.txt
-
-# OU via le fichier de développement
-pip install -r requirements.txt
-pip install qasync pathvalidate
-```
-
-## Lancer l'Application
-
-```bash
-python main.py
-```
-
-L'application va démarrer avec une interface vide.
-
-## Test avec une Bibliothèque Locale
-
-### 1. Créer des Fichiers de Test
-
-```bash
-python create_test_audiobooks.py
-```
-
-Cela créera un dossier `test_audiobooks/` avec :
-- 3 audiobooks de test (Les Misérables, The Great Gatsby, Pride and Prejudice)
-- 8 fichiers WAV au total (60 secondes chacun)
-
-### 2. Utiliser la Bibliothèque Local
-
-Dans Audook:
-1. Ouvrir le dropdown "Sélectionner un serveur"
-2. Cliquer sur "Local"
-3. Sélectionner le dossier `test_audiobooks`
-4. Attendre le chargement automatique des audiobooks
-
-### 3. Écouter un Audiobook
-
-1. Double-cliquer sur un audiobook dans la liste
-2. L'application charge automatiquement le premier chapitre
-3. Cliquer sur Play pour démarrer la lecture
-
-## Contrôles
-
-| Bouton | Action |
-|--------|--------|
-| ▶️ / ⏸️ | Play / Pause |
-| ⏮️ | Chapitre précédent |
-| ⏭️ | Chapitre suivant |
-| ⏪ | Recule de 10s |
-| ⏩ | Avance de 10s |
-| 🔊 | Contrôle du volume |
-
-## Tester le Scanner Local
-
-```bash
-python test_local_scanner.py
-```
-
-Cela affichera :
-- Nombre d'audiobooks trouvés
-- Détails de chaque audiobook
-- Chapitres détectés
-
-## Fonctionnalités Implémentées ✅
-
-### Architecture
-- ✅ Intégration Qt6 + asyncio (qasync)
-- ✅ Lecteur audio avec pygame.mixer
-- ✅ Support complet des appels asynchrones
-
-### Bibliothèques Locales
-- ✅ Scanner récursif de dossiers
-- ✅ Détection automatique des fichiers audio
-- ✅ Support: MP3, M4B, FLAC, OGG, WAV, AAC, OPUS
-
-### Lecture Audio
-- ✅ Play / Pause / Stop
-- ✅ Navigation chapitre suivant/précédent
-- ✅ Seek avant/arrière (10s, 30s)
-- ✅ Contrôle du volume
-- ✅ Sauvegarde automatique de la position
-
-### Serveurs Distants
-- ✅ Client Audiobookshelf (structure prête)
-- ✅ Client Plex (structure prête)
-- 🔄 Synchronisation avec le serveur (à implémenter)
-
-## Prochaines Étapes
-
-### Phase 4: Synchronisation Serveur
-- [ ] Implémenter la sauvegarde de position sur Audiobookshelf
-- [ ] Charger la position depuis le serveur
-- [ ] Support des signets (bookmarks)
-
-### Phase 5: Améliorations UI
-- [ ] Afficher les images de couverture
-- [ ] Meilleur affichage de la durée
-- [ ] Barre de progression en temps réel
-- [ ] Miniatures de chapitres
-
-### Phase 6: Fonctionnalités Avancées
-- [ ] Vitesse de lecture (0.5x à 2.0x)
-- [ ] Édition de marquepages
-- [ ] Recherche par titre/auteur
-- [ ] Intégration Plex complète
-- [ ] Cache local des chapitres
-- [ ] Synchronisation multi-appareils
-
-## Dépannage
-
-### Application qui ne démarre pas
-```bash
-# Vérifier l'installation des dépendances
-pip install -r requirements.txt
-
-# Vérifier la version de Python (3.10+)
-python --version
-```
-
-### Erreurs d'import
-```bash
-# Réinstaller dans un venv propre
-python -m venv venv
-venv\Scripts\activate  # ou source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Pas de son
-- Vérifier les fichiers WAV dans le dossier `test_audiobooks/`
-- Vérifier le volume du système
-- Vérifier que pygame.mixer est bien initialisé
-
-## Architecture du Code
-
-```
-app/
-├── main_window.py          # Fenêtre principale
-├── models/                 # Modèles de données
-├── audiobookshelf/         # Client Audiobookshelf
-├── plex/                   # Client Plex
-├── local/                  # Support répertoires locaux
-│   ├── scanner.py          # Scanner de fichiers audio
-│   └── client.py           # Client abstrait
-├── player/                 # Lecteur audio
-│   ├── player.py           # Implémentation pygame
-│   └── queue.py            # File d'attente
-├── ui/                     # Composants UI
-│   ├── library_view.py     # Navigateur de bibliothèque
-│   ├── player_view.py      # Contrôles de lecteur
-│   └── settings_view.py    # Dialogue de paramètres
-└── utils/                  # Utilitaires
+**Dépendances Node.js** :
+```bash
+npm install
 ```
 
-## Support
+### 2. Lancer en développement
 
-Pour toute question ou problème, consultez les logs :
+#### Option 1 : Batch (Recommandé pour Windows)
+```bash
+dev.bat
 ```
-app/logs/audook.log
+
+#### Option 2 : PowerShell
+```powershell
+.\dev.ps1
 ```
+
+#### Option 3 : Ligne de commande manuelle
+```bash
+# Terminal 1 : Backend Python
+python audook_backend.py
+
+# Terminal 2 : Frontend React
+npm run react-start
+```
+
+L'application devrait s'ouvrir automatiquement après ~10 secondes.
+
+## 🏗️ Compiler pour la production
+
+```bash
+python build_electron.py
+```
+
+Cela créera les fichiers dans `dist/`:
+- `Audook.exe` - Version portable
+- `Audook Setup.exe` - Installateur
+
+## 📝 Checkliste de démarrage
+
+- [ ] Node.js installé et dans le PATH
+- [ ] Python 3.8+ installé et dans le PATH
+- [ ] `pip install -r requirements.txt` exécuté
+- [ ] `npm install` exécuté
+- [ ] `dev.bat` lancé (ou commandes manuelles)
+- [ ] L'app React se charge sur http://localhost:3000
+- [ ] Le backend Python démarre sans erreur
+- [ ] Cliquer sur un livre ouvre la page de détail
+
+## 🆘 Troubleshooting
+
+### "npm: command not found"
+→ Node.js n'est pas installé ou pas dans le PATH
+→ Téléchargez depuis https://nodejs.org/
+
+### "python: command not found"
+→ Python n'est pas dans le PATH
+→ Sur Windows : Lancez l'installeur Python et cochez "Add Python to PATH"
+
+### "Port 3000 already in use"
+→ Une autre app utilise le port 3000
+→ Changez le port : `PORT=3001 npm run react-start`
+
+### "Port 5000 already in use"
+→ Une autre app utilise le port 5000
+→ Arrêtez l'autre application ou changez le port dans `audook_backend.py`
+
+### L'interface React ne charge pas
+→ Vérifiez que `npm run react-start` s'exécute
+→ Ouvrez http://localhost:3000 dans un navigateur
+→ Consultez la console pour les erreurs
+
+### Le backend ne répond pas
+→ Vérifiez que `python audook_backend.py` s'exécute
+→ Testez avec : `curl http://127.0.0.1:5000/api/health`
+→ Vérifiez la console Python pour les erreurs
+
+## 📖 Documentation
+
+- `ELECTRON_README.md` - Documentation Electron complète
+- `MIGRATION.md` - Détails sur la migration PyQt6 → Electron

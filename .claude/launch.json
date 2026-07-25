@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "React Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "react-start"],
+      "port": 3000
+    },
+    {
+      "name": "Flask Backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["audook_backend.py"],
+      "port": 5000
+    }
+  ]
+}
