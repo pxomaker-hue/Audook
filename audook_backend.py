@@ -188,7 +188,8 @@ def get_books():
             'narrator': book.narrator,
             'cover_url': book.cover,
             'duration': book.duration,
-            'description': book.description
+            'description': book.description,
+            'source': book.source
         } for book in books])
     except Exception as e:
         logger.error(f"Failed to get books: {e}")
@@ -317,11 +318,20 @@ def set_speed():
 @app.route('/api/player/state', methods=['GET'])
 def get_player_state():
     try:
+        book = player_service.current_audiobook
         state = {
             'is_playing': player_service.is_playing(),
             'is_paused': player_service.is_paused(),
             'position': player_service.get_current_position(),
-            'duration': player_service.get_current_duration()
+            'duration': player_service.get_current_duration(),
+            'currentBook': {
+                'id': book.id,
+                'title': book.title,
+                'author': book.author,
+                'narrator': book.narrator,
+                'cover_url': book.cover,
+                'description': book.description
+            } if book else None
         }
         return jsonify(state)
     except Exception as e:

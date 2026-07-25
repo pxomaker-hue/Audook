@@ -61,15 +61,15 @@ const App: React.FC = () => {
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
-        backgroundColor: '#0f0f0f',
-        color: '#ffffff',
-        fontFamily: 'system-ui'
+        backgroundColor: 'var(--background)',
+        color: 'var(--text-primary)',
+        fontFamily: 'inherit'
       }}>
         <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔴</div>
         <h1>Serveur non disponible</h1>
-        <p style={{ color: '#b0b0b0', marginBottom: '30px' }}>{error}</p>
-        <p style={{ fontSize: '14px', color: '#888' }}>Vérifiez que:</p>
-        <ul style={{ fontSize: '14px', color: '#888', textAlign: 'left' }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
+        <ul style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'left' }}>
           <li>Le serveur Python est en cours d'exécution</li>
           <li>Aucun autre processus n'utilise le port 5000</li>
           <li>L'application réessayera la connexion automatiquement...</li>
