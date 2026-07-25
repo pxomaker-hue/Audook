@@ -16,7 +16,7 @@ if __name__ == '__main__':
  '--name=Audook',
  '--windowed',
  '--onefile',
- '--icon=assets/icon.ico',
+ '--icon=assets/icons/audook.ico',
  '--clean',
  '--noconfirm',
  '--distpath=dist',
