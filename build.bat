@@ -1,49 +1,49 @@
 @echo off
-:: Build script for Audook
-:: This script creates a Windows installer using PyInstaller
+:: Script de build pour Audook
+:: Ce script crée un installateur Windows en utilisant PyInstaller
 
-:: Check if Python is installed
+:: Vérifier si Python est installé
 python --version >nul 2>&1
 if errorlevel 1 (
- echo Error: Python is not installed or not in PATH
+ echo Erreur : Python n'est pas installé ou n'est pas dans le PATH
  pause
  exit /b 1
 )
 
-:: Check if PyInstaller is installed
+:: Vérifier si PyInstaller est installé
 python -m PyInstaller --version >nul 2>&1
 if errorlevel 1 (
- echo Installing PyInstaller...
+ echo Installation de PyInstaller...
  pip install pyinstaller
 )
 
-:: Create dist directory
+:: Créer le dossier dist
 if not exist dist mkdir dist
 
-:: Build the application
-echo Building Audook...
+:: Construire l'application
+echo Construction d'Audook...
 python build_spec.py
 
-:: Check if build succeeded
+:: Vérifier si la construction a réussi
 if errorlevel 1 (
- echo Error: Build failed
+ echo Erreur : La construction a échoué
  pause
  exit /b 1
 )
 
-:: Create installer using Inno Setup (if available)
+:: Créer l'installateur en utilisant Inno Setup (si disponible)
 if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
- echo Creating installer...
+ echo Création de l'installateur...
  "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /Qp installer.iss
  
  if errorlevel 1 (
- echo Warning: Inno Setup not available, skipping installer creation
+ echo Avertissement : Inno Setup non disponible, création de l'installateur ignorée
  )
 ) else (
- echo Inno Setup not found, skipping installer creation
- echo You can manually create an installer using the dist/Audook.exe file
+ echo Inno Setup introuvable, création de l'installateur ignorée
+ echo Vous pouvez créer manuellement un installateur en utilisant le fichier dist/Audook.exe
 )
 
-echo Build complete!
-echo The executable is in the dist/ folder
+echo Construction terminée !
+echo L'exécutable se trouve dans le dossier dist/
 pause

@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
-Setup script for Audook
-Alternative installation method using pip
+Script d'installation pour Audook
+Méthode d'installation alternative en utilisant pip
 """
 
 from setuptools import setup, find_packages
 import sys
 
-# Read requirements
+# Lire les dépendances
 with open('requirements.txt') as f:
  requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
 
-# Read long description
+# Lire la description longue
 with open('README.md', 'r', encoding='utf-8') as f:
  long_description = f.read()
 
 setup(
  name='Audook',
  version='1.0.0',
- description='A modern audiobook client for Windows supporting Audiobookshelf and Plex',
+ description='Un client moderne de livres audio pour Windows prenant en charge Audiobookshelf et Plex',
  long_description=long_description,
  long_description_content_type='text/markdown',
- author='Audook Team',
+ author='Équipe Audook',
  author_email='',
  url='https://github.com/pxomaker-hue/Audook',
  packages=find_packages(),
@@ -48,8 +48,9 @@ setup(
  'Programming Language :: Python :: 3.12',
  'Topic :: Multimedia :: Sound/Audio',
  'Topic :: Utilities',
+ 'Natural Language :: French',
  ],
- keywords='audiobook player audiobookshelf plex windows',
+ keywords='lecteur livres audio audiobookshelf plex windows',
  project_urls={
  'Bug Reports': 'https://github.com/pxomaker-hue/Audook/issues',
  'Source': 'https://github.com/pxomaker-hue/Audook',

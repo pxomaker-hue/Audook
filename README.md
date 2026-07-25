@@ -1,208 +1,208 @@
-# Audook - Audiobook Client for Windows
+# Audook - Client Audiobook pour Windows
 
-A modern, feature-rich audiobook player for Windows that supports **Audiobookshelf** and **Plex** servers.
+Un lecteur de livres audio moderne et riche en fonctionnalités pour Windows qui prend en charge les serveurs **Audiobookshelf** et **Plex**.
 
-## Features
+## Fonctionnalités
 
-### Core Features
-- ✅ Connect to **Audiobookshelf** servers
-- ✅ Connect to **Plex** servers
-- ✅ Browse audiobook libraries
-- ✅ Play audiobooks with chapter support
-- ✅ Modern, dark/light theme UI
+### Fonctionnalités principales
+- ✅ Connexion aux serveurs **Audiobookshelf**
+- ✅ Connexion aux serveurs **Plex**
+- ✅ Parcourir les bibliothèques de livres audio
+- ✅ Lire les livres audio avec prise en charge des chapitres
+- ✅ Interface moderne avec thèmes sombre et clair
 
-### Playback Features
-- ✅ Play/Pause/Stop controls
-- ✅ Previous/Next chapter navigation
-- ✅ **Seek backward/forward by 10s and 30s**
-- ✅ Adjustable playback speed (0.5x - 2.0x)
-- ✅ Volume control
-- ✅ **Remember playback position between sessions**
-- ✅ Progress bar with time display
+### Fonctionnalités de lecture
+- ✅ Contrôles Lecture/Pause/Arrêt
+- ✅ Navigation entre chapitres (Précédent/Suivant)
+- ✅ **Reculer/Avancer de 10s et 30s**
+- ✅ Vitesse de lecture ajustable (0,5x - 2,0x)
+- ✅ Contrôle du volume
+- ✅ **Mémorisation de la position de lecture entre les sessions**
+- ✅ Barre de progression avec affichage du temps
 
-### Library Features
-- ✅ Browse audiobooks by library
-- ✅ Search audiobooks
-- ✅ View audiobook metadata (title, author, narrator, duration)
-- ✅ **Bookmarks** for saving positions
-- ✅ **Download audiobooks for offline listening**
+### Fonctionnalités de bibliothèque
+- ✅ Parcourir les livres audio par bibliothèque
+- ✅ Rechercher des livres audio
+- ✅ Afficher les métadonnées des livres (titre, auteur, narrateur, durée)
+- ✅ **Marque-pages** pour sauvegarder les positions
+- ✅ **Téléchargement des livres audio pour écoute hors ligne**
 
-### Sync Features
-- ✅ **Sync playback position with server** (Audiobookshelf & Plex)
-- ✅ **Cross-device synchronization** (via server sync)
+### Fonctionnalités de synchronisation
+- ✅ **Synchronisation de la position de lecture avec le serveur** (Audiobookshelf & Plex)
+- ✅ **Synchronisation multi-appareils** (via la synchronisation serveur)
 
-### Settings
-- ✅ Add/Edit/Remove multiple servers
-- ✅ Switch between Audiobookshelf and Plex
-- ✅ Dark and Light themes
-- ✅ Configure default playback settings
+### Paramètres
+- ✅ Ajouter/Modifier/Supprimer plusieurs serveurs
+- ✅ Basculer entre Audiobookshelf et Plex
+- ✅ Thèmes sombre et clair
+- ✅ Configurer les paramètres de lecture par défaut
 
-## Screenshots
+## Captures d'écran
 
-*(Screenshots will be added in future versions)*
+*(Les captures d'écran seront ajoutées dans les versions futures)*
 
 ## Installation
 
-### Prerequisites
-- Windows 10 or 11
-- Python 3.10 or higher (for development)
+### Prérequis
+- Windows 10 ou 11
+- Python 3.10 ou supérieur (pour le développement)
 
-### Quick Install (Using Installer)
-1. Download the latest installer from the [Releases](https://github.com/pxomaker-hue/Audook/releases) page
-2. Run the installer and follow the prompts
-3. Launch Audook from the Start Menu or desktop shortcut
+### Installation rapide (via l'installateur)
+1. Téléchargez le dernier installateur depuis la page [Releases](https://github.com/pxomaker-hue/Audook/releases)
+2. Exécutez l'installateur et suivez les instructions
+3. Lancez Audook depuis le menu Démarrer ou le raccourci bureau
 
-### Development Setup
-1. Clone this repository:
+### Configuration pour le développement
+1. Clonez ce dépôt :
  ```bash
  git clone https://github.com/pxomaker-hue/Audook.git
  cd Audook
  ```
 
-2. Create a virtual environment:
+2. Créez un environnement virtuel :
  ```bash
  python -m venv venv
- source venv/bin/activate # On Windows: venv\Scripts\activate
+ source venv/bin/activate # Sur Windows : venv\Scripts\activate
  ```
 
-3. Install dependencies:
+3. Installez les dépendances :
  ```bash
  pip install -r requirements.txt
  ```
 
-4. Run the application:
+4. Lancez l'application :
  ```bash
  python main.py
  ```
 
-### Building the Executable
+### Création de l'exécutable
 
-To create a standalone Windows executable:
+Pour créer un exécutable Windows autonome :
 
-1. Install PyInstaller:
+1. Installez PyInstaller :
  ```bash
  pip install pyinstaller
  ```
 
-2. Run the build script:
+2. Exécutez le script de build :
  ```bash
  python build_spec.py
  ```
- or double-click `build.bat`
+ ou double-cliquez sur `build.bat`
 
-3. The executable will be created in the `dist/` folder
+3. L'exécutable sera créé dans le dossier `dist/`
 
-### Creating an Installer
+### Création d'un installateur
 
-To create a professional Windows installer:
+Pour créer un installateur Windows professionnel :
 
-1. Install [Inno Setup](https://jrsoftware.org/isinfo.php)
-2. Run the build script (it will automatically create the installer if Inno Setup is installed)
-3. The installer will be in the `dist/` folder as `Audook_Setup.exe`
+1. Installez [Inno Setup](https://jrsoftware.org/isinfo.php)
+2. Exécutez le script de build (il créera automatiquement l'installateur si Inno Setup est installé)
+3. L'installateur sera dans le dossier `dist/` sous le nom `Audook_Setup.exe`
 
-## Usage
+## Utilisation
 
-### Adding a Server
+### Ajouter un serveur
 
-1. Click the **Settings** (⚙️) button in the top-right corner
-2. Go to the **Servers** tab
-3. Click **Add Server**
-4. Enter the server details:
- - **Name**: A friendly name for the server
- - **Type**: Audiobookshelf or Plex
- - **URL**: The server URL (e.g., `http://your-nas:13378` for Audiobookshelf)
- - **API Key**: For Audiobookshelf (find in Settings > Users > Your User > API Key)
- - **Username/Password**: For Plex
-5. Click **Save**
+1. Cliquez sur le bouton **Paramètres** (⚙️) en haut à droite
+2. Allez dans l'onglet **Serveurs**
+3. Cliquez sur **Ajouter un serveur**
+4. Entrez les détails du serveur :
+ - **Nom** : Un nom convivial pour le serveur
+ - **Type** : Audiobookshelf ou Plex
+ - **URL** : L'URL du serveur (ex: `http://votre-nas:13378` pour Audiobookshelf)
+ - **Clé API** : Pour Audiobookshelf (à trouver dans Paramètres > Utilisateurs > Votre utilisateur > Clé API)
+ - **Nom d'utilisateur/Mot de passe** : Pour Plex
+5. Cliquez sur **Enregistrer**
 
-### Browsing Audiobooks
+### Parcourir les livres audio
 
-1. Select a server from the dropdown in the library view
-2. Select a library
-3. Browse or search for audiobooks
-4. Double-click an audiobook to start playing
+1. Sélectionnez un serveur dans la liste déroulante de la vue bibliothèque
+2. Sélectionnez une bibliothèque
+3. Parcourez ou recherchez des livres audio
+4. Double-cliquez sur un livre audio pour commencer la lecture
 
-### Playback Controls
+### Contrôles de lecture
 
-- **Space**: Play/Pause
-- **Left Arrow**: Seek backward 10 seconds
-- **Right Arrow**: Seek forward 10 seconds
-- **Ctrl+Left Arrow**: Seek backward 30 seconds
-- **Ctrl+Right Arrow**: Seek forward 30 seconds
-- **Up Arrow**: Previous chapter
-- **Down Arrow**: Next chapter
+- **Espace** : Lecture/Pause
+- **Flèche gauche** : Reculer de 10 secondes
+- **Flèche droite** : Avancer de 10 secondes
+- **Ctrl+Flèche gauche** : Reculer de 30 secondes
+- **Ctrl+Flèche droite** : Avancer de 30 secondes
+- **Flèche haut** : Chapitre précédent
+- **Flèche bas** : Chapitre suivant
 
-### Keyboard Shortcuts
+### Raccourcis clavier
 
-| Shortcut | Action |
-|----------|--------|
-| Space | Play/Pause |
-| ← | Seek -10s |
-| → | Seek +10s |
-| Ctrl+← | Seek -30s |
-| Ctrl+→ | Seek +30s |
-| ↑ | Previous Chapter |
-| ↓ | Next Chapter |
-| Ctrl+↑ | Increase Volume |
-| Ctrl+↓ | Decrease Volume |
-| Ctrl+F | Search |
-| Ctrl+, | Settings |
+| Raccourci | Action |
+|-----------|--------|
+| Espace | Lecture/Pause |
+| ← | Reculer de 10s |
+| → | Avancer de 10s |
+| Ctrl+← | Reculer de 30s |
+| Ctrl+→ | Avancer de 30s |
+| ↑ | Chapitre précédent |
+| ↓ | Chapitre suivant |
+| Ctrl+↑ | Augmenter le volume |
+| Ctrl+↓ | Diminuer le volume |
+| Ctrl+F | Rechercher |
+| Ctrl+, | Paramètres |
 
 ## Configuration
 
-All configuration is stored in:
-- `%USERPROFILE%\.Audook\config.json` - Main configuration
-- `%USERPROFILE%\.Audook\playback_state.json` - Playback state
-- `%USERPROFILE%\.Audook\bookmarks.json` - Bookmarks
-- `%USERPROFILE%\.Audook\cache\` - Cached audio files
+Toute la configuration est stockée dans :
+- `%USERPROFILE%\.Audook\config.json` - Configuration principale
+- `%USERPROFILE%\.Audook\playback_state.json` - État de lecture
+- `%USERPROFILE%\.Audook\bookmarks.json` - Marque-pages
+- `%USERPROFILE%\.Audook\cache\` - Fichiers audio en cache
 
-## Troubleshooting
+## Résolution des problèmes
 
-### Connection Issues
-- **Audiobookshelf**: Ensure the server URL is correct and the API key is valid
-- **Plex**: Ensure the server URL is correct and you have the correct credentials
-- Check that your NAS/server is accessible from your Windows machine
+### Problèmes de connexion
+- **Audiobookshelf** : Vérifiez que l'URL du serveur est correcte et que la clé API est valide
+- **Plex** : Vérifiez que l'URL du serveur est correcte et que vous avez les identifiants corrects
+- Vérifiez que votre NAS/serveur est accessible depuis votre machine Windows
 
-### Playback Issues
-- Ensure you have an active internet connection (for streaming)
-- For offline playback, download the audiobook first
-- Check that your audio device is working properly
+### Problèmes de lecture
+- Assurez-vous d'avoir une connexion Internet active (pour le streaming)
+- Pour l'écoute hors ligne, téléchargez d'abord le livre audio
+- Vérifiez que votre périphérique audio fonctionne correctement
 
-### Performance Issues
-- Reduce the number of audiobooks loaded at once
-- Clear the cache if it's taking up too much space
-- Use a lower quality setting for downloads
+### Problèmes de performance
+- Réduisez le nombre de livres audio chargés en même temps
+- Effacez le cache s'il prend trop de place
+- Utilisez un paramètre de qualité plus faible pour les téléchargements
 
-## API References
+## Références API
 
-- [Audiobookshelf API Documentation](https://github.com/advplyr/audiobookshelf/wiki/API-Documentation)
-- [Plex API Documentation](https://developer.plex.tv/)
+- [Documentation API Audiobookshelf](https://github.com/advplyr/audiobookshelf/wiki/API-Documentation)
+- [Documentation API Plex](https://developer.plex.tv/)
 
-## Contributing
+## Contribution
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Les contributions sont les bienvenues ! N'hésitez pas à soumettre des issues ou des pull requests.
 
-### Development Guidelines
-- Follow PEP 8 style guide
-- Use type hints
-- Write docstrings for all public methods
-- Keep the code clean and well-organized
+### Directives de développement
+- Respectez le guide de style PEP 8
+- Utilisez les annotations de type
+- Écrivez des docstrings pour toutes les méthodes publiques
+- Gardez le code propre et bien organisé
 
-## License
+## Licence
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Ce projet est sous licence MIT - voir le fichier [LICENCE](LICENSE) pour plus de détails.
 
-## Acknowledgments
+## Remerciements
 
-- [Audiobookshelf](https://github.com/advplyr/audiobookshelf) - The best self-hosted audiobook server
-- [Plex](https://www.plex.tv/) - Media server platform
-- [PyQt6](https://www.riverbankcomputing.com/static/Docs/PyQt6/) - Python bindings for Qt
-- [PyInstaller](https://www.pyinstaller.org/) - Python application packaging
+- [Audiobookshelf](https://github.com/advplyr/audiobookshelf) - Le meilleur serveur auto-hébergé pour livres audio
+- [Plex](https://www.plex.tv/) - Plateforme de serveur multimédia
+- [PyQt6](https://www.riverbankcomputing.com/static/Docs/PyQt6/) - Liaisons Python pour Qt
+- [PyInstaller](https://www.pyinstaller.org/) - Empaquetage d'applications Python
 
 ## Support
 
-For support, please open an issue on the [GitHub repository](https://github.com/pxomaker-hue/Audook).
+Pour obtenir de l'aide, veuillez ouvrir une issue sur le [dépôt GitHub](https://github.com/pxomaker-hue/Audook).
 
 ---
 
-**Audook** - Your perfect audiobook companion for Windows! 📚🎧
+**Audook** - Votre compagnon parfait pour les livres audio sur Windows ! 📚🎧

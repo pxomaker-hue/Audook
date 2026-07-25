@@ -1,68 +1,68 @@
 #!/usr/bin/env python3
 """
-Test script for Audook
-Run this to verify the application works correctly
+Script de test pour Audook
+Exécutez ceci pour vérifier que l'application fonctionne correctement
 """
 
 import sys
 import asyncio
 from pathlib import Path
 
-# Add the project root to path
+# Ajouter le chemin du projet
 sys.path.insert(0, str(Path(__file__).parent))
 
 
 def test_imports():
- """Test that all imports work"""
- print("Testing imports...")
+ """Test que toutes les imports fonctionnent"""
+ print("Test des imports...")
  
  try:
  from app import __version__, APP_NAME, DATA_DIR, CONFIG_FILE
- print(f"✓ App module: v{__version__}")
+ print(f"✓ Module App : v{__version__}")
  
  from app.models import Audiobook, Chapter, Library, Bookmark, PlaybackState, ServerConfig, AppConfig
- print("✓ Models")
+ print("✓ Modèles")
  
  from app.utils import format_duration, format_time_short, generate_id, sanitize_filename
- print("✓ Utilities")
+ print("✓ Utilitaires")
  
  from app.utils.config_manager import config_manager
- print("✓ Config Manager")
+ print("✓ Gestionnaire de configuration")
  
  from app.audiobookshelf.client import AudiobookshelfClient
- print("✓ Audiobookshelf Client")
+ print("✓ Client Audiobookshelf")
  
  from app.plex.client import PlexClient
- print("✓ Plex Client")
+ print("✓ Client Plex")
  
  from app.player.player import player
  from app.player.queue import queue
- print("✓ Player")
+ print("✓ Lecteur")
  
  from app.ui import get_stylesheet, apply_theme
- print("✓ UI Utilities")
+ print("✓ Utilitaires UI")
  
  from app.ui.library_view import LibraryView
  from app.ui.player_view import PlayerView
  from app.ui.settings_view import SettingsView
- print("✓ UI Components")
+ print("✓ Composants UI")
  
  from app.main_window import MainWindow
- print("✓ Main Window")
+ print("✓ Fenêtre principale")
  
- print("\n✅ All imports successful!\n")
+ print("\n✅ Tous les imports ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Import failed: {e}")
+ print(f"\n❌ Import échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 def test_models():
- """Test data models"""
- print("Testing models...")
+ """Test des modèles de données"""
+ print("Test des modèles...")
  
  try:
  from app.models import Audiobook, Chapter, Library, Bookmark, PlaybackState, ServerConfig
@@ -72,35 +72,35 @@ def test_models():
  audiobook = Audiobook(
  id="test123",
  library_id="lib123",
- title="Test Audiobook",
- author="Test Author",
- narrator="Test Narrator",
- description="Test description",
+ title="Livre audio test",
+ author="Auteur test",
+ narrator="Narrateur test",
+ description="Description test",
  duration=3600.0,
  source="audiobookshelf"
  )
- assert audiobook.display_title == "Test Audiobook - Test Author"
- print("✓ Audiobook model")
+ assert audiobook.display_title == "Livre audio test - Auteur test"
+ print("✓ Modèle Audiobook")
  
  # Test Chapter
  chapter = Chapter(
  id="chap1",
- title="Chapter 1",
+ title="Chapitre 1",
  index=0,
  duration=1800.0,
- audio_file="/path/to/audio.mp3"
+ audio_file="/chemin/vers/audio.mp3"
  )
- assert chapter.display_title == "1. Chapter 1"
- print("✓ Chapter model")
+ assert chapter.display_title == "1. Chapitre 1"
+ print("✓ Modèle Chapter")
  
  # Test Library
  library = Library(
  id="lib123",
- name="Test Library",
+ name="Bibliothèque test",
  source="audiobookshelf",
  server_url="http://localhost:13378"
  )
- print("✓ Library model")
+ print("✓ Modèle Library")
  
  # Test Bookmark
  bookmark = Bookmark(
@@ -108,9 +108,9 @@ def test_models():
  library_id="lib123",
  chapter_id="chap1",
  position=600.0,
- title="My Bookmark"
+ title="Mon marque-page"
  )
- print("✓ Bookmark model")
+ print("✓ Modèle Bookmark")
  
  # Test PlaybackState
  state = PlaybackState(
@@ -121,31 +121,31 @@ def test_models():
  is_playing=True,
  speed=1.0
  )
- print("✓ PlaybackState model")
+ print("✓ Modèle PlaybackState")
  
  # Test ServerConfig
  server = ServerConfig(
  id="server1",
- name="My Server",
+ name="Mon serveur",
  type="audiobookshelf",
  url="http://localhost:13378",
- api_key="test-key"
+ api_key="clé-test"
  )
- print("✓ ServerConfig model")
+ print("✓ Modèle ServerConfig")
  
- print("\n✅ All model tests passed!\n")
+ print("\n✅ Tous les tests de modèles ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Model test failed: {e}")
+ print(f"\n❌ Test de modèle échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 def test_utils():
- """Test utility functions"""
- print("Testing utilities...")
+ """Test des fonctions utilitaires"""
+ print("Test des utilitaires...")
  
  try:
  from app.utils import format_duration, format_time_short, generate_id, sanitize_filename
@@ -169,160 +169,160 @@ def test_utils():
  print("✓ generate_id")
  
  # Test sanitize_filename
- assert sanitize_filename("Test: File*Name?.txt") == "Test_File_Name.txt"
+ assert sanitize_filename("Test: Fichier*Nom?.txt") == "Test_Fichier_Nom.txt"
  print("✓ sanitize_filename")
  
- print("\n✅ All utility tests passed!\n")
+ print("\n✅ Tous les tests utilitaires ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Utility test failed: {e}")
+ print(f"\n❌ Test utilitaire échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 def test_config():
- """Test configuration"""
- print("Testing configuration...")
+ """Test de la configuration"""
+ print("Test de la configuration...")
  
  try:
  from app.utils.config_manager import config_manager
  from app.models import ServerConfig
  
- # Test config loading
+ # Test du chargement de la configuration
  config = config_manager.config
  assert hasattr(config, 'servers')
  assert hasattr(config, 'theme')
- print("✓ Config loading")
+ print("✓ Chargement de la configuration")
  
- # Test server management
+ # Test de la gestion des serveurs
  test_server = ServerConfig(
  id="test_server",
- name="Test Server",
+ name="Serveur test",
  type="audiobookshelf",
  url="http://localhost:13378",
- api_key="test-key"
+ api_key="clé-test"
  )
  
- # Add server
+ # Ajouter un serveur
  config_manager.add_server(test_server)
  assert len(config_manager.config.servers) > 0
- print("✓ Add server")
+ print("✓ Ajout d'un serveur")
  
- # Remove server
+ # Supprimer un serveur
  config_manager.remove_server("test_server")
- print("✓ Remove server")
+ print("✓ Suppression d'un serveur")
  
- print("\n✅ All config tests passed!\n")
+ print("\n✅ Tous les tests de configuration ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Config test failed: {e}")
+ print(f"\n❌ Test de configuration échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 async def test_clients():
- """Test API clients (without actual connections)"""
- print("Testing API clients...")
+ """Test des clients API (sans connexions réelles)"""
+ print("Test des clients API...")
  
  try:
  from app.audiobookshelf.client import AudiobookshelfClient
  from app.plex.client import PlexClient
  
- # Test AudiobookshelfClient instantiation
- abs_client = AudiobookshelfClient("http://localhost:13378", "test-key")
+ # Test de l'instanciation d'AudiobookshelfClient
+ abs_client = AudiobookshelfClient("http://localhost:13378", "clé-test")
  assert abs_client.base_url == "http://localhost:13378"
- assert abs_client.api_key == "test-key"
+ assert abs_client.api_key == "clé-test"
  abs_client.close()
- print("✓ AudiobookshelfClient")
+ print("✓ Client Audiobookshelf")
  
- # Test PlexClient instantiation
- plex_client = PlexClient("http://localhost:32400", "test-token")
+ # Test de l'instanciation de PlexClient
+ plex_client = PlexClient("http://localhost:32400", "jeton-test")
  assert plex_client.base_url == "http://localhost:32400"
- assert plex_client.token == "test-token"
+ assert plex_client.token == "jeton-test"
  plex_client.close()
- print("✓ PlexClient")
+ print("✓ Client Plex")
  
- print("\n✅ All client tests passed!\n")
+ print("\n✅ Tous les tests de clients ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Client test failed: {e}")
+ print(f"\n❌ Test de client échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 def test_player():
- """Test player (without actual audio)"""
- print("Testing player...")
+ """Test du lecteur (sans audio réel)"""
+ print("Test du lecteur...")
  
  try:
  from app.player.player import player
  from app.player.queue import queue
  
- # Test player state
- assert player.get_volume() == 0.8 # Default
- assert player.get_speed() == 1.0 # Default
+ # Test de l'état du lecteur
+ assert player.get_volume() == 0.8 # Par défaut
+ assert player.get_speed() == 1.0 # Par défaut
  assert not player.is_playing()
- print("✓ Player state")
+ print("✓ État du lecteur")
  
- # Test queue
+ # Test de la file d'attente
  assert queue.is_empty()
- print("✓ Queue")
+ print("✓ File d'attente")
  
- print("\n✅ All player tests passed!\n")
+ print("\n✅ Tous les tests du lecteur ont réussi !\n")
  return True
  
  except Exception as e:
- print(f"\n❌ Player test failed: {e}")
+ print(f"\n❌ Test du lecteur échoué : {e}")
  import traceback
  traceback.print_exc()
  return False
 
 
 def main():
- """Run all tests"""
+ """Exécuter tous les tests"""
  print("=" * 60)
- print("Audook - Test Suite")
+ print("Audook - Suite de tests")
  print("=" * 60)
  print()
  
  results = []
  
- # Run synchronous tests
+ # Exécuter les tests synchrones
  results.append(("Imports", test_imports()))
- results.append(("Models", test_models()))
- results.append(("Utilities", test_utils()))
- results.append(("Config", test_config()))
- results.append(("Player", test_player()))
+ results.append(("Modèles", test_models()))
+ results.append(("Utilitaires", test_utils()))
+ results.append(("Configuration", test_config()))
+ results.append(("Lecteur", test_player()))
  
- # Run async tests
+ # Exécuter les tests asynchrones
  results.append(("Clients", asyncio.run(test_clients())))
  
- # Summary
+ # Résumé
  print("=" * 60)
- print("Test Summary")
+ print("Résumé des tests")
  print("=" * 60)
  
  passed = sum(1 for _, result in results if result)
  total = len(results)
  
  for name, result in results:
- status = "✅ PASS" if result else "❌ FAIL"
+ status = "✅ RÉUSSI" if result else "❌ ÉCHOUÉ"
  print(f"{name:20s} {status}")
  
  print()
- print(f"Results: {passed}/{total} tests passed")
+ print(f"Résultats : {passed}/{total} tests réussis")
  
  if passed == total:
- print("\n🎉 All tests passed! The application is ready to use.")
+ print("\n🎉 Tous les tests ont réussi ! L'application est prête à être utilisée.")
  return 0
  else:
- print("\n⚠️ Some tests failed. Please check the output above.")
+ print("\n⚠️ Certains tests ont échoué. Veuillez vérifier la sortie ci-dessus.")
  return 1
 
 

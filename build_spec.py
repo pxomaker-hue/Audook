@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-PyInstaller build specification for Audook
+Spécification de build PyInstaller pour Audook
 
-Usage:
+Utilisation :
  python build_spec.py
  
-This will create a standalone Windows executable in the dist/ folder
+Cela créera un exécutable Windows autonome dans le dossier dist/
 """
 
 from PyInstaller.__main__ import run
