@@ -86,8 +86,8 @@ class Book(Base):
     # Chapters data (JSON)
     chapters = Column(JSON, nullable=True)  # Array of chapter objects
 
-    # Metadata
-    metadata = Column(JSON, nullable=True)  # Extra metadata from server
+    # Extra metadata
+    extra_metadata = Column(JSON, nullable=True)  # Extra metadata from server
 
     # Sync info
     last_sync = Column(DateTime, nullable=True)
