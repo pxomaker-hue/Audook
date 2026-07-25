@@ -38,10 +38,9 @@ def init_services():
     global library_service, player_service, sync_service
     if library_service is None:
         try:
-            session = get_session()
-            library_service = LibraryService(session)
-            player_service = PlayerService(session)
-            sync_service = SyncService(session)
+            library_service = LibraryService()
+            player_service = PlayerService()
+            sync_service = SyncService()
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
             # Continue anyway - services will be retried on next request
@@ -57,7 +56,7 @@ def get_books():
             'title': book.title,
             'author': book.author,
             'narrator': book.narrator,
-            'cover_url': book.cover_url,
+            'cover_url': book.cover,
             'duration': book.duration,
             'description': book.description
         } for book in books])
@@ -74,21 +73,21 @@ def get_book_details(book_id):
 
         session = get_session()
         progress_repo = ReadingProgressRepository(session)
-        progress = progress_repo.get_by_book_id(book_id)
+        progress = progress_repo.get_or_create(book_id)
 
         return jsonify({
             'id': book.id,
             'title': book.title,
             'author': book.author,
             'narrator': book.narrator,
-            'cover_url': book.cover_url,
+            'cover_url': book.cover,
             'duration': book.duration,
             'description': book.description,
-            'chapters': [ch.to_dict() for ch in book.chapters],
+            'chapters': book.chapters,
             'progress': {
-                'position': progress.position if progress else 0,
-                'percentage': (progress.position / book.duration * 100) if progress and book.duration else 0
-            } if progress else {'position': 0, 'percentage': 0}
+                'position': progress.position_seconds,
+                'percentage': progress.progress_percent
+            }
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
@@ -104,7 +103,7 @@ def search_books():
             'title': book.title,
             'author': book.author,
             'narrator': book.narrator,
-            'cover_url': book.cover_url
+            'cover_url': book.cover
         } for book in books])
     except Exception as e:
         logger.error(f"Failed to search books: {e}")
@@ -116,7 +115,10 @@ def play_book():
     try:
         data = request.json
         book_id = data.get('book_id')
-        player_service.play(book_id)
+        audiobook = library_service.get_book_by_id(book_id)
+        if not audiobook:
+            return jsonify({'error': 'Book not found'}), 404
+        player_service.start_playbook(audiobook)
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to play book: {e}")
@@ -185,7 +187,12 @@ def set_speed():
 @app.route('/api/player/state', methods=['GET'])
 def get_player_state():
     try:
-        state = player_service.get_state()
+        state = {
+            'is_playing': player_service.is_playing(),
+            'is_paused': player_service.is_paused(),
+            'position': player_service.get_current_position(),
+            'duration': player_service.get_current_duration()
+        }
         return jsonify(state)
     except Exception as e:
         logger.error(f"Failed to get player state: {e}")
@@ -195,7 +202,7 @@ def get_player_state():
 @app.route('/api/sync', methods=['POST'])
 def sync_servers():
     try:
-        sync_service.sync_all()
+        sync_service.sync_all_servers(background=True)
         return jsonify({'status': 'syncing'})
     except Exception as e:
         logger.error(f"Failed to sync: {e}")
