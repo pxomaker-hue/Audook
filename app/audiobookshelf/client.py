@@ -14,13 +14,13 @@ from app.utils import logger
 
 class AudiobookshelfClient:
     """Client for Audiobookshelf API"""
-    
+
     API_VERSION = "v1"
-    
+
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             base_url=f"{self.base_url}/api/{self.API_VERSION}",
             headers={
                 "Authorization": f"Bearer {self.api_key}",
@@ -28,17 +28,17 @@ class AudiobookshelfClient:
             },
             timeout=30.0
         )
-    
+
     async def __aenter__(self):
         await self._client.__aenter__()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._client.__aexit__(exc_type, exc_val, exc_tb)
-    
-    def close(self):
+
+    async def close(self):
         """Close the client"""
-        self._client.close()
+        await self._client.aclose()
     
     async def ping(self) -> bool:
         """Check if server is reachable"""
@@ -289,9 +289,9 @@ class AudiobookshelfClient:
         return f"{self.base_url}/api/items/{cover_path}/cover"
     
     async def download_chapter(
-        self, 
-        library_id: str, 
-        book_id: str, 
+        self,
+        library_id: str,
+        book_id: str,
         chapter_id: str,
         output_path: Path
     ) -> bool:
@@ -300,21 +300,18 @@ class AudiobookshelfClient:
             audio_url = await self.get_chapter_audio_url(library_id, book_id, chapter_id)
             if not audio_url:
                 return False
-            
-            # Use a sync client for downloading
-            with httpx.Client(timeout=300.0) as download_client:
-                with download_client.stream("GET", audio_url) as response:
+
+            # Use async client for downloading
+            async with httpx.AsyncClient(timeout=300.0) as download_client:
+                async with download_client.stream("GET", audio_url) as response:
                     response.raise_for_status()
-                
-                total_size = int(response.headers.get("content-length", 0))
-                downloaded = 0
-                
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        # Could add progress callback here
-                
+
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    async with await response.aiter_bytes(chunk_size=8192) as chunks:
+                        with open(output_path, "wb") as f:
+                            async for chunk in chunks:
+                                f.write(chunk)
+
                 return True
         except Exception as e:
             logger.error(f"Failed to download chapter: {e}")

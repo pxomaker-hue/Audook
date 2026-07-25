@@ -5,23 +5,27 @@ The primary application window
 
 import asyncio
 from typing import Optional, List, Dict, Any
+from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QStackedWidget, QPushButton, QToolButton, QLabel, QFrame
+    QStackedWidget, QPushButton, QToolButton, QLabel, QFrame, QFileDialog
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
+from qasync import asyncSlot
 
 from app.models import Audiobook, Library, ServerConfig
 from app.player.player import player
 from app.player.queue import queue
 from app.utils.config_manager import config_manager
+from app.utils import logger
 from app.ui.library_view import LibraryView
 from app.ui.player_view import PlayerView
 from app.ui.settings_view import SettingsView
 from app.ui import apply_theme, get_stylesheet
 from app.audiobookshelf.client import AudiobookshelfClient
 from app.plex.client import PlexClient
+from app.local.client import LocalClient
 
 
 class MainWindow(QMainWindow):
@@ -250,57 +254,94 @@ class MainWindow(QMainWindow):
     async def _load_libraries(self, server: ServerConfig):
         """Load libraries from server"""
         self._is_loading = True
-        self._status_bar.setText("Chargement des bibliothèques...")
+        self._status_bar.setText(f"Chargement des bibliothèques de {server.name}...")
 
         try:
             if server.type == "audiobookshelf":
                 client = AudiobookshelfClient(server.url, server.api_key or "")
-            else:
+            elif server.type == "plex":
                 client = PlexClient(server.url, server.api_key or server.password or "")
+            else:
+                logger.error(f"Unknown server type: {server.type}")
+                self._status_bar.setText(f"Erreur: Type de serveur inconnu")
+                return
 
             libraries = await client.get_libraries()
+
+            if not libraries:
+                self._status_bar.setText(f"Aucune bibliothèque trouvée sur {server.name}")
+                return
 
             # Update UI
             self._library_view.set_libraries(libraries)
 
-            if libraries:
-                # Set first library as current
-                self._library_view.set_current_library(libraries[0].id)
-                self._current_library = libraries[0]
+            # Set first library as current
+            self._library_view.set_current_library(libraries[0].id)
+            self._current_library = libraries[0]
 
-                # Load audiobooks
-                await self._load_audiobooks(libraries[0])
+            # Load audiobooks
+            await self._load_audiobooks(client, libraries[0])
 
-            self._status_bar.setText(f"Connecté à {server.name}")
+            self._status_bar.setText(f"Connecté à {server.name} - {len(libraries)} bibliothèque(s)")
 
         except Exception as e:
+            logger.error(f"Failed to load libraries: {e}")
             self._status_bar.setText(f"Erreur: {str(e)}")
         finally:
             self._is_loading = False
 
-    async def _load_audiobooks(self, library: Library):
-        """Load audiobooks from library"""
-        if not self._current_server:
-            return
+    async def _load_local_library(self, folder_path: str):
+        """Load audiobooks from a local folder"""
+        self._is_loading = True
+        self._status_bar.setText(f"Lecture du dossier {Path(folder_path).name}...")
 
+        try:
+            client = LocalClient(folder_path)
+
+            # Check if folder is accessible
+            if not await client.ping():
+                self._status_bar.setText("Erreur: Le dossier n'est pas accessible")
+                return
+
+            # Get libraries (for local, it's just the main folder)
+            libraries = await client.get_libraries()
+
+            if not libraries:
+                self._status_bar.setText("Erreur: Impossible de lire le dossier")
+                return
+
+            # Update UI
+            self._library_view.set_libraries(libraries)
+            self._library_view.set_current_library(libraries[0].id)
+            self._current_library = libraries[0]
+
+            # Load audiobooks
+            await self._load_audiobooks(client, libraries[0])
+
+            self._status_bar.setText(f"Dossier local: {Path(folder_path).name}")
+
+        except Exception as e:
+            logger.error(f"Failed to load local library: {e}")
+            self._status_bar.setText(f"Erreur: {str(e)}")
+        finally:
+            self._is_loading = False
+
+    async def _load_audiobooks(self, client: Any, library: Library):
+        """Load audiobooks from library"""
         self._is_loading = True
         self._status_bar.setText(f"Chargement des audiobooks de {library.name}...")
 
         try:
-            if self._current_server.type == "audiobookshelf":
-                client = AudiobookshelfClient(self._current_server.url, self._current_server.api_key or "")
-            else:
-                client = PlexClient(self._current_server.url, self._current_server.api_key or self._current_server.password or "")
-
             audiobooks = await client.get_audiobooks(library.id, limit=100)
 
             # Update UI
             self._audiobooks = audiobooks
             self._library_view.set_audiobooks(audiobooks)
 
-            self._status_bar.setText(f"{len(audiobooks)} audiobooks chargés")
+            self._status_bar.setText(f"{len(audiobooks)} audiobook(s) trouvé(s)")
 
         except Exception as e:
+            logger.error(f"Failed to load audiobooks: {e}")
             self._status_bar.setText(f"Erreur: {str(e)}")
         finally:
             self._is_loading = False

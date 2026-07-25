@@ -17,9 +17,11 @@ pydantic-settings==2.1.0
 
 # Async support
 anyio==4.1.0
+qasync==0.27.1
 
 # File handling
 aiofiles==23.2.1
+pathvalidate==3.0.0
 
 # Utilities
 python-dateutil==2.8.2
