@@ -24,14 +24,28 @@ library_service = None
 player_service = None
 sync_service = None
 
+# Health check endpoint for Electron app (before services init)
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'ok'}), 200
+
 @app.before_request
 def init_services():
+    # Skip for health check endpoint
+    if request.path == '/health':
+        return
+
     global library_service, player_service, sync_service
     if library_service is None:
-        session = get_session()
-        library_service = LibraryService(session)
-        player_service = PlayerService(session)
-        sync_service = SyncService(session)
+        try:
+            session = get_session()
+            library_service = LibraryService(session)
+            player_service = PlayerService(session)
+            sync_service = SyncService(session)
+        except Exception as e:
+            logger.error(f"Failed to initialize services: {e}")
+            # Continue anyway - services will be retried on next request
+            pass
 
 # Library endpoints
 @app.route('/api/books', methods=['GET'])

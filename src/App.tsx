@@ -9,7 +9,7 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import './App.css';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
 const App: React.FC = () => {
   const [isDev, setIsDev] = useState(false);
