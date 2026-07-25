@@ -66,11 +66,12 @@ class PlexClient:
         """Get audiobooks from a library"""
         try:
             audiobooks = []
-            section = self.server.library.getLatest(libtype="artist")
 
             # Get artists (audiobooks) from the section
-            for artist in self.server.library.section(library_id).all():
-                audiobooks.append(self._parse_audiobook(artist))
+            for artist in self.server.library.sectionByID(int(library_id)).all():
+                audiobook = self._parse_audiobook(artist)
+                if audiobook:
+                    audiobooks.append(audiobook)
 
             logger.info(f"Found {len(audiobooks)} audiobooks in library {library_id}")
             return audiobooks

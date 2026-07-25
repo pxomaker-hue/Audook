@@ -50,6 +50,13 @@ def init_services():
             pass
 
 # Server management endpoints
+def _normalize_server_url(server_type, url):
+    """Prepend http:// when the user omitted the scheme (Plex/Audiobookshelf only)"""
+    if server_type in ('plex', 'audiobookshelf') and not url.lower().startswith(('http://', 'https://')):
+        return f"http://{url}"
+    return url
+
+
 def _test_server_connection(server_type, url, api_key=None, username=None, password=None):
     """Attempt to connect to a server, return (ok, error_message)"""
     try:
@@ -100,6 +107,7 @@ def add_server():
         if not name or not url:
             return jsonify({'error': 'Nom et URL/chemin requis'}), 400
 
+        url = _normalize_server_url(server_type, url)
         api_key = data.get('api_key')
         username = data.get('username')
         password = data.get('password')

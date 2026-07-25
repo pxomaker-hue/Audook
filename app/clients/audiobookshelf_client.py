@@ -33,7 +33,7 @@ class AudiobookshelfClient:
         """Authenticate with Audiobookshelf server"""
         try:
             response = self.session.post(
-                f"{self.url}/api/login",
+                f"{self.url}/login",
                 json={"username": self.username, "password": self.password}
             )
             response.raise_for_status()
@@ -80,12 +80,12 @@ class AudiobookshelfClient:
         """Get audiobooks from a library"""
         try:
             response = self.session.get(
-                f"{self.url}/api/libraries/{library_id}/books"
+                f"{self.url}/api/libraries/{library_id}/items"
             )
             response.raise_for_status()
 
             audiobooks = []
-            for book in response.json().get("books", []):
+            for book in response.json().get("results", []):
                 audiobook = self._parse_audiobook(book, library_id)
                 if audiobook:
                     audiobooks.append(audiobook)
@@ -100,9 +100,7 @@ class AudiobookshelfClient:
     def get_audiobook_details(self, library_id: str, book_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed info about a specific audiobook"""
         try:
-            response = self.session.get(
-                f"{self.url}/api/libraries/{library_id}/books/{book_id}"
-            )
+            response = self.session.get(f"{self.url}/api/items/{book_id}")
             response.raise_for_status()
 
             return self._parse_audiobook(response.json(), library_id)
@@ -116,7 +114,7 @@ class AudiobookshelfClient:
         try:
             book_id = book.get("id")
             media = book.get("media", {})
-            metadata = book.get("metadata", {})
+            metadata = media.get("metadata", {})
 
             # Calculate total duration
             total_duration = 0.0
@@ -160,12 +158,10 @@ class AudiobookshelfClient:
             logger.error(f"Failed to parse audiobook: {e}")
             return None
 
-    def _get_streaming_url(self, library_id: str, book_id: str, file_ino: str) -> str:
-        """Get streaming URL for an audio file"""
+    def _get_streaming_url(self, library_id: str, book_id: str, file_ino: str) -> Optional[str]:
+        """Get direct streaming URL for a single audio file"""
         try:
-            # Audiobookshelf streaming URL format
-            url = f"{self.url}/api/books/{book_id}/stream?token={self.auth_token}"
-            return url
+            return f"{self.url}/api/items/{book_id}/file/{file_ino}?token={self.auth_token}"
         except Exception as e:
             logger.error(f"Failed to get streaming URL: {e}")
             return None
@@ -173,7 +169,7 @@ class AudiobookshelfClient:
     def _get_cover_url(self, library_id: str, book_id: str) -> Optional[str]:
         """Get cover art URL"""
         try:
-            return f"{self.url}/api/books/{book_id}/cover?token={self.auth_token}"
+            return f"{self.url}/api/items/{book_id}/cover?token={self.auth_token}"
         except Exception as e:
             logger.error(f"Failed to get cover URL: {e}")
             return None
@@ -217,7 +213,7 @@ class AudiobookshelfClient:
     def test_connection(self) -> bool:
         """Test connection to Audiobookshelf server"""
         try:
-            response = self.session.get(f"{self.url}/api/ping")
+            response = self.session.get(f"{self.url}/ping")
             response.raise_for_status()
             logger.info("Audiobookshelf connection test successful")
             return True
