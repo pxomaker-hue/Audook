@@ -9,6 +9,7 @@ import threading
 import time
 
 from app.database import get_session, ReadingProgressRepository, ReadingHistoryRepository
+from app.database.models import ReadingProgress
 from app.models import Audiobook
 from app.utils import logger
 
@@ -136,9 +137,8 @@ class ProgressManager:
         """
         try:
             session = get_session()
-            repo = ReadingProgressRepository(session)
 
-            progress = repo.session.query(repo.__class__.__bases__[0]).filter_by(
+            progress = session.query(ReadingProgress).filter_by(
                 book_id=audiobook.id
             ).first()
 

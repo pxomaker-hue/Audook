@@ -24,9 +24,13 @@ class BaseRepository:
 class ServerRepository(BaseRepository):
     """Operations on Server model"""
 
-    def create(self, server_id: str, type: str, name: str, url: str, api_key: str = None) -> Server:
+    def create(self, server_id: str, type: str, name: str, url: str, api_key: str = None,
+               username: str = None, password: str = None) -> Server:
         """Create a new server"""
-        server = Server(id=server_id, type=type, name=name, url=url, api_key=api_key)
+        server = Server(
+            id=server_id, type=type, name=name, url=url,
+            api_key=api_key, username=username, password=password
+        )
         self.session.add(server)
         self.session.commit()
         logger.info(f"Created server: {name}")
@@ -60,7 +64,8 @@ class BookRepository(BaseRepository):
     """Operations on Book model"""
 
     def create(self, book_id: str, server_id: str, library_id: str, title: str,
-               author: str = None, duration: float = 0.0, chapters: dict = None) -> Book:
+               author: str = None, narrator: str = None, duration: float = 0.0,
+               chapters: dict = None, cover_url: str = None, extra_metadata: dict = None) -> Book:
         """Create a new book"""
         book = Book(
             id=book_id,
@@ -68,8 +73,11 @@ class BookRepository(BaseRepository):
             library_id=library_id,
             title=title,
             author=author,
+            narrator=narrator,
             duration=duration,
-            chapters=chapters or []
+            chapters=chapters or [],
+            cover_url=cover_url,
+            extra_metadata=extra_metadata
         )
         self.session.add(book)
         self.session.commit()

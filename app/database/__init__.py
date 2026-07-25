@@ -23,6 +23,15 @@ from app.database.models import (
     AppSettings,
 )
 
+from app.database.repositories import (
+    ServerRepository,
+    BookRepository,
+    ReadingProgressRepository,
+    ReadingHistoryRepository,
+    SyncLogRepository,
+    BookmarkRepository,
+)
+
 __all__ = [
     "Database",
     "init_database",
@@ -38,4 +47,10 @@ __all__ = [
     "Device",
     "Bookmark",
     "AppSettings",
+    "ServerRepository",
+    "BookRepository",
+    "ReadingProgressRepository",
+    "ReadingHistoryRepository",
+    "SyncLogRepository",
+    "BookmarkRepository",
 ]

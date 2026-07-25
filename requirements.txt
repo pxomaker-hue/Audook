@@ -1,36 +1,5 @@
-# Core GUI
 PyQt6==6.6.1
-PyQt6-Qt6==6.6.1
-PyQt6-sip==13.6.0
-
-# Database
-SQLAlchemy==2.0.23
-sqlite3  # Built-in
-
-# Audio playback
-python-vlc==3.0.20120  # Better streaming support than pygame
-pygame==2.5.2  # Keep for now, can remove later
-
-# HTTP requests
-httpx==0.26.0
-aiohttp==3.9.1
-
-# Async support
-qasync==0.28.0
-anyio==4.1.0
-aiofiles==23.2.1
-
-# Configuration
-pydantic==2.5.3
-pydantic-settings==2.1.0
-
-# Data validation
-pathvalidate==3.0.0
-
-# Utilities
-python-dateutil==2.8.2
-
-# Development
-pytest==7.4.3  # Testing
-pytest-asyncio==0.21.1  # Async tests
-black==23.11.0  # Code formatting
+sqlalchemy==2.0.23
+python-vlc==3.0.20123
+python-plexapi==4.15.0
+requests==2.31.0
