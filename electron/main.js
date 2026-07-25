@@ -8,10 +8,9 @@ let pythonProcess;
 
 // Spawn Python backend
 function startPythonBackend() {
-  const pythonScript = path.join(__dirname, '../audook_backend.py');
-
   if (isDev) {
     // Development: run Python directly
+    const pythonScript = path.join(__dirname, '../audook_backend.py');
     pythonProcess = spawn('python', [pythonScript], {
       detached: false,
       stdio: 'pipe'
@@ -26,27 +25,32 @@ function startPythonBackend() {
     });
   } else {
     // Production: use PyInstaller bundle
-    const pythonExe = path.join(process.resourcesPath, 'audook_backend', 'audook_backend.exe');
-    pythonProcess = spawn(pythonExe, [], {
-      detached: false,
-      stdio: 'pipe'
-    });
+    const pythonExe = path.join(process.resourcesPath, 'audook_backend.exe');
 
-    pythonProcess.stdout?.on('data', (data) => {
-      console.log(`[Python Backend] ${data}`);
-    });
+    try {
+      pythonProcess = spawn(pythonExe, [], {
+        detached: false,
+        stdio: 'pipe'
+      });
 
-    pythonProcess.stderr?.on('data', (data) => {
-      console.error(`[Python Backend] ${data}`);
-    });
+      pythonProcess.stdout?.on('data', (data) => {
+        console.log(`[Python Backend] ${data}`);
+      });
+
+      pythonProcess.stderr?.on('data', (data) => {
+        console.error(`[Python Backend] ${data}`);
+      });
+    } catch (err) {
+      console.error('Failed to start Python backend from:', pythonExe);
+      console.error('Error:', err);
+    }
   }
 
-  pythonProcess.on('error', (err) => {
-    console.error('Failed to start Python backend:', err);
-    mainWindow?.webContents?.send('backend-error', err.message);
+  pythonProcess?.on('error', (err) => {
+    console.error('Python backend process error:', err);
   });
 
-  pythonProcess.on('exit', (code) => {
+  pythonProcess?.on('exit', (code) => {
     console.log(`Python backend exited with code ${code}`);
   });
 }
@@ -59,7 +63,6 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 700,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       enableRemoteModule: false,
       sandbox: true

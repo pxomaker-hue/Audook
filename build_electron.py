@@ -9,6 +9,7 @@ Usage:
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 def main():
@@ -19,7 +20,7 @@ def main():
     print("=" * 60)
 
     # Step 1: Compile Python backend
-    print("\n[1/2] Compiling Python backend with PyInstaller...")
+    print("\n[1/3] Compiling Python backend with PyInstaller...")
     backend_opts = [
         str(project_dir / 'audook_backend.py'),
         '--name=audook_backend',
@@ -48,18 +49,36 @@ def main():
         print(f"✗ Failed to compile Python backend: {e}")
         return False
 
-    # Step 2: Build Electron app with electron-builder
-    print("\n[2/2] Building Electron application...")
+    # Step 2: Build React first
+    print("\n[2/3] Building React application...")
     try:
+        # Use shell=True on Windows to find npm in PATH
         result = subprocess.run(
-            ['npm', 'run', 'electron-build'],
+            'npm run react-build',
             cwd=str(project_dir),
             check=True,
-            capture_output=False
+            shell=True
+        )
+        print("✓ React application built successfully")
+    except Exception as e:
+        print(f"✗ Failed to build React application: {e}")
+        print("\nMake sure npm is installed and in your PATH")
+        return False
+
+    # Step 3: Build Electron app with electron-builder
+    print("\n[3/3] Building Electron application...")
+    try:
+        # Use shell=True on Windows to find npm in PATH
+        result = subprocess.run(
+            'npm run electron-build',
+            cwd=str(project_dir),
+            check=True,
+            shell=True
         )
         print("✓ Electron application built successfully")
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"✗ Failed to build Electron application: {e}")
+        print("\nMake sure electron-builder is installed: npm install --save-dev electron-builder")
         return False
 
     print("\n" + "=" * 60)

@@ -2,7 +2,7 @@
   "name": "audook",
   "version": "1.0.0",
   "description": "Modern audiobook player for Windows",
-  "main": "electron/main.js",
+  "main": "build/electron.js",
   "homepage": "./",
   "homepage-dev": "http://localhost:3000",
   "scripts": {
@@ -12,27 +12,28 @@
     "react-eject": "react-scripts eject",
     "electron-start": "electron .",
     "electron-dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && npm run electron-start\"",
-    "electron-build": "npm run react-build && electron-builder",
+    "preelectron-build": "node -e \"const fs=require('fs'); fs.cpSync('electron/main.js', 'build/electron.js')\"",
+    "electron-build": "npm run react-build && npm run preelectron-build && electron-builder",
     "build": "npm run electron-build",
     "start": "npm run electron-dev"
   },
   "dependencies": {
+    "axios": "^1.6.0",
+    "electron-is-dev": "^2.0.0",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.18.0",
-    "axios": "^1.6.0",
-    "lucide-react": "^0.294.0"
+    "react-router-dom": "^6.18.0"
   },
   "devDependencies": {
-    "react-scripts": "5.0.1",
+    "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.2.0",
-    "electron": "latest",
-    "electron-builder": "latest",
-    "electron-is-dev": "^2.0.0",
     "concurrently": "^8.2.0",
+    "electron": "latest",
+    "electron-builder": "^26.15.3",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.5",
     "wait-on": "^7.0.0"
   },
   "build": {
@@ -42,6 +43,13 @@
       "build/**/*",
       "electron/**/*",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/audook_backend",
+        "to": ".",
+        "filter": ["audook_backend.exe"]
+      }
     ],
     "win": {
       "target": [
