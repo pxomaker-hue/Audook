@@ -289,7 +289,6 @@ class AudioPlayer:
             self._volume = max(0.0, min(1.0, volume))
             if self._current_sound:
                 self._current_sound.set_volume(self._volume)
-            pygame.mixer.set_volume(self._volume)
             config_manager.config.volume = self._volume
             return True
         except Exception as e:
