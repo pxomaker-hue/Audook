@@ -8,16 +8,20 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from app.ui.widgets import BookCard
+from app.services import LibraryService
 
 
 class HomePage(QWidget):
     """Home page with library and recommendations"""
 
     book_selected = pyqtSignal(str)  # Emits book_id
+    sync_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.current_books = []
         self.init_ui()
+        self.load_books()
 
     def init_ui(self):
         """Initialize home page UI"""
@@ -42,11 +46,11 @@ class HomePage(QWidget):
         header_layout.addStretch()
 
         # Search box
-        search = QLineEdit()
-        search.setObjectName("search_box")
-        search.setPlaceholderText("Search books...")
-        search.setMaximumWidth(300)
-        search.setStyleSheet("""
+        self.search = QLineEdit()
+        self.search.setObjectName("search_box")
+        self.search.setPlaceholderText("Search books...")
+        self.search.setMaximumWidth(300)
+        self.search.setStyleSheet("""
             QLineEdit {
                 background-color: #f5f5f5;
                 border: 1px solid #e0e0e0;
@@ -59,7 +63,8 @@ class HomePage(QWidget):
                 background-color: #ffffff;
             }
         """)
-        header_layout.addWidget(search)
+        self.search.textChanged.connect(self.on_search)
+        header_layout.addWidget(self.search)
 
         # Sync button
         sync_btn = QPushButton("⟳ Sync")
@@ -79,6 +84,7 @@ class HomePage(QWidget):
                 background-color: #333333;
             }
         """)
+        sync_btn.clicked.connect(self.sync_requested.emit)
         header_layout.addWidget(sync_btn)
 
         main_layout.addLayout(header_layout)
@@ -88,48 +94,69 @@ class HomePage(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
 
-        grid_widget = QWidget()
-        grid_layout = QGridLayout(grid_widget)
-        grid_layout.setSpacing(24)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.grid_widget = QWidget()
+        self.grid_layout = QGridLayout(self.grid_widget)
+        self.grid_layout.setSpacing(24)
+        self.grid_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Sample books (will be populated from database)
-        self.books = []
-        self._add_sample_books(grid_layout)
+        # Books will be loaded from database
+        self.book_cards = []
 
         # Add stretch at the end
-        grid_layout.setRowStretch(grid_layout.rowCount(), 1)
-        grid_layout.setColumnStretch(grid_layout.columnCount(), 1)
+        self.grid_layout.setRowStretch(self.grid_layout.rowCount(), 1)
+        self.grid_layout.setColumnStretch(self.grid_layout.columnCount(), 1)
 
-        scroll_area.setWidget(grid_widget)
+        scroll_area.setWidget(self.grid_widget)
 
         main_layout.addWidget(scroll_area)
 
-    def _add_sample_books(self, layout):
-        """Add sample books to grid for demo"""
-        sample_books = [
-            ("book_1", "The Great Gatsby", "F. Scott Fitzgerald", 4.5),
-            ("book_2", "The Hobbit", "J.R.R. Tolkien", 4.7),
-            ("book_3", "1984", "George Orwell", 4.3),
-            ("book_4", "Pride and Prejudice", "Jane Austen", 4.6),
-            ("book_5", "The Catcher in the Rye", "J.D. Salinger", 4.2),
-            ("book_6", "Moby Dick", "Herman Melville", 3.8),
-        ]
+    def load_books(self, books=None):
+        """Load books from database"""
+        if books is None:
+            books = LibraryService.get_all_books()
 
+        self.current_books = books
+
+        # Clear existing cards
+        while self.grid_layout.count() > 0:
+            item = self.grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self.book_cards = []
+
+        # Add books to grid
         col = 0
         row = 0
-        for book_id, title, author, rating in sample_books:
-            card = BookCard(book_id, title, author, rating)
+        for audiobook in books:
+            card = BookCard(
+                audiobook.id,
+                audiobook.title,
+                audiobook.author or "Unknown",
+                rating=4.0  # TODO: Get rating from metadata
+            )
             card.play_clicked.connect(self.on_book_play)
             card.cover_clicked.connect(self.on_book_click)
-            layout.addWidget(card, row, col)
+            self.grid_layout.addWidget(card, row, col)
 
-            self.books.append(card)
+            self.book_cards.append(card)
 
             col += 1
             if col >= 4:
                 col = 0
                 row += 1
+
+        # Add stretch at the end
+        self.grid_layout.setRowStretch(row + 1, 1)
+        self.grid_layout.setColumnStretch(4, 1)
+
+    def on_search(self, query: str):
+        """Handle search query"""
+        if not query:
+            self.load_books()
+        else:
+            results = LibraryService.search_books(query)
+            self.load_books(results)
 
     def on_book_click(self, book_id: str):
         """Handle book click"""
@@ -138,8 +165,3 @@ class HomePage(QWidget):
     def on_book_play(self, book_id: str):
         """Handle play button click"""
         self.book_selected.emit(book_id)
-
-    def load_books_from_db(self, books):
-        """Load books from database"""
-        # This will be connected to database queries
-        pass

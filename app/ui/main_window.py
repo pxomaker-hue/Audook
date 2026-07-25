@@ -13,6 +13,7 @@ from app.ui.pages import HomePage, ExplorePage
 from app.ui.widgets import PlayerWidget
 from app.player import player
 from app.utils import logger
+from app.services import LibraryService, player_service, sync_service
 
 
 class MainWindow(QMainWindow):
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
     def connect_signals(self):
         """Connect signals from pages to handlers"""
         self.home_page.book_selected.connect(self.on_book_selected)
+        self.home_page.sync_requested.connect(self.on_sync_requested)
         self.explore_page.book_selected.connect(self.on_book_selected)
 
         # Connect player signals
@@ -150,37 +152,70 @@ class MainWindow(QMainWindow):
         self.player_widget.seek.connect(self.on_seek)
         self.player_widget.volume_changed.connect(self.on_volume_changed)
 
+        # Connect sync progress
+        sync_service.on_sync_progress(self.on_sync_progress)
+
+        # Connect player service position updates
+        player_service.on_position_changed(self.on_player_position_changed)
+
     def on_book_selected(self, book_id: str):
         """Handle book selection"""
         logger.info(f"Book selected: {book_id}")
-        # TODO: Load and play book from database
-        self.player_widget.set_now_playing(
-            f"Sample Book",
-            f"Sample Author"
-        )
+
+        # Load book from database
+        audiobook = LibraryService.get_book_by_id(book_id)
+        if not audiobook:
+            logger.error(f"Book not found: {book_id}")
+            return
+
+        # Start playback
+        if player_service.start_playbook(audiobook):
+            self.player_widget.set_now_playing(audiobook.title, audiobook.author or "Unknown")
+            self.player_widget.is_playing = True
+            self.player_widget.update_play_button()
+            logger.info(f"Now playing: {audiobook.title}")
+        else:
+            logger.error(f"Failed to start playback: {book_id}")
 
     def on_play_pause(self):
         """Handle play/pause"""
         if self.player_widget.is_playing:
-            player.pause()
+            player_service.pause()
         else:
-            player.resume()
+            player_service.resume()
 
     def on_next_track(self):
         """Handle next track"""
-        player.next_chapter()
+        player_service.next_chapter()
 
     def on_prev_track(self):
         """Handle previous track"""
-        player.previous_chapter()
+        player_service.previous_chapter()
 
     def on_seek(self, position: int):
         """Handle seek"""
-        player.seek(position)
+        player_service.seek(position)
 
     def on_volume_changed(self, volume: int):
         """Handle volume change"""
-        player.set_volume(volume)
+        player_service.set_volume(volume)
+
+    def on_sync_requested(self):
+        """Handle sync button click"""
+        logger.info("Sync requested")
+        sync_service.sync_all_servers(background=True)
+
+    def on_sync_progress(self, message: str, is_complete: bool):
+        """Handle sync progress updates"""
+        logger.info(f"Sync: {message}")
+        if is_complete:
+            # Reload books in UI
+            self.home_page.load_books()
+
+    def on_player_position_changed(self, position: float, duration: float):
+        """Handle player position updates"""
+        # Update player widget
+        self.player_widget.update_progress(int(position * 1000), int(duration * 1000))
 
     def closeEvent(self, event):
         """Handle window close"""

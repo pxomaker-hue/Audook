@@ -3,11 +3,17 @@ Plex API client for audiobook discovery and streaming
 """
 
 from typing import Optional, List, Dict, Any
-from plexapi.server import PlexServer
-from plexapi.audio import Track
 from datetime import datetime
 
 from app.utils import logger
+
+try:
+    from plexapi.server import PlexServer
+    from plexapi.audio import Track
+    PLEX_AVAILABLE = True
+except ImportError:
+    PLEX_AVAILABLE = False
+    logger.warning("plexapi not installed - Plex support disabled")
 
 
 class PlexClient:
@@ -28,6 +34,9 @@ class PlexClient:
 
     def _connect(self):
         """Connect to Plex server"""
+        if not PLEX_AVAILABLE:
+            raise ImportError("plexapi not installed - cannot connect to Plex")
+
         try:
             self.server = PlexServer(self.url, self.token)
             logger.info(f"Connected to Plex server: {self.server.friendlyName}")
@@ -106,7 +115,7 @@ class PlexClient:
             logger.error(f"Failed to parse audiobook: {e}")
             return None
 
-    def _get_streaming_url(self, track: Track) -> str:
+    def _get_streaming_url(self, track) -> str:
         """Get streaming URL for a track"""
         try:
             # Plex streaming URL format
