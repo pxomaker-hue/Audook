@@ -65,7 +65,7 @@ class BookRepository(BaseRepository):
 
     # Fields inside extra_metadata (as opposed to real columns) that can be
     # locked against being overwritten by a scan - see `manual_overrides`.
-    _EXTRA_METADATA_LOCKABLE_FIELDS = ("author_bio", "author_photo")
+    _EXTRA_METADATA_LOCKABLE_FIELDS = ("author_bio", "author_photo", "series")
 
     def create(self, book_id: str, server_id: str, library_id: str, title: str,
                author: str = None, narrator: str = None, description: str = None, duration: float = 0.0,
@@ -355,3 +355,14 @@ class BookmarkRepository(BaseRepository):
         if bookmark:
             self.session.delete(bookmark)
             self.session.commit()
+
+    def get_by_id(self, bookmark_id: int) -> Optional[Bookmark]:
+        """Get a single bookmark"""
+        return self.session.query(Bookmark).filter_by(id=bookmark_id).first()
+
+    def get_book_ids_with_bookmarks(self) -> set:
+        """Get the set of book_ids that have at least one bookmark (for the
+        library-wide badge, independent of - and not cleared by - reading
+        progress resets)"""
+        rows = self.session.query(Bookmark.book_id).distinct().all()
+        return {row[0] for row in rows}

@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, ArrowLeft, Search, Pencil, Lock } from 'lucide-react';
+import { Play, ArrowLeft, Search, Pencil, Lock, Bookmark, Trash2, Loader2 } from 'lucide-react';
 import axios from 'axios';
+
+interface BookmarkEntry {
+  id: number;
+  chapter_index: number;
+  position_seconds: number;
+  title: string | null;
+  created_at: string | null;
+}
 
 interface BookDetail {
   id: string;
@@ -11,12 +19,14 @@ interface BookDetail {
   cover_url: string;
   duration: number;
   description: string;
+  series: string | null;
   chapters: Array<{
     id: string;
     title: string;
     index: number;
     duration: number;
   }>;
+  bookmarks: BookmarkEntry[];
   manual_overrides: string[];
   progress: {
     position: number;
@@ -91,7 +101,9 @@ const BookDetailPage: React.FC = () => {
   const [editNarrator, setEditNarrator] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCoverUrl, setEditCoverUrl] = useState('');
+  const [editSeries, setEditSeries] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [resumingBookmarkId, setResumingBookmarkId] = useState<number | null>(null);
 
   const fetchBookDetail = async () => {
     try {
@@ -151,6 +163,26 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
+  const handleResumeBookmark = async (bookmarkId: number) => {
+    try {
+      setResumingBookmarkId(bookmarkId);
+      await axios.post(`${apiBase}/bookmarks/${bookmarkId}/resume`);
+    } catch (error) {
+      console.error('Failed to resume bookmark:', error);
+    } finally {
+      setResumingBookmarkId(null);
+    }
+  };
+
+  const handleDeleteBookmark = async (bookmarkId: number) => {
+    try {
+      await axios.delete(`${apiBase}/bookmarks/${bookmarkId}`);
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to delete bookmark:', error);
+    }
+  };
+
   const openMatchPanel = () => {
     setShowEditForm(false);
     setShowMatchPanel(!showMatchPanel);
@@ -198,6 +230,7 @@ const BookDetailPage: React.FC = () => {
     setEditNarrator(book.narrator || '');
     setEditDescription(book.description || '');
     setEditCoverUrl(book.cover_url || '');
+    setEditSeries(book.series || '');
     setShowEditForm(!showEditForm);
   };
 
@@ -210,7 +243,8 @@ const BookDetailPage: React.FC = () => {
         author: editAuthor.trim(),
         narrator: editNarrator.trim() || null,
         description: editDescription.trim() || null,
-        cover_url: editCoverUrl.trim() || null
+        cover_url: editCoverUrl.trim() || null,
+        series: editSeries.trim() || null
       });
       setShowEditForm(false);
       await fetchBookDetail();
@@ -327,9 +361,14 @@ const BookDetailPage: React.FC = () => {
           <h1 className="page-title" style={{ marginBottom: '10px' }}>
             {book.title}
           </h1>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: book.series ? '4px' : '20px' }}>
             par {book.author}
           </p>
+          {book.series && (
+            <p style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: 600, marginBottom: '20px' }}>
+              Série : {book.series}
+            </p>
+          )}
           {book.narrator && (
             <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
               Narrateur : {book.narrator}
@@ -475,7 +514,7 @@ const BookDetailPage: React.FC = () => {
                         disabled={applyingKey === c.work_key}
                         onClick={() => handleApplyMatch(c.work_key)}
                       >
-                        {applyingKey === c.work_key ? '...' : 'Choisir'}
+                        {applyingKey === c.work_key ? <Loader2 size={14} className="spin" /> : 'Choisir'}
                       </button>
                     </div>
                   ))}
@@ -500,6 +539,7 @@ const BookDetailPage: React.FC = () => {
             >
               <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titre" style={inputStyle} />
               <input type="text" value={editAuthor} onChange={(e) => setEditAuthor(e.target.value)} placeholder="Auteur" style={inputStyle} />
+              <input type="text" value={editSeries} onChange={(e) => setEditSeries(e.target.value)} placeholder="Série" style={inputStyle} />
               <input type="text" value={editNarrator} onChange={(e) => setEditNarrator(e.target.value)} placeholder="Narrateur" style={inputStyle} />
               <textarea
                 value={editDescription}
@@ -516,7 +556,7 @@ const BookDetailPage: React.FC = () => {
                   disabled={savingEdit}
                   onClick={handleSaveEdit}
                 >
-                  {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
+                  {savingEdit ? <Loader2 size={14} className="spin" /> : 'Enregistrer'}
                 </button>
               </div>
             </div>
@@ -538,6 +578,75 @@ const BookDetailPage: React.FC = () => {
           </p>
         </div>
       )}
+
+      <div style={{ marginBottom: '30px' }}>
+        <h2 style={{ color: 'var(--primary)', margin: '0 0 15px' }}>Marque-pages</h2>
+
+        {(book.bookmarks || []).length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Aucun marque-page pour ce livre.</p>
+        ) : (
+          <div
+            style={{
+              backgroundColor: 'var(--surface)',
+              boxShadow: 'var(--shadow-pop)',
+              borderRadius: 'var(--radius-md)',
+              overflow: 'hidden'
+            }}
+          >
+            {(book.bookmarks || []).map((bookmark, index) => {
+              const chapter = (book.chapters || [])[bookmark.chapter_index];
+              const minutes = Math.floor(bookmark.position_seconds / 60);
+              const seconds = Math.floor(bookmark.position_seconds % 60);
+              return (
+                <div
+                  key={bookmark.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px 16px',
+                    borderBottom: index < (book.bookmarks || []).length - 1 ? '1px solid var(--border)' : 'none'
+                  }}
+                >
+                  <Bookmark size={16} color="var(--primary)" fill="var(--primary)" style={{ flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {bookmark.title || chapter?.title || `Chapitre ${bookmark.chapter_index + 1}`}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {minutes}:{seconds.toString().padStart(2, '0')}
+                    </div>
+                  </div>
+                  <button
+                    className="cta-button"
+                    style={{
+                      ...mutedButtonStyle,
+                      background: 'var(--primary)',
+                      color: 'var(--secondary)',
+                      opacity: resumingBookmarkId === bookmark.id ? 0.6 : 1
+                    }}
+                    disabled={resumingBookmarkId === bookmark.id}
+                    onClick={() => handleResumeBookmark(bookmark.id)}
+                  >
+                    {resumingBookmarkId === bookmark.id ? (
+                      <Loader2 size={14} className="spin" />
+                    ) : (
+                      'Reprendre'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBookmark(bookmark.id)}
+                    title="Supprimer ce marque-page"
+                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', padding: '6px', flexShrink: 0 }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {book.chapters && book.chapters.length > 0 && (
         <div>
@@ -587,11 +696,25 @@ const BookDetailPage: React.FC = () => {
                       fontWeight: isActive ? 700 : 400,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '10px',
+                      gap: '16px',
                       minWidth: 0
                     }}
                   >
-                    <Play size={14} style={{ flexShrink: 0, color: isActive ? 'var(--primary)' : 'var(--text-secondary)' }} />
+                    <span
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        backgroundColor: isActive ? 'var(--accent-ink)' : 'var(--surface-muted)',
+                        color: isActive ? 'var(--accent)' : 'var(--text-secondary)'
+                      }}
+                    >
+                      <Play size={13} fill="currentColor" />
+                    </span>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {index + 1}. {chapter.title}
                     </span>

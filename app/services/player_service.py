@@ -21,8 +21,10 @@ class PlayerService:
         audiobook: Audiobook,
         device_id: str = "audook_windows",
         chapter_index: Optional[int] = None,
+        position: Optional[float] = None,
     ) -> bool:
-        """Start playing an audiobook, optionally jumping straight to a given chapter"""
+        """Start playing an audiobook, optionally jumping straight to a given
+        chapter/position (e.g. resuming a bookmark)"""
         try:
             if not audiobook or not audiobook.chapters:
                 logger.error("No audiobook or chapters to play")
@@ -32,7 +34,7 @@ class PlayerService:
 
             if chapter_index is not None:
                 chapter_idx = max(0, min(chapter_index, len(audiobook.chapters) - 1))
-                position = 0.0
+                position = position if position is not None else 0.0
             else:
                 # Load saved progress
                 chapter_idx, position = progress_manager.load_progress(audiobook)
@@ -62,6 +64,7 @@ class PlayerService:
         """Pause playback"""
         try:
             if player.pause():
+                progress_manager.mark_paused()
                 logger.info("Playback paused")
                 return True
         except Exception as e:
@@ -72,6 +75,18 @@ class PlayerService:
         """Resume playback"""
         try:
             if player.resume():
+                progress_manager.mark_resumed()
+
+                # A pause that ran long enough auto-closes its session (see
+                # ProgressManager.PAUSE_TIMEOUT_SECONDS) - reopen a fresh one.
+                if not progress_manager.is_session_active() and self.current_audiobook:
+                    progress_manager.start_session(
+                        self.current_audiobook,
+                        self.current_chapter_index,
+                        player.get_position(),
+                        device_id="audook_windows"
+                    )
+
                 logger.info("Playback resumed")
                 return True
         except Exception as e:
@@ -79,10 +94,14 @@ class PlayerService:
         return False
 
     def stop(self) -> bool:
-        """Stop playback"""
+        """Stop playback and clear the loaded book, so the player goes back
+        to its empty state instead of showing a book that can no longer be
+        resumed (resume only works on a paused player, not a stopped one)."""
         try:
             progress_manager.end_session()
             player.stop()
+            self.current_audiobook = None
+            self.current_chapter_index = 0
             logger.info("Playback stopped")
             return True
         except Exception as e:

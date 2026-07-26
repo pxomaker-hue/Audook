@@ -12,7 +12,7 @@ from flask_cors import CORS
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository
+from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.clients import PlexClient, AudiobookshelfClient
@@ -191,6 +191,7 @@ def get_books():
         books = library_service.get_all_books()
         session = get_session()
         in_progress = ReadingProgressRepository(session).get_in_progress_map()
+        bookmarked_ids = BookmarkRepository(session).get_book_ids_with_bookmarks()
 
         result = []
         for book in books:
@@ -210,8 +211,10 @@ def get_books():
                 'duration': book.duration,
                 'description': book.description,
                 'source': book.source,
+                'series': book.metadata.get('series'),
                 'progress_percent': progress.get('percent') if progress else 0,
                 'current_chapter_title': current_chapter_title,
+                'has_bookmark': book.id in bookmarked_ids,
                 'author_bio': book.metadata.get('author_bio'),
                 'author_photo': book.metadata.get('author_photo')
             })
@@ -230,6 +233,7 @@ def get_book_details(book_id):
         session = get_session()
         progress_repo = ReadingProgressRepository(session)
         progress = progress_repo.get_or_create(book_id)
+        bookmarks = BookmarkRepository(session).get_by_book(book_id)
 
         return jsonify({
             'id': book.id,
@@ -240,16 +244,92 @@ def get_book_details(book_id):
             'duration': book.duration,
             'description': book.description,
             'chapters': book.chapters,
+            'series': book.metadata.get('series'),
             'author_bio': book.metadata.get('author_bio'),
             'author_photo': book.metadata.get('author_photo'),
             'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,
                 'percentage': progress.progress_percent
-            }
+            },
+            'bookmarks': [{
+                'id': b.id,
+                'chapter_index': b.chapter_index,
+                'position_seconds': b.position_seconds,
+                'title': b.title,
+                'created_at': b.created_at.isoformat() if b.created_at else None
+            } for b in bookmarks]
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/bookmarks', methods=['POST'])
+def create_bookmark(book_id):
+    """Create a bookmark. Defaults to the current playback position if this
+    is the book currently playing and no explicit position was given -
+    bookmarks persist independently of reading progress, so resetting
+    progress never removes them."""
+    try:
+        book = library_service.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        data = request.json or {}
+        chapter_index = data.get('chapter_index')
+        position = data.get('position')
+        title = data.get('title')
+
+        if chapter_index is None or position is None:
+            if player_service.current_audiobook and player_service.current_audiobook.id == book_id:
+                chapter_index = player_service.current_chapter_index
+                position = player_service.get_current_position()
+            else:
+                return jsonify({'error': 'chapter_index et position requis (livre non en lecture)'}), 400
+
+        session = get_session()
+        bookmark = BookmarkRepository(session).create(book_id, chapter_index, position, title)
+        return jsonify({
+            'id': bookmark.id,
+            'chapter_index': bookmark.chapter_index,
+            'position_seconds': bookmark.position_seconds,
+            'title': bookmark.title
+        }), 201
+    except Exception as e:
+        logger.error(f"Failed to create bookmark: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bookmarks/<int:bookmark_id>', methods=['DELETE'])
+def delete_bookmark(bookmark_id):
+    try:
+        session = get_session()
+        BookmarkRepository(session).delete(bookmark_id)
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        logger.error(f"Failed to delete bookmark: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bookmarks/<int:bookmark_id>/resume', methods=['POST'])
+def resume_bookmark(bookmark_id):
+    """Start playback of a book from a saved bookmark's exact position"""
+    try:
+        session = get_session()
+        bookmark = BookmarkRepository(session).get_by_id(bookmark_id)
+        if not bookmark:
+            return jsonify({'error': 'Bookmark introuvable'}), 404
+
+        book = library_service.get_book_by_id(bookmark.book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        if not player_service.start_playbook(
+            book, chapter_index=bookmark.chapter_index, position=bookmark.position_seconds
+        ):
+            return jsonify({'error': 'La lecture a échoué'}), 500
+
+        return jsonify({'status': 'playing'})
+    except Exception as e:
+        logger.error(f"Failed to resume bookmark: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/<book_id>', methods=['PATCH'])
@@ -258,7 +338,7 @@ def update_book(book_id):
     being overwritten by a future scan."""
     try:
         data = request.json or {}
-        allowed_fields = ('title', 'author', 'narrator', 'description', 'cover_url')
+        allowed_fields = ('title', 'author', 'narrator', 'description', 'cover_url', 'series')
         fields = {k: v for k, v in data.items() if k in allowed_fields}
         if not fields:
             return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
@@ -622,6 +702,17 @@ def sync_status():
 
 @app.route('/api/health', methods=['GET'])
 def health():
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown_backend():
+    """Best-effort cleanup called by Electron right before it force-kills this
+    process on quit, so an in-progress reading session gets a final, accurate
+    end time instead of relying solely on the periodic checkpoint."""
+    try:
+        player_service.stop()
+    except Exception as e:
+        logger.error(f"Failed to stop cleanly during shutdown: {e}")
     return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':

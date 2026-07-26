@@ -108,6 +108,14 @@ class PlexClient:
                     "audio_file": self._get_streaming_url(track)
                 })
 
+            # Plex has no native "book series" field for music-organized audiobooks,
+            # but collections are commonly used for that purpose - best-effort.
+            series = None
+            collections = getattr(album, "collections", None) or []
+            collection_names = [c.tag for c in collections if getattr(c, "tag", None)]
+            if collection_names:
+                series = ", ".join(collection_names)
+
             return {
                 "id": f"plex_album_{album.ratingKey}",
                 "title": album.title,
@@ -119,7 +127,8 @@ class PlexClient:
                 "duration": total_duration,
                 "extra_metadata": {
                     "author_bio": author_bio,
-                    "author_photo": author_photo
+                    "author_photo": author_photo,
+                    "series": series
                 }
             }
 

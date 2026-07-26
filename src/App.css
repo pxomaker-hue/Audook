@@ -522,6 +522,90 @@ input[type="checkbox"] {
   background-color: #e81123;
 }
 
+.book-card-bookmark {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-pop);
+  z-index: 1;
+}
+
+.library-sort-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  border: none;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  font-family: inherit;
+}
+
+.library-sort-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
+.library-sort-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background-color: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  z-index: 10;
+}
+
+.library-sort-option {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.library-sort-option:hover {
+  background-color: var(--surface-muted);
+}
+
+.library-sort-option.active {
+  color: var(--accent-ink);
+  font-weight: 700;
+  background-color: var(--surface-muted);
+}
+
+.library-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+
 .book-card-overlay {
   position: absolute;
   top: 0;
@@ -871,6 +955,18 @@ input[type="checkbox"] {
   transform: scale(0.88);
 }
 
+.player-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+
+.player-button.confirmed {
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  opacity: 1;
+}
+
 .player-button.main {
   width: 52px;
   height: 52px;
@@ -928,6 +1024,93 @@ input[type="checkbox"] {
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
+}
+
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-dialog {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  padding: 24px;
+  width: 100%;
+  max-width: 360px;
+  animation: dialog-pop 0.18s ease-out;
+}
+
+@keyframes dialog-pop {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.confirm-dialog-title {
+  color: var(--text-primary);
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.confirm-dialog-message {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirm-dialog-cancel,
+.confirm-dialog-confirm {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s;
+}
+
+.confirm-dialog-cancel {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.confirm-dialog-confirm {
+  background: var(--primary);
+  color: var(--secondary);
+}
+
+.confirm-dialog-confirm.danger {
+  background: #e5484d;
+  color: #fff;
+}
+
+.confirm-dialog-cancel:hover,
+.confirm-dialog-confirm:hover {
+  transform: translateY(-2px);
+}
+
+.confirm-dialog-cancel:active,
+.confirm-dialog-confirm:active {
+  transform: scale(0.96);
 }
 
 .volume-popover-wrapper {

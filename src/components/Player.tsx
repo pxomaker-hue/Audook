@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX, Bookmark, Loader2, Check } from 'lucide-react';
 import axios from 'axios';
 
 // Click window (ms) to detect a double-click on the "previous chapter" button
@@ -17,6 +17,7 @@ interface PlayerState {
   isPlaying: boolean;
   currentBook: any | null;
   currentChapterTitle: string | null;
+  currentChapterIndex: number | null;
   position: number;
   duration: number;
   volume: number;
@@ -41,12 +42,15 @@ const Player: React.FC = () => {
     isPlaying: false,
     currentBook: null,
     currentChapterTitle: null,
+    currentChapterIndex: null,
     position: 0,
     duration: 0,
     volume: 80,
     speed: 1
   });
   const [showVolume, setShowVolume] = useState(false);
+  const [addingBookmark, setAddingBookmark] = useState(false);
+  const [bookmarkAdded, setBookmarkAdded] = useState(false);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -187,6 +191,20 @@ const Player: React.FC = () => {
     axios.post(`${API_BASE}/player/volume`, { volume });
   };
 
+  const handleAddBookmark = async () => {
+    if (!state.currentBook) return;
+    try {
+      setAddingBookmark(true);
+      await axios.post(`${API_BASE}/books/${state.currentBook.id}/bookmarks`, {});
+      setBookmarkAdded(true);
+      setTimeout(() => setBookmarkAdded(false), 1800);
+    } catch (error) {
+      console.error('Failed to add bookmark:', error);
+    } finally {
+      setAddingBookmark(false);
+    }
+  };
+
   const handleCycleSpeed = () => {
     const currentIndex = SPEEDS.indexOf(state.speed);
     const nextSpeed = SPEEDS[(currentIndex + 1) % SPEEDS.length] ?? 1;
@@ -283,6 +301,20 @@ const Player: React.FC = () => {
       </div>
 
       <div className="player-extra-row">
+        <button
+          className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
+          onClick={handleAddBookmark}
+          disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+          title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
+        >
+          {addingBookmark ? (
+            <Loader2 size={16} className="spin" />
+          ) : bookmarkAdded ? (
+            <Check size={16} />
+          ) : (
+            <Bookmark size={16} />
+          )}
+        </button>
         <button
           className="player-button"
           onClick={() => navigate(`/book/${state.currentBook.id}`)}

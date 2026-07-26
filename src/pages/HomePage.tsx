@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Play, RefreshCw, User, X } from 'lucide-react';
+import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown } from 'lucide-react';
 import axios from 'axios';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+const SORT_STORAGE_KEY = 'audook_library_sort';
 
 interface Book {
   id: string;
@@ -13,8 +15,10 @@ interface Book {
   cover_url: string;
   duration: number;
   source: string;
+  series: string | null;
   progress_percent: number;
   current_chapter_title: string | null;
+  has_bookmark: boolean;
   author_photo: string | null;
 }
 
@@ -23,6 +27,16 @@ interface ServerEntry {
   type: 'plex' | 'audiobookshelf' | 'local';
   name: string;
 }
+
+type SortMode = 'series' | 'alphabetical' | 'author' | 'progress' | 'bookmark';
+
+const SORT_LABELS: Record<SortMode, string> = {
+  series: 'Par séries',
+  alphabetical: 'Ordre alphabétique',
+  author: 'Par auteurs',
+  progress: 'Par progression',
+  bookmark: 'Marque-pages'
+};
 
 const SOURCE_LABELS: Record<string, string> = {
   audiobookshelf: 'Audiobookshelf',
@@ -47,6 +61,11 @@ const formatDuration = (seconds: number) => {
   return hours > 0 ? `${hours}h${minutes.toString().padStart(2, '0')}` : `${minutes}min`;
 };
 
+// The sort key used for "Par séries": the series name when set, otherwise the
+// author - so the whole library sorts into one alphabetical sequence of
+// series-or-author groups.
+const seriesGroupKey = (book: Book) => (book.series && book.series.trim()) || book.author;
+
 const HomePage: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [servers, setServers] = useState<ServerEntry[]>([]);
@@ -55,7 +74,17 @@ const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = localStorage.getItem(SORT_STORAGE_KEY);
+    return (saved as SortMode) || 'series';
+  });
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [confirmDismissId, setConfirmDismissId] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.setItem(SORT_STORAGE_KEY, sortMode);
+  }, [sortMode]);
 
   const fetchAll = async () => {
     try {
@@ -70,9 +99,24 @@ const HomePage: React.FC = () => {
     }
   };
 
+  // Refetch just the books quietly (no loading spinner) so progress,
+  // bookmarks and chapter changes made from the player show up here without
+  // needing to leave and come back to this page.
+  const refreshBooksQuietly = async () => {
+    try {
+      const booksRes = await axios.get(`${API_BASE}/books`);
+      setBooks(booksRes.data);
+    } catch (error) {
+      console.error('Failed to refresh library:', error);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     fetchAll().finally(() => setLoading(false));
+
+    const interval = setInterval(refreshBooksQuietly, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const availableSources = useMemo(
@@ -118,10 +162,24 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const handleDismissProgress = async (e: React.MouseEvent, bookId: string) => {
+  const handleDismissProgress = (e: React.MouseEvent, bookId: string) => {
     e.stopPropagation();
+    setConfirmDismissId(bookId);
+  };
+
+  const confirmDismissProgress = async () => {
+    const bookId = confirmDismissId;
+    if (!bookId) return;
+    setConfirmDismissId(null);
     setBooks(prev => prev.map(b => (b.id === bookId ? { ...b, progress_percent: 0, current_chapter_title: null } : b)));
     try {
+      // If this book is the one currently loaded in the player, stop
+      // playback too - keeping it playing after removing its progress
+      // would just recreate the progress a few seconds later via autosave.
+      const stateRes = await axios.get(`${API_BASE}/player/state`);
+      if (stateRes.data.currentBook?.id === bookId) {
+        await axios.post(`${API_BASE}/player/stop`);
+      }
       await axios.delete(`${API_BASE}/books/${bookId}/progress`);
     } catch (error) {
       console.error('Failed to reset book progress:', error);
@@ -164,16 +222,55 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // "In progress" = has been started but not finished. Shown bigger, above the
-  // full library grid, and excluded from it to avoid showing the same book twice.
+  // "In progress" = has been started but not finished. Shown bigger, above
+  // the full library grid. They also stay visible (more discreetly) in
+  // "Toute la bibliothèque" below, per user preference.
   const inProgressBooks = useMemo(
     () => books.filter(b => b.progress_percent > 0 && b.progress_percent < 100),
     [books]
   );
-  const inProgressIds = useMemo(() => new Set(inProgressBooks.map(b => b.id)), [inProgressBooks]);
-  const libraryBooks = filteredBooks.filter(b => !inProgressIds.has(b.id));
 
-  const renderBookCard = (book: Book) => (
+  const sortedLibraryBooks = useMemo(() => {
+    const list = [...filteredBooks];
+    switch (sortMode) {
+      case 'alphabetical':
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case 'author':
+        return list.sort((a, b) => a.author.localeCompare(b.author) || a.title.localeCompare(b.title));
+      case 'progress':
+        return list.sort((a, b) => b.progress_percent - a.progress_percent || a.title.localeCompare(b.title));
+      case 'bookmark':
+        return list.sort((a, b) => {
+          if (a.has_bookmark !== b.has_bookmark) return a.has_bookmark ? -1 : 1;
+          return a.title.localeCompare(b.title);
+        });
+      case 'series':
+      default:
+        return list.sort((a, b) => {
+          const keyCompare = seriesGroupKey(a).localeCompare(seriesGroupKey(b));
+          return keyCompare || a.title.localeCompare(b.title);
+        });
+    }
+  }, [filteredBooks, sortMode]);
+
+  // When sorting "by series", group consecutive books under their series/author
+  // key so it reads as an actual grouped catalog, not just a flat sorted list.
+  const seriesGroups = useMemo(() => {
+    if (sortMode !== 'series') return null;
+    const groups: { key: string; books: Book[] }[] = [];
+    for (const book of sortedLibraryBooks) {
+      const key = seriesGroupKey(book);
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.books.push(book);
+      } else {
+        groups.push({ key, books: [book] });
+      }
+    }
+    return groups;
+  }, [sortedLibraryBooks, sortMode]);
+
+  const renderBookCard = (book: Book, discreet = false) => (
     <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
       <div className="book-card-cover">
         {book.cover_url ? (
@@ -182,6 +279,11 @@ const HomePage: React.FC = () => {
           <span>📚</span>
         )}
         <span className="book-card-badge">{formatDuration(book.duration)}</span>
+        {book.has_bookmark && (
+          <span className="book-card-bookmark" title="Marque-page enregistré">
+            <Bookmark size={12} fill="currentColor" />
+          </span>
+        )}
         <div className="book-card-overlay">
           <button className="play-button" onClick={(e) => handlePlayBook(e, book.id)} title="Lire">
             <Play size={18} fill="currentColor" />
@@ -189,13 +291,15 @@ const HomePage: React.FC = () => {
         </div>
         {book.progress_percent > 0 && (
           <>
-            <button
-              className="book-card-dismiss"
-              onClick={(e) => handleDismissProgress(e, book.id)}
-              title="Retirer de Reprendre l'écoute"
-            >
-              <X size={12} />
-            </button>
+            {!discreet && (
+              <button
+                className="book-card-dismiss"
+                onClick={(e) => handleDismissProgress(e, book.id)}
+                title="Retirer de Reprendre l'écoute"
+              >
+                <X size={12} />
+              </button>
+            )}
             <div className="book-card-progress-bar">
               <div className="book-card-progress-fill" style={{ width: `${book.progress_percent}%` }} />
             </div>
@@ -205,7 +309,7 @@ const HomePage: React.FC = () => {
       <div className="book-card-info">
         <div className="book-card-title">{book.title}</div>
         <div className="book-card-author">{book.author}</div>
-        {book.current_chapter_title && (
+        {!discreet && book.current_chapter_title && (
           <div className="book-card-chapter">{book.current_chapter_title}</div>
         )}
       </div>
@@ -273,7 +377,7 @@ const HomePage: React.FC = () => {
             <>
               <h2 className="section-title">Reprendre l'écoute</h2>
               <div className="books-grid books-grid--featured">
-                {inProgressBooks.map(renderBookCard)}
+                {inProgressBooks.map(b => renderBookCard(b, false))}
               </div>
             </>
           )}
@@ -302,18 +406,67 @@ const HomePage: React.FC = () => {
             </>
           )}
 
-          <h2 className="section-title">Toute la bibliothèque</h2>
-          {libraryBooks.length === 0 ? (
-            <div style={{ color: 'var(--text-secondary)', padding: '20px 0' }}>
-              Aucun autre audiolivre.
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '34px', marginBottom: '16px' }}>
+            <h2 className="section-title" style={{ margin: 0 }}>Toute la bibliothèque</h2>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="library-sort-button"
+                onClick={() => setShowSortMenu(!showSortMenu)}
+              >
+                {SORT_LABELS[sortMode]} <ChevronDown size={14} />
+              </button>
+              {showSortMenu && (
+                <>
+                  <div className="library-sort-backdrop" onClick={() => setShowSortMenu(false)} />
+                  <div className="library-sort-menu">
+                    {(Object.keys(SORT_LABELS) as SortMode[]).map(mode => (
+                      <button
+                        key={mode}
+                        className={`library-sort-option ${sortMode === mode ? 'active' : ''}`}
+                        onClick={() => {
+                          setSortMode(mode);
+                          setShowSortMenu(false);
+                        }}
+                      >
+                        {SORT_LABELS[mode]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
+          </div>
+
+          {sortedLibraryBooks.length === 0 ? (
+            <div style={{ color: 'var(--text-secondary)', padding: '20px 0' }}>
+              Aucun audiolivre ne correspond.
+            </div>
+          ) : sortMode === 'series' && seriesGroups ? (
+            seriesGroups.map(group => (
+              <div key={group.key} style={{ marginBottom: '30px' }}>
+                <h3 className="library-group-title">{group.key}</h3>
+                <div className="books-grid">
+                  {group.books.map(b => renderBookCard(b, true))}
+                </div>
+              </div>
+            ))
           ) : (
             <div className="books-grid">
-              {libraryBooks.map(renderBookCard)}
+              {sortedLibraryBooks.map(b => renderBookCard(b, true))}
             </div>
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDismissId !== null}
+        title="Retirer de Reprendre l'écoute"
+        message="La progression de ce livre sera réinitialisée et sa lecture en cours sera arrêtée. Continuer ?"
+        confirmLabel="Retirer"
+        danger
+        onConfirm={confirmDismissProgress}
+        onCancel={() => setConfirmDismissId(null)}
+      />
     </div>
   );
 };

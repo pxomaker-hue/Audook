@@ -166,15 +166,39 @@ function killPythonBackend() {
   }
 }
 
-app.on('window-all-closed', () => {
+// Give the backend a brief chance to close out the current reading session
+// (accurate end time/position) before force-killing it. If it's unreachable
+// or slow, we just proceed to the force-kill anyway - the periodic
+// checkpoint (every few seconds during playback) already limits how much
+// could be lost.
+async function gracefulShutdown() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    await fetch('http://127.0.0.1:5000/api/shutdown', { method: 'POST', signal: controller.signal });
+    clearTimeout(timeout);
+  } catch (err) {
+    logToFile(`Graceful shutdown request failed (continuing anyway): ${err}`);
+  }
   killPythonBackend();
+}
 
+let isQuitting = false;
+
+app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on('before-quit', killPythonBackend);
+app.on('before-quit', (event) => {
+  if (isQuitting) {
+    return;
+  }
+  event.preventDefault();
+  isQuitting = true;
+  gracefulShutdown().then(() => app.quit());
+});
 
 app.on('activate', () => {
   if (mainWindow === null) {
