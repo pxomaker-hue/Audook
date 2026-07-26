@@ -12,7 +12,7 @@ from flask_cors import CORS
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository
+from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.sync import progress_sync
@@ -45,6 +45,7 @@ def init_services():
             library_service = LibraryService()
             player_service = PlayerService()
             sync_service = SyncService()
+            player_service.restore_audio_settings()
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
             # Continue anyway - services will be retried on next request
@@ -215,6 +216,7 @@ def get_books():
                 'description': book.description,
                 'source': book.source,
                 'series': book.metadata.get('series'),
+                'series_sequence': book.metadata.get('series_sequence'),
                 'progress_percent': progress.get('percent') if progress else 0,
                 'current_chapter_title': current_chapter_title,
                 'is_finished': book.id in finished_ids,
@@ -249,6 +251,7 @@ def get_book_details(book_id):
             'description': book.description,
             'chapters': book.chapters,
             'series': book.metadata.get('series'),
+            'series_sequence': book.metadata.get('series_sequence'),
             'author_bio': book.metadata.get('author_bio'),
             'author_photo': book.metadata.get('author_photo'),
             'manual_overrides': book.metadata.get('manual_overrides', []),
@@ -682,6 +685,144 @@ def set_speed():
         logger.error(f"Failed to set speed: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/player/equalizer', methods=['POST'])
+def set_player_equalizer():
+    try:
+        data = request.json or {}
+        preset_id = data.get('preset_id')
+        if preset_id is None:
+            player_service.set_equalizer_preset(None)
+            return jsonify({'status': 'equalizer_set', 'preset_id': None})
+
+        session = get_session()
+        preset = EqualizerPresetRepository(session).get_by_id(preset_id)
+        session.close()
+        if not preset:
+            return jsonify({'error': 'Preset introuvable'}), 404
+
+        player_service.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
+        return jsonify({'status': 'equalizer_set', 'preset_id': preset.id})
+    except Exception as e:
+        logger.error(f"Failed to set equalizer: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/player/equalizer/cycle', methods=['POST'])
+def cycle_player_equalizer():
+    try:
+        new_preset_id = player_service.cycle_equalizer_preset()
+        return jsonify({'status': 'equalizer_cycled', 'preset_id': new_preset_id})
+    except Exception as e:
+        logger.error(f"Failed to cycle equalizer: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/player/normalization', methods=['POST'])
+def set_player_normalization():
+    try:
+        data = request.json or {}
+        enabled = bool(data.get('enabled'))
+        player_service.set_normalization(enabled)
+        return jsonify({'status': 'normalization_set', 'enabled': enabled})
+    except Exception as e:
+        logger.error(f"Failed to set normalization: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Equalizer preset management (fine-tuning lives in Settings)
+@app.route('/api/equalizer/presets', methods=['GET'])
+def get_equalizer_presets():
+    try:
+        session = get_session()
+        presets = EqualizerPresetRepository(session).get_all()
+        result = [{
+            'id': p.id,
+            'name': p.name,
+            'bands': p.bands,
+            'preamp': p.preamp,
+            'is_builtin': p.is_builtin
+        } for p in presets]
+        session.close()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Failed to get equalizer presets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equalizer/presets', methods=['POST'])
+def create_equalizer_preset():
+    try:
+        data = request.json or {}
+        name = (data.get('name') or '').strip()
+        bands = data.get('bands')
+        preamp = float(data.get('preamp', 0.0))
+
+        if not name:
+            return jsonify({'error': 'Le nom est requis'}), 400
+        if not isinstance(bands, list) or len(bands) != 10:
+            return jsonify({'error': 'bands doit contenir exactement 10 valeurs'}), 400
+
+        session = get_session()
+        preset = EqualizerPresetRepository(session).create(name, [float(b) for b in bands], preamp)
+        result = {'id': preset.id, 'name': preset.name, 'bands': preset.bands,
+                   'preamp': preset.preamp, 'is_builtin': preset.is_builtin}
+        session.close()
+        return jsonify(result), 201
+    except Exception as e:
+        logger.error(f"Failed to create equalizer preset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equalizer/presets/<preset_id>', methods=['PUT'])
+def update_equalizer_preset(preset_id):
+    try:
+        data = request.json or {}
+        name = data.get('name')
+        bands = data.get('bands')
+        preamp = data.get('preamp')
+
+        if bands is not None and (not isinstance(bands, list) or len(bands) != 10):
+            return jsonify({'error': 'bands doit contenir exactement 10 valeurs'}), 400
+
+        session = get_session()
+        repo = EqualizerPresetRepository(session)
+        preset = repo.update(
+            preset_id,
+            name=name.strip() if name else None,
+            bands=[float(b) for b in bands] if bands is not None else None,
+            preamp=float(preamp) if preamp is not None else None
+        )
+        session.close()
+
+        if not preset:
+            return jsonify({'error': 'Preset introuvable ou en lecture seule'}), 404
+
+        # If this preset is the one currently active, re-apply it so the
+        # edit takes effect immediately instead of on the next switch.
+        if player_service.equalizer_preset_id == preset.id:
+            player_service.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
+
+        return jsonify({'id': preset.id, 'name': preset.name, 'bands': preset.bands,
+                         'preamp': preset.preamp, 'is_builtin': preset.is_builtin})
+    except Exception as e:
+        logger.error(f"Failed to update equalizer preset: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equalizer/presets/<preset_id>', methods=['DELETE'])
+def delete_equalizer_preset(preset_id):
+    try:
+        session = get_session()
+        deleted = EqualizerPresetRepository(session).delete(preset_id)
+        session.close()
+
+        if not deleted:
+            return jsonify({'error': 'Preset introuvable ou en lecture seule'}), 404
+
+        # Deleted preset was active - fall back to disabled rather than
+        # keep driving the live player off a preset that no longer exists.
+        if player_service.equalizer_preset_id == preset_id:
+            player_service.set_equalizer_preset(None)
+
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        logger.error(f"Failed to delete equalizer preset: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/player/state', methods=['GET'])
 def get_player_state():
     try:
@@ -696,6 +837,10 @@ def get_player_state():
             'is_paused': player_service.is_paused(),
             'position': player_service.get_current_position(),
             'duration': player_service.get_current_duration(),
+            'volume': player_service.get_volume(),
+            'speed': player_service.get_speed(),
+            'equalizer_preset_id': player_service.equalizer_preset_id,
+            'normalization_enabled': player_service.normalization_enabled,
             'currentChapterIndex': chapter_index,
             'currentChapterTitle': chapter_title,
             'currentBook': {
@@ -747,4 +892,9 @@ def shutdown_backend():
 if __name__ == '__main__':
     logger.info("Starting Audook Backend...")
     init_database()
+
+    seed_session = get_session()
+    EqualizerPresetRepository(seed_session).ensure_builtins()
+    seed_session.close()
+
     app.run(host='127.0.0.1', port=5000, debug=False)

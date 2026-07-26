@@ -20,6 +20,16 @@ export interface PlayerState {
   duration: number;
   volume: number;
   speed: number;
+  equalizerPresetId: string | null;
+  normalizationEnabled: boolean;
+}
+
+export interface EqualizerPreset {
+  id: string;
+  name: string;
+  bands: number[];
+  preamp: number;
+  is_builtin: boolean;
 }
 
 export function formatTime(seconds: number) {
@@ -41,11 +51,14 @@ export function usePlayerState() {
     position: 0,
     duration: 0,
     volume: 80,
-    speed: 1
+    speed: 1,
+    equalizerPresetId: null,
+    normalizationEnabled: false
   });
   const [showVolume, setShowVolume] = useState(false);
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
+  const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +70,9 @@ export function usePlayerState() {
       setState(prev => ({
         ...prev,
         ...response.data,
-        isPlaying: response.data.is_playing ?? prev.isPlaying
+        isPlaying: response.data.is_playing ?? prev.isPlaying,
+        equalizerPresetId: response.data.equalizer_preset_id ?? null,
+        normalizationEnabled: response.data.normalization_enabled ?? false
       }));
     } catch (error) {
       console.error('Failed to get player state:', error);
@@ -78,6 +93,10 @@ export function usePlayerState() {
         setState(prev => ({ ...prev, position: data.position }));
       });
     }
+
+    axios.get(`${API_BASE}/equalizer/presets`)
+      .then(res => setEqualizerPresets(res.data))
+      .catch(error => console.error('Failed to load equalizer presets:', error));
 
     const interval = setInterval(fetchState, 1000);
     return () => clearInterval(interval);
@@ -207,6 +226,27 @@ export function usePlayerState() {
     axios.post(`${API_BASE}/player/speed`, { speed: nextSpeed });
   };
 
+  const handleCycleEqualizer = async () => {
+    try {
+      const response = await axios.post(`${API_BASE}/player/equalizer/cycle`);
+      setState(prev => ({ ...prev, equalizerPresetId: response.data.preset_id ?? null }));
+    } catch (error) {
+      console.error('Failed to cycle equalizer:', error);
+    }
+  };
+
+  const handleToggleNormalization = async () => {
+    const next = !state.normalizationEnabled;
+    setState(prev => ({ ...prev, normalizationEnabled: next }));
+    try {
+      await axios.post(`${API_BASE}/player/normalization`, { enabled: next });
+    } catch (error) {
+      console.error('Failed to toggle normalization:', error);
+      // Roll back the optimistic update if the request actually failed
+      setState(prev => ({ ...prev, normalizationEnabled: !next }));
+    }
+  };
+
   return {
     state,
     showVolume,
@@ -214,6 +254,7 @@ export function usePlayerState() {
     addingBookmark,
     bookmarkAdded,
     volumeWrapperRef,
+    equalizerPresets,
     handlePlayPause,
     handlePreviousClick,
     handleNextClick,
@@ -222,6 +263,8 @@ export function usePlayerState() {
     handleVolumeChange,
     handleAddBookmark,
     handleCycleSpeed,
+    handleCycleEqualizer,
+    handleToggleNormalization,
     SEEK_STEP_SECONDS
   };
 }

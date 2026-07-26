@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
 import { usePlayerState, formatTime } from '../hooks/usePlayerState';
+import PlayerMoreMenu from './PlayerMoreMenu';
 
 // Below this window width the full side-panel player no longer fits (it used
 // to just disappear entirely) - switch to a compact horizontal bar instead.
@@ -36,6 +37,9 @@ const Player: React.FC = () => {
     handleVolumeChange,
     handleAddBookmark,
     handleCycleSpeed,
+    equalizerPresets,
+    handleCycleEqualizer,
+    handleToggleNormalization,
     SEEK_STEP_SECONDS
   } = usePlayerState();
   const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_BREAKPOINT).matches);
@@ -158,6 +162,16 @@ const Player: React.FC = () => {
           >
             <ListMusic size={14} />
           </button>
+          <PlayerMoreMenu
+            speed={state.speed}
+            onCycleSpeed={handleCycleSpeed}
+            equalizerPresetId={state.equalizerPresetId}
+            equalizerPresets={equalizerPresets}
+            onCycleEqualizer={handleCycleEqualizer}
+            normalizationEnabled={state.normalizationEnabled}
+            onToggleNormalization={handleToggleNormalization}
+            buttonSize={14}
+          />
         </div>
       </div>
     );
@@ -256,9 +270,6 @@ const Player: React.FC = () => {
         >
           <ListMusic size={16} />
         </button>
-        <button className="speed-pill" onClick={handleCycleSpeed} title="Vitesse de lecture">
-          {state.speed}×
-        </button>
         <div className="volume-popover-wrapper" ref={volumeWrapperRef}>
           {showVolume && (
             <div className="volume-popover">
@@ -289,6 +300,15 @@ const Player: React.FC = () => {
             <PictureInPicture2 size={16} />
           </button>
         )}
+        <PlayerMoreMenu
+          speed={state.speed}
+          onCycleSpeed={handleCycleSpeed}
+          equalizerPresetId={state.equalizerPresetId}
+          equalizerPresets={equalizerPresets}
+          onCycleEqualizer={handleCycleEqualizer}
+          normalizationEnabled={state.normalizationEnabled}
+          onToggleNormalization={handleToggleNormalization}
+        />
       </div>
     </div>
   );

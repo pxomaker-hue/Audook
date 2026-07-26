@@ -241,3 +241,23 @@ class AppSettings(Base):
 
     def __repr__(self):
         return f"<AppSettings {self.key}>"
+
+
+class EqualizerPreset(Base):
+    """A named 10-band graphic EQ curve (VLC's fixed band layout: 31Hz to
+    16kHz, one octave apart). Built-in presets (Flat, Voix) are seeded once
+    and protected from edit/delete; the rest are user-created."""
+    __tablename__ = "equalizer_presets"
+
+    id = Column(String(50), primary_key=True)
+    name = Column(String(100), nullable=False)
+    preamp = Column(Float, default=0.0)
+    bands = Column(JSON, nullable=False)  # 10 floats, dB gain per band
+    is_builtin = Column(Boolean, default=False)
+    position = Column(Integer, default=0)  # cycling order in the player button
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<EqualizerPreset {self.name}>"

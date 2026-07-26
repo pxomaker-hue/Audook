@@ -11,7 +11,7 @@ let pythonProcess;
 let isMiniMode = false;
 
 const MINI_WINDOW_WIDTH = 360;
-const MINI_WINDOW_HEIGHT = 165;
+const MINI_WINDOW_HEIGHT = 210;
 const BACKEND_API_BASE = 'http://127.0.0.1:5000/api';
 // Matches the ±30s step used by the in-app rewind/fast-forward buttons (see
 // SEEK_STEP_SECONDS in src/hooks/usePlayerState.ts) - there's no standard

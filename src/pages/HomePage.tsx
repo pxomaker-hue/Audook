@@ -16,6 +16,7 @@ interface Book {
   duration: number;
   source: string;
   series: string | null;
+  series_sequence: string | number | null;
   progress_percent: number;
   current_chapter_title: string | null;
   is_finished: boolean;
@@ -249,7 +250,14 @@ const HomePage: React.FC = () => {
       default:
         return list.sort((a, b) => {
           const keyCompare = seriesGroupKey(a).localeCompare(seriesGroupKey(b));
-          return keyCompare || a.title.localeCompare(b.title);
+          if (keyCompare) return keyCompare;
+          // Within the same series, order by tome/sequence number (as
+          // Audiobookshelf reports it) instead of alphabetically by title -
+          // titles rarely sort into reading order on their own.
+          const seqA = parseFloat(String(a.series_sequence));
+          const seqB = parseFloat(String(b.series_sequence));
+          if (!isNaN(seqA) && !isNaN(seqB) && seqA !== seqB) return seqA - seqB;
+          return a.title.localeCompare(b.title);
         });
     }
   }, [filteredBooks, sortMode]);

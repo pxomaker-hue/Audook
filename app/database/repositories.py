@@ -5,11 +5,12 @@ Clean separation between business logic and database
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import uuid
 from sqlalchemy.orm import Session
 
 from app.database.models import (
     Server, Library, Book, ReadingProgress, ReadingHistory,
-    SyncLog, Device, Bookmark, AppSettings
+    SyncLog, Device, Bookmark, AppSettings, EqualizerPreset
 )
 from app.utils import logger
 
@@ -379,3 +380,91 @@ class BookmarkRepository(BaseRepository):
         progress resets)"""
         rows = self.session.query(Bookmark.book_id).distinct().all()
         return {row[0] for row in rows}
+
+
+class EqualizerPresetRepository(BaseRepository):
+    """Operations on EqualizerPreset model"""
+
+    # (id, name, bands, preamp) - bands are 10 floats for 31Hz..16kHz, seeded
+    # once on first use. "Voix" cuts rumble/mud and lifts the 1-4kHz presence
+    # range where speech intelligibility lives, with a slight treble rolloff
+    # to tame sibilance/hiss on older or amateur recordings.
+    BUILTIN_PRESETS = [
+        ("builtin-flat", "Flat", [0.0] * 10, 0.0),
+        ("builtin-voice", "Voix", [-4.0, -3.0, -1.0, 0.0, 1.0, 2.0, 3.0, 2.0, 0.0, -1.0], 1.5),
+    ]
+
+    def ensure_builtins(self):
+        """Seed the built-in presets once, if they don't already exist"""
+        if self.session.query(EqualizerPreset).filter_by(is_builtin=True).first():
+            return
+        for i, (preset_id, name, bands, preamp) in enumerate(self.BUILTIN_PRESETS):
+            self.session.add(EqualizerPreset(
+                id=preset_id, name=name, bands=bands, preamp=preamp,
+                is_builtin=True, position=i
+            ))
+        self.session.commit()
+
+    def get_all(self) -> List[EqualizerPreset]:
+        """All presets (built-in first), in cycling order"""
+        return self.session.query(EqualizerPreset).order_by(EqualizerPreset.position).all()
+
+    def get_by_id(self, preset_id: str) -> Optional[EqualizerPreset]:
+        return self.session.query(EqualizerPreset).filter_by(id=preset_id).first()
+
+    def create(self, name: str, bands: List[float], preamp: float = 0.0) -> EqualizerPreset:
+        max_position = self.session.query(EqualizerPreset).count()
+        preset = EqualizerPreset(
+            id=str(uuid.uuid4()),
+            name=name,
+            bands=bands,
+            preamp=preamp,
+            is_builtin=False,
+            position=max_position
+        )
+        self.session.add(preset)
+        self.session.commit()
+        return preset
+
+    def update(self, preset_id: str, name: str = None, bands: List[float] = None,
+               preamp: float = None) -> Optional[EqualizerPreset]:
+        """Update a custom preset. Built-ins are read-only - returns None."""
+        preset = self.get_by_id(preset_id)
+        if not preset or preset.is_builtin:
+            return None
+        if name is not None:
+            preset.name = name
+        if bands is not None:
+            preset.bands = bands
+        if preamp is not None:
+            preset.preamp = preamp
+        self.session.commit()
+        return preset
+
+    def delete(self, preset_id: str) -> bool:
+        """Delete a custom preset. Built-ins are protected - returns False."""
+        preset = self.get_by_id(preset_id)
+        if not preset or preset.is_builtin:
+            return False
+        self.session.delete(preset)
+        self.session.commit()
+        return True
+
+
+class AppSettingsRepository(BaseRepository):
+    """Simple key-value store for small app-wide preferences (active
+    equalizer preset, normalization toggle, ...) that don't warrant their
+    own dedicated table/columns."""
+
+    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        row = self.session.query(AppSettings).filter_by(key=key).first()
+        return row.value if row else default
+
+    def set(self, key: str, value: str):
+        row = self.session.query(AppSettings).filter_by(key=key).first()
+        if row:
+            row.value = value
+        else:
+            row = AppSettings(key=key, value=value)
+            self.session.add(row)
+        self.session.commit()

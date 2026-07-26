@@ -41,6 +41,14 @@ class VLCPlayer:
         self._volume: float = 80  # 0-100
         self._speed: float = 1.0  # 0.5-2.0
 
+        # Audio enhancement: equalizer (None = disabled) and volume
+        # normalization. Both are re-applied to the media_player on every
+        # play() call (see below) since a fresh VLC Media/track is loaded
+        # for each chapter.
+        self._equalizer_bands: Optional[list] = None  # 10 floats, dB gain
+        self._equalizer_preamp: float = 0.0
+        self._normalization_enabled: bool = False
+
         # Position tracking
         self._position: float = 0.0
         self._duration: float = 0.0
@@ -214,6 +222,12 @@ class VLCPlayer:
                     logger.error(f"Failed to create VLC media: {audio_file}")
                     return False
 
+                # Volume normalization is a per-media audio filter (VLC has
+                # no clean way to toggle it on an already-playing stream) -
+                # has to be set before the media is handed to the player.
+                if self._normalization_enabled:
+                    media.add_option(':audio-filter=normvol')
+
                 # Clear current playlist and add new media
                 self.media_list = self.instance.media_list_new()
                 self.media_list.add_media(media)
@@ -223,6 +237,7 @@ class VLCPlayer:
                 media_player = self.player.get_media_player()
                 media_player.audio_set_volume(self._volume)
                 media_player.set_rate(self._speed)
+                self._apply_equalizer(media_player)
 
                 # Start playback
                 self.player.play()
@@ -361,6 +376,59 @@ class VLCPlayer:
         except Exception as e:
             logger.error(f"Set speed error: {e}")
             return False
+
+    def _apply_equalizer(self, media_player) -> None:
+        """Builds a VLC AudioEqualizer from the current bands/preamp and
+        applies it to the given media_player, or clears it if disabled. Must
+        be called with self._lock held - it only touches libvlc objects."""
+        if self._equalizer_bands is None:
+            media_player.set_equalizer(None)
+            return
+
+        eq = vlc.AudioEqualizer()
+        eq.set_preamp(self._equalizer_preamp)
+        for i, amp in enumerate(self._equalizer_bands):
+            eq.set_amp_at_index(float(amp), i)
+        media_player.set_equalizer(eq)
+
+    def set_equalizer(self, bands: Optional[list], preamp: float = 0.0) -> bool:
+        """Set (or clear, with bands=None) the 10-band equalizer. Unlike
+        normalization, this applies to the currently playing track
+        immediately - no reload needed."""
+        try:
+            with self._lock:
+                self._equalizer_bands = list(bands) if bands is not None else None
+                self._equalizer_preamp = preamp
+                if self._is_playing:
+                    self._apply_equalizer(self.player.get_media_player())
+            return True
+        except Exception as e:
+            logger.error(f"Set equalizer error: {e}")
+            return False
+
+    def get_equalizer(self) -> tuple:
+        """Returns (bands, preamp) - bands is None if disabled"""
+        return self._equalizer_bands, self._equalizer_preamp
+
+    def set_normalization(self, enabled: bool) -> bool:
+        """Toggle volume normalization. This is a per-media VLC audio filter
+        (see play()), so unlike volume/speed/equalizer it can't be applied to
+        an already-loaded track - reloads the current chapter at its current
+        position to take effect immediately."""
+        try:
+            self._normalization_enabled = enabled
+            if self._current_audiobook and self._current_chapter:
+                was_paused = self._is_paused
+                self.play(self._current_audiobook, self._current_chapter, self._position)
+                if was_paused:
+                    self.pause()
+            return True
+        except Exception as e:
+            logger.error(f"Set normalization error: {e}")
+            return False
+
+    def get_normalization(self) -> bool:
+        return self._normalization_enabled
 
     def next_chapter(self) -> bool:
         """Play next chapter"""

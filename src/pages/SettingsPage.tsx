@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
+import EqualizerSettings from '../components/EqualizerSettings';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -511,6 +512,8 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <EqualizerSettings />
 
       <div style={cardStyle}>
         <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Maintenance</h2>

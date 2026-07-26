@@ -1,6 +1,7 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2 } from 'lucide-react';
-import { usePlayerState } from '../hooks/usePlayerState';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2, Bookmark, Loader2, Check } from 'lucide-react';
+import { usePlayerState, formatTime } from '../hooks/usePlayerState';
+import PlayerMoreMenu from './PlayerMoreMenu';
 
 // Rendered in the detached mini-player Electron window (see electron/main.js
 // createMiniWindow, loaded at the '#/mini' hash route). Deliberately shows
@@ -9,11 +10,18 @@ import { usePlayerState } from '../hooks/usePlayerState';
 const MiniPlayerView: React.FC = () => {
   const {
     state,
+    addingBookmark,
+    bookmarkAdded,
     handlePlayPause,
     handlePreviousClick,
     handleNextClick,
     handleSeek,
     handleSeekStep,
+    handleAddBookmark,
+    handleCycleSpeed,
+    equalizerPresets,
+    handleCycleEqualizer,
+    handleToggleNormalization,
     SEEK_STEP_SECONDS
   } = usePlayerState();
 
@@ -44,18 +52,37 @@ const MiniPlayerView: React.FC = () => {
               )}
             </div>
             <div className="mini-player-info">
-              <div className="mini-player-title">
-                {state.currentChapterTitle || state.currentBook.title}
-              </div>
+              <div className="mini-player-title">{state.currentBook.title}</div>
               <div className="mini-player-subtitle">{state.currentBook.author}</div>
+              {state.currentChapterTitle && (
+                <div className="mini-player-subtitle">{state.currentChapterTitle}</div>
+              )}
             </div>
           </div>
 
           <div className="progress-bar" onClick={handleSeek}>
             <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
           </div>
+          <div className="player-time-row">
+            <span className="player-time">{formatTime(state.position)}</span>
+            <span className="player-time">{formatTime(state.duration)}</span>
+          </div>
 
           <div className="player-controls">
+            <button
+              className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
+              onClick={handleAddBookmark}
+              disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+              title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
+            >
+              {addingBookmark ? (
+                <Loader2 size={14} className="spin" />
+              ) : bookmarkAdded ? (
+                <Check size={14} />
+              ) : (
+                <Bookmark size={14} />
+              )}
+            </button>
             <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
               <SkipBack size={14} />
             </button>
@@ -75,6 +102,16 @@ const MiniPlayerView: React.FC = () => {
             <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
               <SkipForward size={14} />
             </button>
+            <PlayerMoreMenu
+              speed={state.speed}
+              onCycleSpeed={handleCycleSpeed}
+              equalizerPresetId={state.equalizerPresetId}
+              equalizerPresets={equalizerPresets}
+              onCycleEqualizer={handleCycleEqualizer}
+              normalizationEnabled={state.normalizationEnabled}
+              onToggleNormalization={handleToggleNormalization}
+              buttonSize={14}
+            />
           </div>
         </>
       )}

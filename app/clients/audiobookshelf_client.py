@@ -121,6 +121,21 @@ class AudiobookshelfClient:
             logger.error(f"Failed to get audiobook details: {e}")
             return None
 
+    @staticmethod
+    def _join_names(items: List[Any]) -> str:
+        """Join an ABS metadata array (authors/narrators/series) into a
+        comma-separated string. Items can be plain strings or {id, name, ...}
+        dicts depending on the field and how the library was tagged/matched -
+        never assume one or the other."""
+        if not items:
+            return ""
+        names = []
+        for item in items:
+            name = item.get("name") if isinstance(item, dict) else item
+            if name:
+                names.append(str(name))
+        return ", ".join(names)
+
     def _parse_audiobook(self, book: Dict[str, Any], library_id: str) -> Optional[Dict[str, Any]]:
         """Parse Audiobookshelf book to standard format"""
         try:
@@ -147,19 +162,33 @@ class AudiobookshelfClient:
                 }
                 chapters.append(chapter)
 
-            # The full item endpoint (/api/items/{id}) returns authors/narrators/series
-            # as arrays of {id, name}, unlike the library list endpoint which flattens
-            # them into authorName/narratorName strings. Support both shapes.
+            # The full item endpoint (/api/items/{id}) returns authors/series as
+            # arrays of {id, name} (first-class ABS entities), but narrators has
+            # no entity of its own - it's always a plain array of strings. A
+            # book whose narrator ABS didn't resolve to an author-like object
+            # (seen on some imported libraries) used to crash this whole parse
+            # ('str' object has no attribute 'get'), silently dropping the book
+            # from every future scan - hence _join_names() below, which accepts
+            # either shape for any of the three fields rather than assuming.
             authors = metadata.get("authors") or []
-            author = ", ".join(a["name"] for a in authors if a.get("name")) or metadata.get("authorName") or "Unknown Author"
+            author = self._join_names(authors) or metadata.get("authorName") or "Unknown Author"
 
             narrators = metadata.get("narrators") or []
-            narrator = ", ".join(n["name"] for n in narrators if n.get("name")) or metadata.get("narratorName") or None
+            narrator = self._join_names(narrators) or metadata.get("narratorName") or None
 
             series = metadata.get("series") or []
-            series_names = ", ".join(s["name"] for s in series if s.get("name")) if isinstance(series, list) else series
+            series_names = self._join_names(series) if isinstance(series, list) else series
+            # ABS's per-series "sequence" (tome/book number, e.g. "7" or "2.5"
+            # for a novella) - only meaningful for the first series entry,
+            # same as series_names only really covering the common single-series
+            # case. Used to sort a series' books in reading order instead of
+            # alphabetically by title.
+            series_sequence = None
+            if isinstance(series, list) and series and isinstance(series[0], dict):
+                series_sequence = series[0].get("sequence")
 
-            author_info = self._get_author_info(authors[0]["id"]) if authors and authors[0].get("id") else {}
+            first_author = authors[0] if authors and isinstance(authors[0], dict) else None
+            author_info = self._get_author_info(first_author["id"]) if first_author and first_author.get("id") else {}
 
             audiobook = {
                 "id": f"abs_{book_id}",
@@ -175,6 +204,7 @@ class AudiobookshelfClient:
                     "language": metadata.get("language"),
                     "publish_year": metadata.get("publishedYear"),
                     "series": series_names,
+                    "series_sequence": series_sequence,
                     "author_bio": author_info.get("bio"),
                     "author_photo": author_info.get("photo")
                 }

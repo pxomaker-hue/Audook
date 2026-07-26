@@ -20,6 +20,7 @@ interface BookDetail {
   duration: number;
   description: string;
   series: string | null;
+  series_sequence: string | number | null;
   chapters: Array<{
     id: string;
     title: string;
@@ -382,6 +383,7 @@ const BookDetailPage: React.FC = () => {
           {book.series && (
             <p style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: 600, marginBottom: '20px' }}>
               Série : {book.series}
+              {book.series_sequence != null && book.series_sequence !== '' && ` (Tome ${book.series_sequence})`}
             </p>
           )}
           {book.narrator && (

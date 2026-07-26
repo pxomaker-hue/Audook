@@ -7,6 +7,7 @@ from app.player import player, progress_manager
 from app.models import Audiobook
 from app.utils import logger
 from app.sync import progress_sync
+from app.database import get_session, AppSettingsRepository, EqualizerPresetRepository
 
 # Consider the current chapter "fully listened" (for auto mark-as-finished)
 # once we're this close to the end of the last chapter.
@@ -21,6 +22,8 @@ class PlayerService:
         self.current_chapter_index: int = 0
         self._on_position_changed: Optional[Callable] = None
         self._auto_finished: bool = False
+        self.equalizer_preset_id: Optional[str] = None
+        self.normalization_enabled: bool = False
 
     def start_playbook(
         self,
@@ -211,6 +214,86 @@ class PlayerService:
             logger.error(f"Failed to set speed: {e}")
             return False
 
+    def set_equalizer_preset(self, preset_id: Optional[str], bands: Optional[list] = None,
+                              preamp: float = 0.0) -> bool:
+        """Apply an equalizer preset (preset_id=None disables it) and
+        remember the choice for next launch."""
+        try:
+            if not player.set_equalizer(bands, preamp):
+                return False
+            self.equalizer_preset_id = preset_id
+            self._save_setting('equalizer_preset_id', preset_id or '')
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set equalizer preset: {e}")
+            return False
+
+    def cycle_equalizer_preset(self) -> Optional[str]:
+        """Switch to the next equalizer preset in the list (off -> preset 1
+        -> preset 2 -> ... -> off), for the player button. Returns the new
+        preset_id (None if it landed back on "off")."""
+        session = get_session()
+        try:
+            presets = EqualizerPresetRepository(session).get_all()
+            # Cycle order: off, then every preset in position order
+            ids = [None] + [p.id for p in presets]
+            try:
+                current_index = ids.index(self.equalizer_preset_id)
+            except ValueError:
+                current_index = 0
+            next_id = ids[(current_index + 1) % len(ids)]
+
+            if next_id is None:
+                self.set_equalizer_preset(None)
+            else:
+                preset = next((p for p in presets if p.id == next_id), None)
+                if preset:
+                    self.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
+            return self.equalizer_preset_id
+        finally:
+            session.close()
+
+    def set_normalization(self, enabled: bool) -> bool:
+        """Toggle volume normalization and remember the choice for next
+        launch. Reloads the current chapter to take effect (see
+        VLCPlayer.set_normalization)."""
+        try:
+            if not player.set_normalization(enabled):
+                return False
+            self.normalization_enabled = enabled
+            self._save_setting('normalization_enabled', '1' if enabled else '0')
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set normalization: {e}")
+            return False
+
+    def restore_audio_settings(self):
+        """Reapply the persisted equalizer/normalization preferences at
+        backend startup, before any playback begins."""
+        session = get_session()
+        try:
+            settings_repo = AppSettingsRepository(session)
+            preset_id = settings_repo.get('equalizer_preset_id') or None
+            normalization = settings_repo.get('normalization_enabled') == '1'
+
+            if preset_id:
+                preset = EqualizerPresetRepository(session).get_by_id(preset_id)
+                if preset:
+                    self.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
+            if normalization:
+                self.set_normalization(True)
+        except Exception as e:
+            logger.error(f"Failed to restore audio settings: {e}")
+        finally:
+            session.close()
+
+    def _save_setting(self, key: str, value: str):
+        session = get_session()
+        try:
+            AppSettingsRepository(session).set(key, value)
+        finally:
+            session.close()
+
     def get_current_position(self) -> float:
         """Get current position in seconds"""
         return player.get_position()
@@ -226,6 +309,14 @@ class PlayerService:
     def is_paused(self) -> bool:
         """Check if paused"""
         return player.is_paused()
+
+    def get_volume(self) -> float:
+        """Get current volume (0-100)"""
+        return player.get_volume()
+
+    def get_speed(self) -> float:
+        """Get current playback speed"""
+        return player.get_speed()
 
     def on_position_changed(self, callback: Callable[[float, float], None]):
         """Set callback for position updates (position, duration)"""

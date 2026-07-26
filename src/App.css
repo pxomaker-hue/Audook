@@ -1057,19 +1057,6 @@ input[type="checkbox"] {
   margin-top: 16px;
 }
 
-.speed-pill {
-  background: var(--surface-muted);
-  color: var(--text-primary);
-  border: none;
-  border-radius: 999px;
-  padding: 0 14px;
-  height: 38px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-}
-
 .confirm-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -1184,6 +1171,59 @@ input[type="checkbox"] {
   height: 90px;
   cursor: pointer;
   accent-color: var(--accent-ink);
+}
+
+/* "..." button (see PlayerMoreMenu) - unfolds a small popover upward with
+   speed/normalization/equalizer, replacing the old standalone speed pill. */
+.more-menu-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.more-menu-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 5;
+  min-width: 180px;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s;
+  white-space: nowrap;
+}
+
+.more-menu-item:hover {
+  background-color: var(--surface-muted);
+}
+
+.more-menu-item.active .more-menu-value {
+  color: var(--accent-ink);
+}
+
+.more-menu-value {
+  color: var(--text-tertiary);
+  font-weight: 700;
 }
 
 /* Responsive: below this width, the player switches to a compact horizontal
@@ -1380,5 +1420,9 @@ input[type="checkbox"] {
 }
 
 .mini-player .player-controls {
+  margin-top: 0;
+}
+
+.mini-player .player-extra-row {
   margin-top: 0;
 }
