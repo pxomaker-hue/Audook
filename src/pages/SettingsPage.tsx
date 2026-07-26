@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, RotateCcw } from 'lucide-react';
 import axios from 'axios';
+import { CloseBehavior } from '../electron';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -77,6 +78,7 @@ const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState('dark');
   const [volume, setVolume] = useState(80);
   const [autoSync, setAutoSync] = useState(true);
+  const [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior>('ask');
 
   const [servers, setServers] = useState<ServerEntry[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
@@ -108,6 +110,17 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     loadServers();
   }, [loadServers]);
+
+  useEffect(() => {
+    window.electron?.getCloseBehavior().then((value) => {
+      if (value) setCloseBehaviorState(value);
+    });
+  }, []);
+
+  const handleCloseBehaviorChange = (value: CloseBehavior) => {
+    setCloseBehaviorState(value);
+    window.electron?.setCloseBehavior(value);
+  };
 
   const handleSave = () => {
     localStorage.setItem('theme', theme);
@@ -289,6 +302,22 @@ const SettingsPage: React.FC = () => {
           Enregistrer les paramètres
         </button>
       </div>
+
+      {window.electron && (
+        <div style={cardStyle}>
+          <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Fermeture de l'application</h2>
+          <label style={labelStyle}>Quand je clique sur fermer</label>
+          <select
+            value={closeBehavior}
+            onChange={(e) => handleCloseBehaviorChange(e.target.value as CloseBehavior)}
+            style={inputStyle}
+          >
+            <option value="ask">Toujours demander</option>
+            <option value="tray">Réduire dans la barre système</option>
+            <option value="quit">Fermer l'application</option>
+          </select>
+        </div>
+      )}
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>

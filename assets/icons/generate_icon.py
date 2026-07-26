@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Script pour générer une icône basique pour Audook
-Utilise Pillow pour créer un fichier .ico
+Génère audook.ico à partir du logo source audook.png.
 
 Installation :
  pip install pillow
@@ -10,67 +9,33 @@ Exécution :
  python generate_icon.py
 """
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import os
 
-# Créer un dossier pour l'icône si nécessaire
+SOURCE = "assets/icons/audook.png"
+ICO_PATH = "assets/icons/audook.ico"
+# Fraction of the square canvas the artwork occupies - leaves a small margin
+# so the icon doesn't look cramped at small sizes (taskbar/tray).
+CONTENT_SCALE = 0.86
+
 os.makedirs("assets/icons", exist_ok=True)
 
-# Créer une image carrée (256x256 pour une bonne qualité)
-size = 256
-img = Image.new('RGBA', (size, size), (22, 33, 62, 255))  # Fond bleu foncé (#1a1a2e)
+img = Image.open(SOURCE).convert("RGBA")
 
-# Dessiner un livre ouvert (icône basique)
-draw = ImageDraw.Draw(img)
+# Crop to the actual artwork (source has only a sliver of transparent border)
+bbox = img.getbbox()
+if bbox:
+    img = img.crop(bbox)
 
-# Couleurs
-book_color = (233, 69, 96, 255)  # Rose (#e94560)
-page_color = (248, 249, 250, 255)  # Blanc cassé
-text_color = (22, 33, 62, 255)  # Bleu foncé
+# Pad to a square canvas, centered, with a small margin on all sides
+side = max(img.width, img.height)
+canvas_size = round(side / CONTENT_SCALE)
+canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
+offset = ((canvas_size - img.width) // 2, (canvas_size - img.height) // 2)
+canvas.paste(img, offset, img)
 
-# Dessiner le livre (rectangle avec une couverture)
-# Couverture du livre
-cover_width = 120
-cover_height = 160
-cover_x = (size - cover_width) // 2
-cover_y = (size - cover_height) // 2
+icon_sizes = [16, 32, 48, 64, 128, 256]
+resized_images = [canvas.resize((s, s), Image.LANCZOS) for s in icon_sizes]
+resized_images[-1].save(ICO_PATH, format="ICO", sizes=[(s, s) for s in icon_sizes])
 
-# Dessiner la couverture
-draw.rectangle([cover_x, cover_y, cover_x + cover_width, cover_y + cover_height], fill=book_color, outline=(0, 0, 0, 255), width=4)
-
-# Dessiner les pages (à droite de la couverture)
-page_width = 80
-page_x = cover_x + cover_width - 10
-draw.rectangle([page_x, cover_y, page_x + page_width, cover_y + cover_height], fill=page_color, outline=(200, 200, 200, 255), width=2)
-
-# Dessiner une ligne pour séparer les pages
-draw.line([(page_x + 5, cover_y), (page_x + 5, cover_y + cover_height)], fill=(150, 150, 150, 255), width=1)
-
-# Ajouter un petit logo "A" au centre de la couverture
-center_x = cover_x + cover_width // 2
-center_y = cover_y + cover_height // 2
-
-# Dessiner un "A" stylisé
-try:
- # Essayer avec une police par défaut
- font = ImageFont.truetype("arial.ttf", 60)
-except:
- font = ImageFont.load_default()
-
-draw.text((center_x - 25, center_y - 30), "A", fill=page_color, font=font)
-
-# Sauvegarder en .ico (plusieurs tailles)
-icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-resized_images = []
-
-for icon_size in icon_sizes:
- resized = img.resize(icon_size, Image.LANCZOS)
- resized_images.append(resized)
-
-# Sauvegarder le fichier .ico
-ico_path = "assets/icons/audook.ico"
-resized_images[0].save(ico_path, format='ICO', sizes=[s for s in icon_sizes])
-
-print(f"✅ Icône générée avec succès : {ico_path}")
-print("\nPour l'utiliser avec PyInstaller, ajoutez :")
-print("  --icon=assets/icons/audook.ico")
+print(f"Icone generee : {ICO_PATH}")

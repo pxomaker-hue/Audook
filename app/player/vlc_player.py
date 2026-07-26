@@ -75,13 +75,18 @@ class VLCPlayer:
         self._update_thread.start()
 
     def _position_update_loop(self):
-        """Continuously update position while playing"""
+        """Continuously update position while playing, and detect when a
+        chapter finishes on its own. libvlc just stops internally at the end
+        of its media - it doesn't auto-advance or tell anyone - so without
+        this, _is_playing would stay stuck True forever (endless "playing"
+        animation) and nothing would ever start the next chapter."""
         while not self._stop_update_thread:
             if self._is_playing and not self._is_paused:
                 try:
                     with self._lock:
                         media_player = self.player.get_media_player()
                         is_playing = media_player and media_player.is_playing()
+                        state = media_player.get_state() if media_player else None
                         if is_playing:
                             length_ms = media_player.get_length()
                             time_ms = media_player.get_time()
@@ -95,6 +100,17 @@ class VLCPlayer:
                                 self._on_position_change(self._position)
                             except Exception as e:
                                 logger.error(f"Position callback error: {e}")
+
+                    elif not is_playing and state == vlc.State.Ended:
+                        # Reset before notifying: if the callback starts the
+                        # next chapter, play() sets this back to True and
+                        # that's the state that should stick, not this False.
+                        self._is_playing = False
+                        if self._on_playback_end:
+                            try:
+                                self._on_playback_end()
+                            except Exception as e:
+                                logger.error(f"Playback end callback error: {e}")
 
                 except Exception as e:
                     logger.error(f"Error updating position: {e}")

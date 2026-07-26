@@ -4,6 +4,8 @@ import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
 import MiniPlayerView from './components/MiniPlayerView';
+import CloseAppDialog from './components/CloseAppDialog';
+import { CloseBehavior } from './electron';
 import HomePage from './pages/HomePage';
 import ExplorePage from './pages/ExplorePage';
 import BookDetailPage from './pages/BookDetailPage';
@@ -29,7 +31,18 @@ const App: React.FC = () => {
   const [backendOnline, setBackendOnline] = useState(false);
   const [showError, setShowError] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
   const firstFailureRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (isMiniWindow) return;
+    window.electron?.onCloseRequested(() => setShowCloseDialog(true));
+  }, []);
+
+  const handleCloseChoice = (action: CloseBehavior, remember: boolean) => {
+    setShowCloseDialog(false);
+    window.electron?.respondToClose(action, remember);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +164,7 @@ const App: React.FC = () => {
     <div className={`app-shell ${isMiniWindow ? 'mini-window' : ''}`}>
       {!isMiniWindow && <TitleBar />}
       <div className="app-shell-body">{renderBody()}</div>
+      {!isMiniWindow && <CloseAppDialog open={showCloseDialog} onChoice={handleCloseChoice} />}
     </div>
   );
 };

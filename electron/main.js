@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
@@ -12,6 +12,11 @@ let isMiniMode = false;
 
 const MINI_WINDOW_WIDTH = 360;
 const MINI_WINDOW_HEIGHT = 165;
+const BACKEND_API_BASE = 'http://127.0.0.1:5000/api';
+// Matches the ±30s step used by the in-app rewind/fast-forward buttons (see
+// SEEK_STEP_SECONDS in src/hooks/usePlayerState.ts) - there's no standard
+// Windows media key for "seek", so Next/Previous Track double as that.
+const MEDIA_KEY_SEEK_SECONDS = 30;
 
 // Packaged apps have no visible console, so console.log/error are otherwise
 // invisible to the user. Mirror backend spawn output and errors to a file
@@ -24,6 +29,31 @@ function logToFile(line) {
     // Nothing we can do if even the log file can't be written.
   }
 }
+
+// Small persisted preferences file (not the audiobook library - that lives in
+// the Python backend's own database). Currently just the close-button
+// behavior, but a plain JSON blob under userData is easy to grow later.
+const settingsFilePath = path.join(app.getPath('userData'), 'app-settings.json');
+
+function loadSettings() {
+  try {
+    return JSON.parse(fs.readFileSync(settingsFilePath, 'utf8'));
+  } catch (err) {
+    return {};
+  }
+}
+
+function saveSettings(partial) {
+  try {
+    fs.writeFileSync(settingsFilePath, JSON.stringify({ ...loadSettings(), ...partial }, null, 2));
+  } catch (err) {
+    logToFile(`Failed to save settings: ${err}`);
+  }
+}
+
+// 'ask' (default) | 'quit' | 'tray' - what the close button does, see the
+// mainWindow 'close' handler in createWindow() below.
+let closeBehavior = loadSettings().closeBehavior || 'ask';
 
 // Spawn Python backend
 function startPythonBackend() {
@@ -153,6 +183,27 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Intercepts every close attempt (custom title bar button, Alt+F4, the
+  // taskbar's own "Close window"). isQuitting is only true once app.quit()
+  // has actually been decided (tray "Quitter", or the dialog's "Fermer"
+  // choice below) - in that case let it proceed uninterrupted.
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+
+    if (closeBehavior === 'tray') {
+      event.preventDefault();
+      mainWindow.hide();
+      return;
+    }
+    if (closeBehavior === 'quit') {
+      return;
+    }
+
+    // 'ask': hold off and let the renderer show the choice dialog instead.
+    event.preventDefault();
+    mainWindow.webContents.send('window:close-requested');
+  });
 }
 
 // Small always-on-top window showing only the player, used when the user
@@ -208,6 +259,12 @@ function enterMiniMode() {
 
 function exitMiniMode() {
   isMiniMode = false;
+  if (isQuitting) {
+    // The mini window closing as part of app.quit()'s teardown also lands
+    // here (see the 'closed' handler above) - don't pop the main window back
+    // up or touch the tray (already destroyed by then) on the way out.
+    return;
+  }
   if (miniWindow) {
     // Triggers the 'closed' handler above, but the isMiniMode flag is already
     // false by then so it won't recurse back into exitMiniMode().
@@ -220,6 +277,70 @@ function exitMiniMode() {
     createWindow();
   }
   updateTrayMenu();
+}
+
+// Brings the app back regardless of *why* there's no visible window right
+// now - detached mini-player, or closed-to-tray via the close dialog/setting.
+// This is what the tray icon's own click should always do; the two states
+// need different teardown (exitMiniMode also closes the mini window) so they
+// can't just both be "mainWindow.show()".
+function restoreMainWindow() {
+  if (isMiniMode) {
+    exitMiniMode();
+    return;
+  }
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
+}
+
+// Windows media keys (play/pause, next/previous track on keyboards and
+// headsets) - registered globally so they work regardless of which window
+// has focus, or even if Audook has no visible window at all (tray/mini
+// mode). Talks straight to the Python backend's HTTP API rather than routing
+// through a renderer, since there may not be a visible one listening.
+async function mediaKeyPlayPause() {
+  try {
+    const stateRes = await fetch(`${BACKEND_API_BASE}/player/state`);
+    const state = await stateRes.json();
+    await fetch(`${BACKEND_API_BASE}/player/${state.is_playing ? 'pause' : 'resume'}`, { method: 'POST' });
+  } catch (err) {
+    logToFile(`Media key play/pause failed: ${err}`);
+  }
+}
+
+async function mediaKeySeek(deltaSeconds) {
+  try {
+    const stateRes = await fetch(`${BACKEND_API_BASE}/player/state`);
+    const state = await stateRes.json();
+    const newPosition = Math.max(0, Math.min(state.duration ?? 0, (state.position ?? 0) + deltaSeconds));
+    await fetch(`${BACKEND_API_BASE}/player/seek`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ position: newPosition })
+    });
+  } catch (err) {
+    logToFile(`Media key seek failed: ${err}`);
+  }
+}
+
+function registerMediaKeys() {
+  const bindings = {
+    MediaPlayPause: mediaKeyPlayPause,
+    MediaNextTrack: () => mediaKeySeek(MEDIA_KEY_SEEK_SECONDS),
+    MediaPreviousTrack: () => mediaKeySeek(-MEDIA_KEY_SEEK_SECONDS)
+  };
+  for (const [accelerator, handler] of Object.entries(bindings)) {
+    // register() returns false (doesn't throw) if another app already
+    // claimed the key - log and move on rather than treating it as fatal.
+    const ok = globalShortcut.register(accelerator, handler);
+    if (!ok) {
+      logToFile(`Failed to register media key ${accelerator} (likely claimed by another app)`);
+    }
+  }
 }
 
 function createTray() {
@@ -235,13 +356,7 @@ function createTray() {
     return;
   }
   tray.setToolTip('Audook');
-  tray.on('click', () => {
-    if (isMiniMode) {
-      exitMiniMode();
-    } else {
-      enterMiniMode();
-    }
-  });
+  tray.on('click', () => restoreMainWindow());
   updateTrayMenu();
 }
 
@@ -252,7 +367,7 @@ function updateTrayMenu() {
       label: isMiniMode ? 'Fermer le mini-lecteur' : 'Ouvrir le mini-lecteur',
       click: () => (isMiniMode ? exitMiniMode() : enterMiniMode())
     },
-    { label: 'Afficher Audook', click: () => exitMiniMode() },
+    { label: 'Afficher Audook', click: () => restoreMainWindow() },
     { type: 'separator' },
     { label: 'Quitter', click: () => app.quit() }
   ]);
@@ -267,6 +382,11 @@ app.on('ready', () => {
   startPythonBackend();
   createWindow();
   createTray();
+  registerMediaKeys();
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 function killPythonBackend() {
@@ -275,8 +395,23 @@ function killPythonBackend() {
   }
 
   if (process.platform === 'win32') {
-    // child.kill() is unreliable on Windows for processes that spawn their
-    // own threads (VLC). taskkill with /T kills the whole process tree.
+    if (!isDev) {
+      // The packaged backend is a PyInstaller --onefile .exe: what we
+      // spawned is only a bootloader that self-extracts to a temp folder
+      // and launches a second process to actually run Flask/VLC, then waits
+      // on it. Killing the bootloader's PID (even with /T for its tree)
+      // doesn't reliably take the re-exec'd worker down with it, since
+      // Windows has no parent-death cascade - it survives as an orphan
+      // still holding port 5000, which is the "it disappears, then comes
+      // back" this fixes. Killing by image name catches every instance
+      // (bootloader and worker share the same exe name) regardless of
+      // which temp path spawned it.
+      spawn('taskkill', ['/im', 'audook_backend.exe', '/f', '/t']);
+      return;
+    }
+    // Dev mode: a plain `python audook_backend.py`, no bootloader/child
+    // indirection - kill by PID like before (by image name here would risk
+    // killing unrelated python.exe processes elsewhere on the system).
     spawn('taskkill', ['/pid', pythonProcess.pid, '/f', '/t']);
   } else {
     pythonProcess.kill();
@@ -292,7 +427,7 @@ async function gracefulShutdown() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);
-    await fetch('http://127.0.0.1:5000/api/shutdown', { method: 'POST', signal: controller.signal });
+    await fetch(`${BACKEND_API_BASE}/shutdown`, { method: 'POST', signal: controller.signal });
     clearTimeout(timeout);
   } catch (err) {
     logToFile(`Graceful shutdown request failed (continuing anyway): ${err}`);
@@ -315,6 +450,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   isQuitting = true;
   tray?.destroy();
+  tray = null;
   gracefulShutdown().then(() => app.quit());
 });
 
@@ -367,3 +503,22 @@ ipcMain.handle('window:is-maximized', () => {
 // Detached mini-player window (see createMiniWindow/enterMiniMode above)
 ipcMain.on('mini-player:activate', () => enterMiniMode());
 ipcMain.on('mini-player:deactivate', () => exitMiniMode());
+
+// Close-button behavior (see the mainWindow 'close' handler in createWindow)
+ipcMain.on('window:close-response', (event, { action, remember }) => {
+  if (remember) {
+    closeBehavior = action;
+    saveSettings({ closeBehavior: action });
+  }
+  if (action === 'quit') {
+    app.quit();
+  } else {
+    mainWindow?.hide();
+  }
+});
+
+ipcMain.handle('settings:get-close-behavior', () => closeBehavior);
+ipcMain.on('settings:set-close-behavior', (event, action) => {
+  closeBehavior = action;
+  saveSettings({ closeBehavior: action });
+});

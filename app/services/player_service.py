@@ -60,8 +60,9 @@ class PlayerService:
 
                 if success:
                     logger.info(f"Started playing: {audiobook.title}")
-                    # Setup position updates
+                    # Setup position updates and chapter auto-advance
                     player.on_position_change(self._on_player_position_changed)
+                    player.on_playback_end(self._on_chapter_ended)
                     return True
 
             return False
@@ -256,6 +257,23 @@ class PlayerService:
                 self._on_position_changed(position, duration)
             except Exception as e:
                 logger.error(f"Position callback error: {e}")
+
+    def _on_chapter_ended(self):
+        """A chapter finished playing on its own (end of media, not a user
+        pause/stop) - advance to the next one, or end the session cleanly if
+        that was the last chapter (already marked as finished above)."""
+        try:
+            if not self.current_audiobook or not self.current_audiobook.chapters:
+                return
+
+            is_last_chapter = self.current_chapter_index >= len(self.current_audiobook.chapters) - 1
+            if is_last_chapter:
+                progress_manager.end_session()
+                return
+
+            self.next_chapter()
+        except Exception as e:
+            logger.error(f"Failed to auto-advance after chapter end: {e}")
 
 
 # Global instance

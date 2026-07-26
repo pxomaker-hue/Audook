@@ -23,7 +23,13 @@ export interface IElectronAPI {
     activate: () => void;
     deactivate: () => void;
   };
+  onCloseRequested: (callback: () => void) => void;
+  respondToClose: (action: CloseBehavior, remember: boolean) => void;
+  getCloseBehavior: () => Promise<CloseBehavior>;
+  setCloseBehavior: (action: CloseBehavior) => void;
 }
+
+export type CloseBehavior = 'ask' | 'quit' | 'tray';
 
 declare global {
   interface Window {

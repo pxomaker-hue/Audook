@@ -53,5 +53,15 @@ contextBridge.exposeInMainWorld('electron', {
   miniPlayer: {
     activate: () => ipcRenderer.send('mini-player:activate'),
     deactivate: () => ipcRenderer.send('mini-player:deactivate')
-  }
+  },
+
+  // Close-button behavior: quit, minimize to tray, or ask every time
+  onCloseRequested: (callback) => {
+    ipcRenderer.on('window:close-requested', () => callback());
+  },
+  respondToClose: (action, remember) => {
+    ipcRenderer.send('window:close-response', { action, remember });
+  },
+  getCloseBehavior: () => ipcRenderer.invoke('settings:get-close-behavior'),
+  setCloseBehavior: (action) => ipcRenderer.send('settings:set-close-behavior', action)
 });
