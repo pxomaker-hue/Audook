@@ -221,41 +221,50 @@ class AudiobookshelfClient:
             logger.error(f"Failed to get cover URL: {e}")
             return None
 
-    def get_user_progress(self, book_id: str) -> Dict[str, Any]:
-        """Get user's reading progress on a book"""
-        try:
-            response = self.session.get(
-                f"{self.url}/api/me/progress/{book_id}"
-            )
-            response.raise_for_status()
+    def get_user_progress(self, item_id: str) -> Optional[Dict[str, Any]]:
+        """Get the current user's progress on a library item.
 
-            progress = response.json()
-            return {
-                "current_chapter": progress.get("currentChapter", 0),
-                "position_ms": progress.get("positionMs", 0),
-                "finished": progress.get("finished", False)
-            }
+        Audiobookshelf tracks progress as a single "currentTime" - a position
+        within the whole item's continuous timeline, not per audio-file - so
+        the caller is responsible for converting that back into a
+        chapter_index/position_in_chapter pair."""
+        try:
+            response = self.session.get(f"{self.url}/api/me")
+            response.raise_for_status()
+            data = response.json()
+
+            for entry in data.get("mediaProgress", []):
+                if entry.get("libraryItemId") == item_id:
+                    return {
+                        "position_seconds": entry.get("currentTime", 0.0),
+                        "duration": entry.get("duration", 0.0),
+                        "finished": bool(entry.get("isFinished", False)),
+                        "last_update": entry.get("lastUpdate")
+                    }
+            return None
 
         except Exception as e:
             logger.error(f"Failed to get user progress: {e}")
-            return {}
+            return None
 
-    def set_user_progress(self, book_id: str, chapter_index: int, position_ms: int, finished: bool = False):
-        """Update user's reading progress"""
+    def set_user_progress(self, item_id: str, position_seconds: float, duration_seconds: float, finished: bool = False):
+        """Push the current position (as a whole-item cumulative time) to Audiobookshelf"""
         try:
-            response = self.session.post(
-                f"{self.url}/api/me/progress/{book_id}",
+            progress_fraction = (position_seconds / duration_seconds) if duration_seconds else 0.0
+            response = self.session.patch(
+                f"{self.url}/api/me/progress/{item_id}",
                 json={
-                    "currentChapter": chapter_index,
-                    "positionMs": position_ms,
-                    "finished": finished
+                    "currentTime": position_seconds,
+                    "duration": duration_seconds,
+                    "progress": max(0.0, min(1.0, progress_fraction)),
+                    "isFinished": finished
                 }
             )
             response.raise_for_status()
-            logger.info(f"Updated progress for book {book_id}")
+            logger.info(f"Pushed progress for item {item_id} to Audiobookshelf")
 
         except Exception as e:
-            logger.error(f"Failed to set user progress: {e}")
+            logger.warning(f"Failed to push user progress to Audiobookshelf: {e}")
 
     def test_connection(self) -> bool:
         """Test connection to Audiobookshelf server"""

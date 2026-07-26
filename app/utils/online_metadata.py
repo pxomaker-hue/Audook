@@ -62,11 +62,21 @@ def fetch_author_info_online(name: str, force: bool = False) -> Dict[str, Option
     return result
 
 
-def _search_open_library(title: str, author: Optional[str], limit: int) -> List[Dict[str, Any]]:
+def _search_open_library(title: str, author: Optional[str], limit: int, french_only: bool = False) -> List[Dict[str, Any]]:
     try:
-        params = {"title": title, "limit": limit}
-        if author and author.strip().lower() not in UNKNOWN_AUTHOR_NAMES:
-            params["author"] = author
+        if french_only:
+            # Open Library only honors a language filter when it's part of
+            # the combined `q` field query (`title:"..." language:fre`) -
+            # passing separate `title=`/`language=` params silently produces
+            # an empty query and zero results.
+            query = f'title:"{title}" language:fre'
+            if author and author.strip().lower() not in UNKNOWN_AUTHOR_NAMES:
+                query += f' author:"{author}"'
+            params = {"q": query, "limit": limit}
+        else:
+            params = {"title": title, "limit": limit}
+            if author and author.strip().lower() not in UNKNOWN_AUTHOR_NAMES:
+                params["author"] = author
 
         response = requests.get(
             "https://openlibrary.org/search.json",
@@ -90,7 +100,11 @@ def _search_open_library(title: str, author: Optional[str], limit: int) -> List[
                 "author": ", ".join(doc.get("author_name") or []) or None,
                 "year": doc.get("first_publish_year"),
                 "cover_url": f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg" if cover_id else None,
-                "is_french": "fre" in (doc.get("language") or [])
+                # Only trust the language flag when it came from a query we
+                # actually restricted to French - the doc-level `language`
+                # field is unreliable (often missing) on unrestricted results,
+                # which is how non-French matches used to get mislabeled.
+                "is_french": french_only
             })
         return candidates
 
@@ -99,15 +113,19 @@ def _search_open_library(title: str, author: Optional[str], limit: int) -> List[
         return []
 
 
-def _search_google_books(title: str, author: Optional[str], limit: int) -> List[Dict[str, Any]]:
+def _search_google_books(title: str, author: Optional[str], limit: int, french_only: bool = False) -> List[Dict[str, Any]]:
     try:
         query = f"intitle:{title}"
         if author and author.strip().lower() not in UNKNOWN_AUTHOR_NAMES:
             query += f"+inauthor:{author}"
 
+        params = {"q": query, "maxResults": limit}
+        if french_only:
+            params["langRestrict"] = "fr"
+
         response = requests.get(
             "https://www.googleapis.com/books/v1/volumes",
-            params={"q": query, "maxResults": limit},
+            params=params,
             timeout=REQUEST_TIMEOUT,
             headers={"User-Agent": USER_AGENT}
         )
@@ -128,7 +146,11 @@ def _search_google_books(title: str, author: Optional[str], limit: int) -> List[
                 "author": ", ".join(vi.get("authors") or []) or None,
                 "year": (vi.get("publishedDate") or "")[:4] or None,
                 "cover_url": thumbnail.replace("http://", "https://") if thumbnail else None,
-                "is_french": vi.get("language") == "fr"
+                # Same reasoning as Open Library: `langRestrict` is an actual
+                # server-side filter, so a hit from that pass is a verified
+                # French edition. The unrestricted pass's own `language`
+                # field is kept as a secondary (weaker) signal only.
+                "is_french": french_only or vi.get("language") == "fr"
             })
         return candidates
 
@@ -141,20 +163,32 @@ def search_book_candidates(title: str, author: Optional[str] = None, limit: int 
     """Search Open Library and Google Books for candidate matches for a book,
     French editions ranked first, for use in a manual "Associer" (match)
     picker. Each source's failure (including Google's anonymous rate limit)
-    is non-fatal - results just come from whichever source responded."""
+    is non-fatal - results just come from whichever source responded.
+
+    Runs a French-restricted pass first (using each API's actual language
+    filter, not a guessed field) so well-known translated books - e.g. Harry
+    Potter - are reliably found in French, and so the "is_french" flag on a
+    result is verified rather than a best-effort guess."""
     if not title:
         return []
 
-    ol_candidates = _search_open_library(title, author, limit)
-    google_candidates = _search_google_books(title, author, limit)
+    fr_ol = _search_open_library(title, author, limit, french_only=True)
+    fr_google = _search_google_books(title, author, limit, french_only=True)
 
-    # Interleave so one source's ranking doesn't drown out the other, then
-    # put French results first overall.
+    # Only bother with the broader, unrestricted passes if the French-only
+    # ones didn't already fill the quota.
+    remaining = max(0, limit - len(fr_ol) - len(fr_google))
+    ol_candidates = _search_open_library(title, author, limit) if remaining else []
+    google_candidates = _search_google_books(title, author, limit) if remaining else []
+
+    seen_keys = set()
     combined = []
-    for a, b in zip(ol_candidates, google_candidates):
-        combined.extend([a, b])
-    combined.extend(ol_candidates[len(google_candidates):])
-    combined.extend(google_candidates[len(ol_candidates):])
+    for candidate in fr_ol + fr_google + ol_candidates + google_candidates:
+        key = candidate["work_key"]
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        combined.append(candidate)
 
     combined.sort(key=lambda c: 0 if c.get("is_french") else 1)
     return combined[:limit]

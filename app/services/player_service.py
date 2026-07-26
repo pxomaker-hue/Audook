@@ -6,6 +6,11 @@ from typing import Optional, Callable
 from app.player import player, progress_manager
 from app.models import Audiobook
 from app.utils import logger
+from app.sync import progress_sync
+
+# Consider the current chapter "fully listened" (for auto mark-as-finished)
+# once we're this close to the end of the last chapter.
+AUTO_FINISH_THRESHOLD_SECONDS = 2.0
 
 
 class PlayerService:
@@ -15,6 +20,7 @@ class PlayerService:
         self.current_audiobook: Optional[Audiobook] = None
         self.current_chapter_index: int = 0
         self._on_position_changed: Optional[Callable] = None
+        self._auto_finished: bool = False
 
     def start_playbook(
         self,
@@ -31,13 +37,17 @@ class PlayerService:
                 return False
 
             self.current_audiobook = audiobook
+            self._auto_finished = False
 
             if chapter_index is not None:
                 chapter_idx = max(0, min(chapter_index, len(audiobook.chapters) - 1))
                 position = position if position is not None else 0.0
             else:
-                # Load saved progress
+                # Load saved local progress, then check whether the source
+                # server (Plex/ABS) has a more advanced position - e.g. this
+                # book was also listened to from the official app/website.
                 chapter_idx, position = progress_manager.load_progress(audiobook)
+                chapter_idx, position = self._merge_remote_progress(audiobook, chapter_idx, position)
             self.current_chapter_index = chapter_idx
 
             # Start session
@@ -60,11 +70,42 @@ class PlayerService:
             logger.error(f"Failed to start playbook: {e}")
             return False
 
+    def _merge_remote_progress(self, audiobook: Audiobook, chapter_idx: int, position: float):
+        """Compare local progress against the source server's and use
+        whichever is further along - best-effort, silently keeps the local
+        values on any failure (offline, local-folder book, etc)."""
+        try:
+            remote = progress_sync.pull_progress(audiobook.id)
+            if not remote:
+                return chapter_idx, position
+
+            def cumulative(idx: int, pos: float) -> float:
+                total = 0.0
+                for i, chapter in enumerate(audiobook.chapters or []):
+                    if i < idx:
+                        total += chapter.get("duration", 0) or 0
+                    elif i == idx:
+                        total += pos
+                        break
+                return total
+
+            local_cum = cumulative(chapter_idx, position)
+            remote_cum = cumulative(remote["chapter_index"], remote["position_seconds"])
+
+            if remote_cum > local_cum + 1.0:
+                logger.info(f"Using more advanced remote progress for {audiobook.title}")
+                return remote["chapter_index"], remote["position_seconds"]
+        except Exception as e:
+            logger.warning(f"Failed to merge remote progress: {e}")
+
+        return chapter_idx, position
+
     def pause(self) -> bool:
         """Pause playback"""
         try:
             if player.pause():
                 progress_manager.mark_paused()
+                progress_manager.push_remote_now()
                 logger.info("Playback paused")
                 return True
         except Exception as e:
@@ -195,6 +236,19 @@ class PlayerService:
 
         # Update progress in background
         progress_manager.update_progress(self.current_chapter_index, position)
+
+        # Auto mark-as-finished: reached the end of the last chapter
+        if (
+            not self._auto_finished
+            and self.current_audiobook
+            and self.current_audiobook.chapters
+            and self.current_chapter_index == len(self.current_audiobook.chapters) - 1
+            and duration > 0
+            and position >= duration - AUTO_FINISH_THRESHOLD_SECONDS
+        ):
+            self._auto_finished = True
+            progress_manager.mark_as_finished(self.current_audiobook)
+            progress_manager.push_remote_now(finished=True)
 
         # Notify UI
         if self._on_position_changed:

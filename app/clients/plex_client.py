@@ -157,35 +157,63 @@ class PlexClient:
 
         return None
 
-    def get_audiobook_progress(self, track_key: str) -> Dict[str, Any]:
-        """Get user's progress on an audiobook"""
-        try:
-            track = self.server.library.getByKey(f"/library/metadata/{track_key}")
+    def _album_for_book(self, book_id: str):
+        """Resolve a book id (e.g. 'plex_album_1234') back to its Plex album"""
+        rating_key = book_id.replace("plex_album_", "", 1)
+        return self.server.fetchItem(int(rating_key))
 
-            if track and hasattr(track, 'userRating'):
+    def pull_progress(self, book_id: str, chapters: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Read progress from Plex. Each chapter is a separate Plex track, so
+        this walks the tracks in order and reports the first one that isn't
+        fully watched as the current chapter/position."""
+        try:
+            album = self._album_for_book(book_id)
+            tracks = sorted(album.tracks(), key=lambda t: t.index or 0)
+            if not tracks:
+                return None
+
+            for idx, track in enumerate(tracks):
+                view_offset_ms = getattr(track, 'viewOffset', 0) or 0
+                view_count = getattr(track, 'viewCount', 0) or 0
+                if view_count > 0 and view_offset_ms == 0:
+                    # Fully watched, no partial offset left over - move on
+                    continue
                 return {
-                    "viewed_leaf_count": getattr(track, 'viewedLeafCount', 0),
-                    "leaf_count": getattr(track, 'leafCount', 0),
-                    "view_offset": getattr(track, 'viewOffset', 0)
+                    "chapter_index": idx,
+                    "position_seconds": view_offset_ms / 1000.0,
+                    "finished": False
                 }
-            return {}
-        except Exception as e:
-            logger.error(f"Failed to get audiobook progress: {e}")
-            return {}
 
-    def set_audiobook_progress(self, track_key: str, position_ms: int):
-        """Update playback position for a track"""
-        try:
-            url = f"{self.url}/library/metadata/{track_key}/timeline"
-            params = {
-                "time": position_ms,
-                "state": "playing",
-                "X-Plex-Token": self.token
-            }
-            # This would need a proper HTTP request implementation
-            logger.info(f"Updated progress for track {track_key} to {position_ms}ms")
+            # Every track has been watched
+            return {"chapter_index": len(tracks) - 1, "position_seconds": 0.0, "finished": True}
+
         except Exception as e:
-            logger.error(f"Failed to set audiobook progress: {e}")
+            logger.warning(f"Failed to pull progress from Plex: {e}")
+            return None
+
+    def push_progress(self, book_id: str, chapters: List[Dict[str, Any]], chapter_index: int,
+                       position_seconds: float, finished: bool = False) -> bool:
+        """Push progress to Plex: mark chapters before the current one as
+        watched, and report the live position on the current one."""
+        try:
+            album = self._album_for_book(book_id)
+            tracks = sorted(album.tracks(), key=lambda t: t.index or 0)
+
+            for idx, track in enumerate(tracks):
+                try:
+                    if finished or idx < chapter_index:
+                        track.markWatched()
+                    elif idx == chapter_index:
+                        duration_ms = int(track.duration or 0)
+                        track.updateTimeline(int(position_seconds * 1000), state='paused', duration=duration_ms)
+                except Exception as e:
+                    logger.warning(f"Failed to push progress for track {idx} of {book_id}: {e}")
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to push progress to Plex: {e}")
+            return False
 
     def test_connection(self) -> bool:
         """Test connection to Plex server"""

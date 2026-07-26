@@ -12,6 +12,7 @@ from app.database import get_session, ReadingProgressRepository, ReadingHistoryR
 from app.database.models import ReadingProgress
 from app.models import Audiobook
 from app.utils import logger
+from app.sync import progress_sync
 
 
 class ProgressManager:
@@ -21,6 +22,12 @@ class ProgressManager:
     # after this opens a fresh session rather than continuing the old one, so
     # a session's duration reflects actual listening time, not idle gaps.
     PAUSE_TIMEOUT_SECONDS = 15 * 60
+
+    # Pushing progress to Plex/Audiobookshelf is a network call - too slow to
+    # do on every 5s local checkpoint. Throttle it, but always push right
+    # away on pause/stop (see push_remote_now) so leaving the app promptly
+    # reflects on the server.
+    REMOTE_PUSH_INTERVAL_SECONDS = 20
 
     def __init__(self, save_interval: int = 5):
         """
@@ -39,6 +46,7 @@ class ProgressManager:
         self._current_session_id: Optional[int] = None
         self._session_active: bool = False
         self._paused_since: Optional[float] = None
+        self._last_remote_push: float = 0.0
 
         # Auto-save thread
         self._save_thread: Optional[threading.Thread] = None
@@ -140,6 +148,7 @@ class ProgressManager:
 
         self._session_active = False
         self._paused_since = None
+        self.push_remote_now()
 
         # The auto-save thread calls end_session() on itself when a pause
         # times out; joining it from inside its own thread would deadlock.
@@ -182,10 +191,31 @@ class ProgressManager:
             )
             session.close()
 
+            now = time.time()
+            if now - self._last_remote_push >= self.REMOTE_PUSH_INTERVAL_SECONDS:
+                self._last_remote_push = now
+                self._push_remote(self._current_audiobook.id, self._current_chapter_index, self._current_position)
+
             return True
         except Exception as e:
             logger.error(f"Failed to save progress: {e}")
             return False
+
+    def _push_remote(self, book_id: str, chapter_index: int, position: float, finished: bool = False):
+        """Best-effort push to the source server - never lets a network
+        failure affect local playback/progress saving."""
+        try:
+            progress_sync.push_progress(book_id, chapter_index, position, finished)
+        except Exception as e:
+            logger.warning(f"Remote progress push failed: {e}")
+
+    def push_remote_now(self, finished: bool = False):
+        """Force an immediate remote push, bypassing the throttle - used on
+        pause/stop so leaving the app is reflected on the server right away."""
+        if not self._current_audiobook:
+            return
+        self._last_remote_push = time.time()
+        self._push_remote(self._current_audiobook.id, self._current_chapter_index, self._current_position, finished)
 
     def load_progress(self, audiobook: Audiobook) -> tuple[int, float]:
         """

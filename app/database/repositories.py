@@ -193,11 +193,17 @@ class ReadingProgressRepository(BaseRepository):
 
     def mark_finished(self, book_id: str):
         """Mark a book as finished"""
+        self.set_finished(book_id, True)
+
+    def set_finished(self, book_id: str, finished: bool) -> ReadingProgress:
+        """Manually set/unset a book's finished status"""
         progress = self.get_or_create(book_id)
-        progress.is_finished = True
-        progress.finished_at = datetime.utcnow()
-        progress.progress_percent = 100.0
+        progress.is_finished = finished
+        progress.finished_at = datetime.utcnow() if finished else None
+        if finished:
+            progress.progress_percent = 100.0
         self.session.commit()
+        return progress
 
     def get_current_chapter(self, book_id: str) -> int:
         """Get current chapter index"""
@@ -223,6 +229,13 @@ class ReadingProgressRepository(BaseRepository):
         count = self.session.query(ReadingProgress).delete()
         self.session.commit()
         return count
+
+    def get_finished_book_ids(self) -> set:
+        """Get the set of book_ids marked as finished (manually or automatically)"""
+        rows = self.session.query(ReadingProgress.book_id).filter(
+            ReadingProgress.is_finished == True  # noqa: E712
+        ).all()
+        return {row[0] for row in rows}
 
     def get_in_progress_map(self) -> dict:
         """Get {book_id: {percent, chapter_index}} for books that have been

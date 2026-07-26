@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown } from 'lucide-react';
+import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -18,6 +18,7 @@ interface Book {
   series: string | null;
   progress_percent: number;
   current_chapter_title: string | null;
+  is_finished: boolean;
   has_bookmark: boolean;
   author_photo: string | null;
 }
@@ -279,6 +280,11 @@ const HomePage: React.FC = () => {
           <span>📚</span>
         )}
         <span className="book-card-badge">{formatDuration(book.duration)}</span>
+        {book.is_finished && (
+          <span className="book-card-finished" title="Livre terminé">
+            <CheckCircle2 size={12} fill="currentColor" />
+          </span>
+        )}
         {book.has_bookmark && (
           <span className="book-card-bookmark" title="Marque-page enregistré">
             <Bookmark size={12} fill="currentColor" />

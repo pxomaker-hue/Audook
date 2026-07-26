@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
+from app.sync import progress_sync
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
 from app.utils import logger, generate_id, online_metadata
@@ -190,7 +191,9 @@ def get_books():
     try:
         books = library_service.get_all_books()
         session = get_session()
-        in_progress = ReadingProgressRepository(session).get_in_progress_map()
+        progress_repo = ReadingProgressRepository(session)
+        in_progress = progress_repo.get_in_progress_map()
+        finished_ids = progress_repo.get_finished_book_ids()
         bookmarked_ids = BookmarkRepository(session).get_book_ids_with_bookmarks()
 
         result = []
@@ -214,6 +217,7 @@ def get_books():
                 'series': book.metadata.get('series'),
                 'progress_percent': progress.get('percent') if progress else 0,
                 'current_chapter_title': current_chapter_title,
+                'is_finished': book.id in finished_ids,
                 'has_bookmark': book.id in bookmarked_ids,
                 'author_bio': book.metadata.get('author_bio'),
                 'author_photo': book.metadata.get('author_photo')
@@ -252,6 +256,7 @@ def get_book_details(book_id):
                 'position': progress.position_seconds,
                 'percentage': progress.progress_percent
             },
+            'is_finished': progress.is_finished,
             'bookmarks': [{
                 'id': b.id,
                 'chapter_index': b.chapter_index,
@@ -262,6 +267,30 @@ def get_book_details(book_id):
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/finished', methods=['POST'])
+def set_book_finished(book_id):
+    """Manually mark/unmark a book as finished. Also best-effort pushes the
+    finished status to the book's source server (Plex/Audiobookshelf)."""
+    try:
+        data = request.json or {}
+        finished = bool(data.get('finished', True))
+
+        session = get_session()
+        progress_repo = ReadingProgressRepository(session)
+        progress = progress_repo.set_finished(book_id, finished)
+        chapter_index = progress.current_chapter_index
+        position = progress.position_seconds
+
+        try:
+            progress_sync.push_progress(book_id, chapter_index, position, finished)
+        except Exception as e:
+            logger.warning(f"Failed to push finished status to remote server: {e}")
+
+        return jsonify({'status': 'ok', 'is_finished': finished})
+    except Exception as e:
+        logger.error(f"Failed to set finished status: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/<book_id>/bookmarks', methods=['POST'])

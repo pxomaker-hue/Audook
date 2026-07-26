@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark } from 'lucide-react';
+import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -12,6 +12,7 @@ interface Book {
   cover_url: string | null;
   duration: number;
   has_bookmark: boolean;
+  is_finished: boolean;
   author_bio: string | null;
   author_photo: string | null;
 }
@@ -265,6 +266,11 @@ const AuthorPage: React.FC = () => {
                   <span>📚</span>
                 )}
                 <span className="book-card-badge">{formatDuration(book.duration)}</span>
+                {book.is_finished && (
+                  <span className="book-card-finished" title="Livre terminé">
+                    <CheckCircle2 size={12} fill="currentColor" />
+                  </span>
+                )}
                 {book.has_bookmark && (
                   <span className="book-card-bookmark" title="Marque-page enregistré">
                     <Bookmark size={12} fill="currentColor" />

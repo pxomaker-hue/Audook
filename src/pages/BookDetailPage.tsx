@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, ArrowLeft, Search, Pencil, Lock, Bookmark, Trash2, Loader2 } from 'lucide-react';
+import { Play, ArrowLeft, Search, Pencil, Lock, Bookmark, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 
 interface BookmarkEntry {
@@ -32,6 +32,7 @@ interface BookDetail {
     position: number;
     percentage: number;
   };
+  is_finished: boolean;
 }
 
 interface MatchCandidate {
@@ -104,6 +105,7 @@ const BookDetailPage: React.FC = () => {
   const [editSeries, setEditSeries] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [resumingBookmarkId, setResumingBookmarkId] = useState<number | null>(null);
+  const [togglingFinished, setTogglingFinished] = useState(false);
 
   const fetchBookDetail = async () => {
     try {
@@ -160,6 +162,19 @@ const BookDetailPage: React.FC = () => {
       } catch (error) {
         console.error('Failed to play chapter:', error);
       }
+    }
+  };
+
+  const handleToggleFinished = async () => {
+    if (!book) return;
+    try {
+      setTogglingFinished(true);
+      await axios.post(`${apiBase}/books/${book.id}/finished`, { finished: !book.is_finished });
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to toggle finished status:', error);
+    } finally {
+      setTogglingFinished(false);
     }
   };
 
@@ -431,6 +446,25 @@ const BookDetailPage: React.FC = () => {
             </button>
             <button className="cta-button" style={smallButtonStyle} onClick={openEditForm}>
               <Pencil size={14} /> Modifier
+            </button>
+            <button
+              className="cta-button"
+              style={{
+                ...mutedButtonStyle,
+                background: book.is_finished ? '#35c46a' : 'var(--surface-muted)',
+                color: book.is_finished ? '#ffffff' : 'var(--text-primary)',
+                opacity: togglingFinished ? 0.6 : 1
+              }}
+              disabled={togglingFinished}
+              onClick={handleToggleFinished}
+            >
+              {togglingFinished ? (
+                <Loader2 size={14} className="spin" />
+              ) : (
+                <>
+                  <CheckCircle2 size={14} /> {book.is_finished ? 'Lu' : 'Marquer comme lu'}
+                </>
+              )}
             </button>
           </div>
 
