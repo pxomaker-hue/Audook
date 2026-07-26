@@ -209,6 +209,21 @@ class ReadingProgressRepository(BaseRepository):
         progress = self.session.query(ReadingProgress).filter_by(book_id=book_id).first()
         return progress.position_seconds if progress else 0.0
 
+    def delete(self, book_id: str) -> bool:
+        """Reset (delete) the reading progress for a single book"""
+        progress = self.session.query(ReadingProgress).filter_by(book_id=book_id).first()
+        if not progress:
+            return False
+        self.session.delete(progress)
+        self.session.commit()
+        return True
+
+    def delete_all(self) -> int:
+        """Reset (delete) all reading progress, returns the number deleted"""
+        count = self.session.query(ReadingProgress).delete()
+        self.session.commit()
+        return count
+
     def get_in_progress_map(self) -> dict:
         """Get {book_id: {percent, chapter_index}} for books that have been
         started but not finished"""

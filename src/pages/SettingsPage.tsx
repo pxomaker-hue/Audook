@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -91,6 +91,7 @@ const SettingsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [busyServerId, setBusyServerId] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
+  const [resettingProgress, setResettingProgress] = useState(false);
 
   const loadServers = useCallback(async () => {
     try {
@@ -217,6 +218,18 @@ const SettingsPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to sync:', error);
       setSyncingAll(false);
+    }
+  };
+
+  const handleResetAllProgress = async () => {
+    if (!window.confirm("Réinitialiser toute la progression de lecture ? Tous les livres seront retirés de \"Reprendre l'écoute\".")) return;
+    try {
+      setResettingProgress(true);
+      await axios.delete(`${API_BASE}/progress`);
+    } catch (error) {
+      console.error('Failed to reset progress:', error);
+    } finally {
+      setResettingProgress(false);
     }
   };
 
@@ -468,6 +481,34 @@ const SettingsPage: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
+
+      <div style={cardStyle}>
+        <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Maintenance</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '15px' }}>
+          Retire tous les livres de la section "Reprendre l'écoute" en réinitialisant leur progression de lecture.
+        </p>
+        <button
+          className="cta-button"
+          onClick={handleResetAllProgress}
+          disabled={resettingProgress}
+          style={{
+            background: 'var(--surface-muted)',
+            color: 'var(--text-primary)',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: '999px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            opacity: resettingProgress ? 0.6 : 1
+          }}
+        >
+          <RotateCcw size={14} /> Réinitialiser toutes les progressions
+        </button>
       </div>
 
       <div style={cardStyle}>

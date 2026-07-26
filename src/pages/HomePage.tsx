@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Play, RefreshCw, User } from 'lucide-react';
+import { Search, Play, RefreshCw, User, X } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -118,6 +118,17 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const handleDismissProgress = async (e: React.MouseEvent, bookId: string) => {
+    e.stopPropagation();
+    setBooks(prev => prev.map(b => (b.id === bookId ? { ...b, progress_percent: 0, current_chapter_title: null } : b)));
+    try {
+      await axios.delete(`${API_BASE}/books/${bookId}/progress`);
+    } catch (error) {
+      console.error('Failed to reset book progress:', error);
+      fetchAll();
+    }
+  };
+
   const handleSync = async () => {
     if (syncing) return;
     try {
@@ -177,9 +188,18 @@ const HomePage: React.FC = () => {
           </button>
         </div>
         {book.progress_percent > 0 && (
-          <div className="book-card-progress-bar">
-            <div className="book-card-progress-fill" style={{ width: `${book.progress_percent}%` }} />
-          </div>
+          <>
+            <button
+              className="book-card-dismiss"
+              onClick={(e) => handleDismissProgress(e, book.id)}
+              title="Retirer de Reprendre l'écoute"
+            >
+              <X size={12} />
+            </button>
+            <div className="book-card-progress-bar">
+              <div className="book-card-progress-fill" style={{ width: `${book.progress_percent}%` }} />
+            </div>
+          </>
         )}
       </div>
       <div className="book-card-info">

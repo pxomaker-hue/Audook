@@ -436,6 +436,30 @@ def clear_history():
         logger.error(f"Failed to clear history: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/books/<book_id>/progress', methods=['DELETE'])
+def delete_book_progress(book_id):
+    """Reset a single book's reading progress (removes it from 'Reprendre l'écoute')"""
+    try:
+        session = get_session()
+        deleted = ReadingProgressRepository(session).delete(book_id)
+        if not deleted:
+            return jsonify({'error': 'Aucune progression pour ce livre'}), 404
+        return jsonify({'status': 'reset'})
+    except Exception as e:
+        logger.error(f"Failed to reset book progress: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/progress', methods=['DELETE'])
+def clear_all_progress():
+    """Reset all reading progress (empties 'Reprendre l'écoute' for every book)"""
+    try:
+        session = get_session()
+        count = ReadingProgressRepository(session).delete_all()
+        return jsonify({'status': 'cleared', 'deleted': count})
+    except Exception as e:
+        logger.error(f"Failed to clear progress: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/books/search', methods=['GET'])
 def search_books():
     try:
