@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
 import MiniPlayerView from './components/MiniPlayerView';
 import CloseAppDialog from './components/CloseAppDialog';
+import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
-import HomePage from './pages/HomePage';
-import ExplorePage from './pages/ExplorePage';
-import BookDetailPage from './pages/BookDetailPage';
-import AuthorPage from './pages/AuthorPage';
-import HistoryPage from './pages/HistoryPage';
-import SettingsPage from './pages/SettingsPage';
 import './App.css';
 
 // The detached mini-player (electron/main.js createMiniWindow) loads this
@@ -145,14 +140,7 @@ const App: React.FC = () => {
         <div className="app">
           <Sidebar />
           <main className="main-content">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/explore" element={<ExplorePage />} />
-              <Route path="/book/:id" element={<BookDetailPage />} />
-              <Route path="/author/:name" element={<AuthorPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
+            <AnimatedRoutes />
           </main>
           <Player />
         </div>

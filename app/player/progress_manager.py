@@ -170,6 +170,19 @@ class ProgressManager:
         except Exception as e:
             logger.error(f"Failed to end session: {e}")
 
+    def _cumulative_position(self, chapter_index: int, position: float) -> float:
+        """Seconds elapsed across the whole book up to the given chapter/position -
+        i.e. the sum of every earlier chapter's duration plus the current one's
+        position, not just the position within the current chapter."""
+        total = 0.0
+        for i, chapter in enumerate(self._current_audiobook.chapters or []):
+            if i < chapter_index:
+                total += chapter.get("duration", 0) or 0
+            elif i == chapter_index:
+                total += position
+                break
+        return total
+
     def save_progress(self) -> bool:
         """Save current progress to database"""
         if not self._current_audiobook:
@@ -179,9 +192,12 @@ class ProgressManager:
             session = get_session()
             repo = ReadingProgressRepository(session)
 
-            # Calculate progress percentage
+            # Progress percentage across the whole book, not just how far
+            # into the current chapter we are - a book's summary/library
+            # card should reflect total advancement.
             total_duration = self._current_audiobook.duration
-            progress_percent = (self._current_position / total_duration * 100) if total_duration > 0 else 0
+            cumulative_position = self._cumulative_position(self._current_chapter_index, self._current_position)
+            progress_percent = (cumulative_position / total_duration * 100) if total_duration > 0 else 0
 
             repo.update_progress(
                 self._current_audiobook.id,
