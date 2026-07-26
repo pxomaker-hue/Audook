@@ -231,10 +231,10 @@ const Player: React.FC = () => {
         </div>
       </div>
 
-      <div className="player-author">{state.currentBook.author}</div>
       {state.currentChapterTitle && (
         <div className="player-current-chapter">{state.currentChapterTitle}</div>
       )}
+      <div className="player-author">{state.currentBook.author}</div>
 
       {state.currentBook.description && (
         <div className="player-description">{state.currentBook.description}</div>

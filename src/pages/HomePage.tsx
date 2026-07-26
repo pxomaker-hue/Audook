@@ -14,6 +14,7 @@ interface Book {
   duration: number;
   source: string;
   progress_percent: number;
+  current_chapter_title: string | null;
   author_photo: string | null;
 }
 
@@ -184,6 +185,9 @@ const HomePage: React.FC = () => {
       <div className="book-card-info">
         <div className="book-card-title">{book.title}</div>
         <div className="book-card-author">{book.author}</div>
+        {book.current_chapter_title && (
+          <div className="book-card-chapter">{book.current_chapter_title}</div>
+        )}
       </div>
     </div>
   );

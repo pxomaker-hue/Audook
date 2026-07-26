@@ -32,6 +32,15 @@ contextBridge.exposeInMainWorld('electron', {
   // Native folder picker (for local audiobook folders)
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
 
+  // Custom title bar controls (the window is frameless, no native ones)
+  minimizeWindow: () => ipcRenderer.send('window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.send('window:toggle-maximize'),
+  closeWindow: () => ipcRenderer.send('window:close'),
+  isWindowMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+  onWindowMaximizedChange: (callback) => {
+    ipcRenderer.on('window:maximized-change', (event, isMaximized) => callback(isMaximized));
+  },
+
   // Listen for player events
   onPlayerState: (callback) => {
     ipcRenderer.on('player:stateChange', (event, state) => callback(state));

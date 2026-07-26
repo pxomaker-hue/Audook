@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -26,29 +27,79 @@ const formatDuration = (seconds: number | null) => {
 const HistoryPage: React.FC = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${API_BASE}/history`);
-        setHistory(response.data);
-      } catch (error) {
-        console.error('Failed to fetch history:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE}/history`);
+      setHistory(response.data);
+    } catch (error) {
+      console.error('Failed to fetch history:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchHistory();
   }, []);
 
+  const handleDeleteEntry = async (e: React.MouseEvent, sessionId: number) => {
+    e.stopPropagation();
+    setHistory(prev => prev.filter(h => h.session_id !== sessionId));
+    try {
+      await axios.delete(`${API_BASE}/history/${sessionId}`);
+    } catch (error) {
+      console.error('Failed to delete history entry:', error);
+      fetchHistory();
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Effacer tout l'historique d'écoute ?")) return;
+    try {
+      setClearing(true);
+      await axios.delete(`${API_BASE}/history`);
+      setHistory([]);
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div className="page-content">
-      <div className="page-header">
-        <h1 className="page-title">Historique</h1>
-        <p className="page-subtitle">Vos sessions d'écoute récentes</p>
+      <div className="top-bar" style={{ marginBottom: '20px' }}>
+        <div style={{ flex: 1 }}>
+          <h1 className="page-title" style={{ marginBottom: '4px' }}>Historique</h1>
+          <p className="page-subtitle">Vos sessions d'écoute récentes</p>
+        </div>
+        {history.length > 0 && (
+          <button
+            className="cta-button"
+            onClick={handleClearAll}
+            disabled={clearing}
+            style={{
+              background: 'var(--surface-muted)',
+              color: 'var(--text-primary)',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '999px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: clearing ? 0.6 : 1
+            }}
+          >
+            <Trash2 size={14} /> Effacer tout
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -121,6 +172,22 @@ const HistoryPage: React.FC = () => {
                 )}
                 {formatDuration(entry.duration_seconds) && <div>{formatDuration(entry.duration_seconds)}</div>}
               </div>
+              <button
+                onClick={(e) => handleDeleteEntry(e, entry.session_id)}
+                title="Supprimer cette session"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-tertiary)',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  padding: '6px',
+                  display: 'flex',
+                  transition: 'color 0.15s'
+                }}
+              >
+                <Trash2 size={15} />
+              </button>
             </div>
           ))}
         </div>

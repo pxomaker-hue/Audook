@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, ArrowLeft } from 'lucide-react';
+import { Play, ArrowLeft, Search, Pencil, Lock } from 'lucide-react';
 import axios from 'axios';
 
 interface BookDetail {
@@ -17,11 +17,56 @@ interface BookDetail {
     index: number;
     duration: number;
   }>;
+  manual_overrides: string[];
   progress: {
     position: number;
     percentage: number;
   };
 }
+
+interface MatchCandidate {
+  work_key: string;
+  title: string;
+  author: string | null;
+  year: number | null;
+  cover_url: string | null;
+  is_french: boolean;
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  backgroundColor: 'var(--surface-muted)',
+  color: 'var(--text-primary)',
+  border: 'none',
+  borderRadius: '999px',
+  fontFamily: 'inherit',
+  fontSize: '13px'
+};
+
+const smallButtonStyle: React.CSSProperties = {
+  background: 'var(--primary)',
+  color: 'var(--secondary)',
+  border: 'none',
+  padding: '12px 24px',
+  borderRadius: '999px',
+  cursor: 'pointer',
+  fontSize: '14px',
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px'
+};
+
+// Lighter variant for secondary, repeated actions inside a panel (e.g. one
+// per search result row), so the page isn't wall-to-wall accent yellow.
+const mutedButtonStyle: React.CSSProperties = {
+  ...smallButtonStyle,
+  background: 'var(--surface-muted)',
+  color: 'var(--text-primary)',
+  padding: '9px 16px',
+  fontSize: '13px'
+};
 
 const BookDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,22 +76,40 @@ const BookDetailPage: React.FC = () => {
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
   const apiBase = 'http://localhost:5000/api';
 
-  useEffect(() => {
-    const fetchBookDetail = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${apiBase}/books/${id}`);
-        setBook(response.data);
-      } catch (error) {
-        console.error('Failed to fetch book details:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // "Associer" (match) panel
+  const [showMatchPanel, setShowMatchPanel] = useState(false);
+  const [matchQuery, setMatchQuery] = useState('');
+  const [matchCandidates, setMatchCandidates] = useState<MatchCandidate[]>([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [matchMode, setMatchMode] = useState<'fill' | 'replace'>('fill');
+  const [applyingKey, setApplyingKey] = useState<string | null>(null);
 
+  // Manual edit form
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editAuthor, setEditAuthor] = useState('');
+  const [editNarrator, setEditNarrator] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCoverUrl, setEditCoverUrl] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const fetchBookDetail = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${apiBase}/books/${id}`);
+      setBook(response.data);
+    } catch (error) {
+      console.error('Failed to fetch book details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (id) {
       fetchBookDetail();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -85,6 +148,76 @@ const BookDetailPage: React.FC = () => {
       } catch (error) {
         console.error('Failed to play chapter:', error);
       }
+    }
+  };
+
+  const openMatchPanel = () => {
+    setShowEditForm(false);
+    setShowMatchPanel(!showMatchPanel);
+    if (!showMatchPanel) {
+      setMatchQuery('');
+      setMatchCandidates([]);
+      handleSearchCandidates('');
+    }
+  };
+
+  const handleSearchCandidates = async (query: string) => {
+    if (!book) return;
+    try {
+      setMatchLoading(true);
+      const response = await axios.get(`${apiBase}/books/${book.id}/match-candidates`, {
+        params: query ? { query } : {}
+      });
+      setMatchCandidates(response.data);
+    } catch (error) {
+      console.error('Failed to search candidates:', error);
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
+  const handleApplyMatch = async (workKey: string) => {
+    if (!book) return;
+    try {
+      setApplyingKey(workKey);
+      await axios.post(`${apiBase}/books/${book.id}/match`, { work_key: workKey, mode: matchMode });
+      setShowMatchPanel(false);
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to apply match:', error);
+    } finally {
+      setApplyingKey(null);
+    }
+  };
+
+  const openEditForm = () => {
+    if (!book) return;
+    setShowMatchPanel(false);
+    setEditTitle(book.title);
+    setEditAuthor(book.author);
+    setEditNarrator(book.narrator || '');
+    setEditDescription(book.description || '');
+    setEditCoverUrl(book.cover_url || '');
+    setShowEditForm(!showEditForm);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!book) return;
+    try {
+      setSavingEdit(true);
+      await axios.patch(`${apiBase}/books/${book.id}`, {
+        title: editTitle.trim(),
+        author: editAuthor.trim(),
+        narrator: editNarrator.trim() || null,
+        description: editDescription.trim() || null,
+        cover_url: editCoverUrl.trim() || null
+      });
+      setShowEditForm(false);
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to save edit:', error);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -234,25 +367,166 @@ const BookDetailPage: React.FC = () => {
             </div>
           )}
 
-          <button
-            className="cta-button"
-            onClick={handlePlayBook}
-            style={{
-              background: 'var(--primary)',
-              color: 'var(--secondary)',
-              border: 'none',
-              padding: '12px 30px',
-              borderRadius: '999px',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}
-          >
-            <Play size={20} /> Lire
-          </button>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              className="cta-button"
+              onClick={handlePlayBook}
+              style={{
+                background: 'var(--primary)',
+                color: 'var(--secondary)',
+                border: 'none',
+                padding: '12px 30px',
+                borderRadius: '999px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}
+            >
+              <Play size={20} /> Lire
+            </button>
+            <button className="cta-button" style={smallButtonStyle} onClick={openMatchPanel}>
+              <Search size={14} /> Associer
+            </button>
+            <button className="cta-button" style={smallButtonStyle} onClick={openEditForm}>
+              <Pencil size={14} /> Modifier
+            </button>
+          </div>
+
+          {showMatchPanel && (
+            <div
+              style={{
+                marginTop: '20px',
+                backgroundColor: 'var(--surface)',
+                boxShadow: 'var(--shadow-pop)',
+                borderRadius: 'var(--radius-md)',
+                padding: '20px',
+                maxWidth: '520px'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                <input
+                  type="text"
+                  value={matchQuery}
+                  onChange={(e) => setMatchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearchCandidates(matchQuery)}
+                  placeholder={`${book.title} ${book.author}`}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  className="cta-button"
+                  style={mutedButtonStyle}
+                  onClick={() => handleSearchCandidates(matchQuery)}
+                >
+                  Chercher
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '14px', marginBottom: '14px', fontSize: '13px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                  <input type="radio" checked={matchMode === 'fill'} onChange={() => setMatchMode('fill')} />
+                  Compléter (garde ce qui existe)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                  <input type="radio" checked={matchMode === 'replace'} onChange={() => setMatchMode('replace')} />
+                  Remplacer
+                </label>
+              </div>
+
+              {matchLoading ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Recherche...</p>
+              ) : matchCandidates.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Aucun résultat</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto' }}>
+                  {matchCandidates.map((c) => (
+                    <div
+                      key={c.work_key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '8px',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--surface-muted)'
+                      }}
+                    >
+                      <div style={{ width: '40px', height: '56px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', backgroundColor: 'var(--background)' }}>
+                        {c.cover_url && <img src={c.cover_url} alt={c.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {c.title}
+                          {c.is_french && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent-ink)', background: 'var(--accent)', padding: '2px 6px', borderRadius: '999px' }}>
+                              FR
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {c.author} {c.year ? `· ${c.year}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        className="cta-button"
+                        style={{ ...mutedButtonStyle, opacity: applyingKey === c.work_key ? 0.6 : 1 }}
+                        disabled={applyingKey === c.work_key}
+                        onClick={() => handleApplyMatch(c.work_key)}
+                      >
+                        {applyingKey === c.work_key ? '...' : 'Choisir'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showEditForm && (
+            <div
+              style={{
+                marginTop: '20px',
+                backgroundColor: 'var(--surface)',
+                boxShadow: 'var(--shadow-pop)',
+                borderRadius: 'var(--radius-md)',
+                padding: '20px',
+                maxWidth: '520px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
+              <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titre" style={inputStyle} />
+              <input type="text" value={editAuthor} onChange={(e) => setEditAuthor(e.target.value)} placeholder="Auteur" style={inputStyle} />
+              <input type="text" value={editNarrator} onChange={(e) => setEditNarrator(e.target.value)} placeholder="Narrateur" style={inputStyle} />
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Description"
+                rows={4}
+                style={{ ...inputStyle, borderRadius: 'var(--radius-sm)', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+              <input type="text" value={editCoverUrl} onChange={(e) => setEditCoverUrl(e.target.value)} placeholder="URL de couverture" style={inputStyle} />
+              <div>
+                <button
+                  className="cta-button"
+                  style={{ ...smallButtonStyle, background: 'var(--primary)', color: 'var(--secondary)', opacity: savingEdit ? 0.6 : 1 }}
+                  disabled={savingEdit}
+                  onClick={handleSaveEdit}
+                >
+                  {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {book.manual_overrides && book.manual_overrides.length > 0 && (
+            <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Lock size={11} /> Modifié manuellement, protégé des prochaines synchronisations
+            </p>
+          )}
         </div>
       </div>
 

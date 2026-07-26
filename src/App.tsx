@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
 import HomePage from './pages/HomePage';
@@ -71,67 +72,76 @@ const App: React.FC = () => {
     };
   }, []);
 
-  if (!backendOnline) {
-    if (showError) {
+  const renderBody = () => {
+    if (!backendOnline) {
+      if (showError) {
+        return (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100%',
+            backgroundColor: 'var(--background)',
+            color: 'var(--text-primary)',
+            fontFamily: 'inherit'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔴</div>
+            <h1>Serveur non disponible</h1>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
+            <ul style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'left' }}>
+              <li>Le serveur Python est en cours d'exécution</li>
+              <li>Aucun autre processus n'utilise le port 5000</li>
+              <li>L'application réessayera la connexion automatiquement...</li>
+            </ul>
+          </div>
+        );
+      }
+
+      // Silent loading state: the backend is expected to take a moment to
+      // start up, so no error is shown until ERROR_THRESHOLD_MS has elapsed.
       return (
         <div style={{
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
-          height: '100vh',
+          height: '100%',
           backgroundColor: 'var(--background)',
-          color: 'var(--text-primary)',
-          fontFamily: 'inherit'
+          gap: '20px'
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔴</div>
-          <h1>Serveur non disponible</h1>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
-          <ul style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'left' }}>
-            <li>Le serveur Python est en cours d'exécution</li>
-            <li>Aucun autre processus n'utilise le port 5000</li>
-            <li>L'application réessayera la connexion automatiquement...</li>
-          </ul>
+          <div className="app-boot-spinner" />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Démarrage d'Audook...</p>
         </div>
       );
     }
 
-    // Silent loading state: the backend is expected to take a moment to
-    // start up, so no error is shown until ERROR_THRESHOLD_MS has elapsed.
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: 'var(--background)',
-        gap: '20px'
-      }}>
-        <div className="app-boot-spinner" />
-        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Démarrage d'Audook...</p>
-      </div>
+      <HashRouter>
+        <div className="app">
+          <Sidebar />
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/book/:id" element={<BookDetailPage />} />
+              <Route path="/author/:name" element={<AuthorPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </main>
+          <Player />
+        </div>
+      </HashRouter>
     );
-  }
+  };
 
   return (
-    <BrowserRouter>
-      <div className="app">
-        <Sidebar />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/explore" element={<ExplorePage />} />
-            <Route path="/book/:id" element={<BookDetailPage />} />
-            <Route path="/author/:name" element={<AuthorPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </main>
-        <Player />
-      </div>
-    </BrowserRouter>
+    <div className="app-shell">
+      <TitleBar />
+      <div className="app-shell-body">{renderBody()}</div>
+    </div>
   );
 };
 

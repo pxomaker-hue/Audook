@@ -17,7 +17,7 @@ from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
-from app.utils import logger, generate_id
+from app.utils import logger, generate_id, online_metadata
 
 app = Flask(__name__)
 CORS(app)
@@ -191,19 +191,31 @@ def get_books():
         books = library_service.get_all_books()
         session = get_session()
         in_progress = ReadingProgressRepository(session).get_in_progress_map()
-        return jsonify([{
-            'id': book.id,
-            'title': book.title,
-            'author': book.author,
-            'narrator': book.narrator,
-            'cover_url': book.cover,
-            'duration': book.duration,
-            'description': book.description,
-            'source': book.source,
-            'progress_percent': in_progress.get(book.id, 0),
-            'author_bio': book.metadata.get('author_bio'),
-            'author_photo': book.metadata.get('author_photo')
-        } for book in books])
+
+        result = []
+        for book in books:
+            progress = in_progress.get(book.id)
+            current_chapter_title = None
+            if progress and book.chapters:
+                chapter_index = progress.get('chapter_index') or 0
+                if 0 <= chapter_index < len(book.chapters):
+                    current_chapter_title = book.chapters[chapter_index].get('title')
+
+            result.append({
+                'id': book.id,
+                'title': book.title,
+                'author': book.author,
+                'narrator': book.narrator,
+                'cover_url': book.cover,
+                'duration': book.duration,
+                'description': book.description,
+                'source': book.source,
+                'progress_percent': progress.get('percent') if progress else 0,
+                'current_chapter_title': current_chapter_title,
+                'author_bio': book.metadata.get('author_bio'),
+                'author_photo': book.metadata.get('author_photo')
+            })
+        return jsonify(result)
     except Exception as e:
         logger.error(f"Failed to get books: {e}")
         return jsonify({'error': str(e)}), 500
@@ -228,6 +240,9 @@ def get_book_details(book_id):
             'duration': book.duration,
             'description': book.description,
             'chapters': book.chapters,
+            'author_bio': book.metadata.get('author_bio'),
+            'author_photo': book.metadata.get('author_photo'),
+            'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,
                 'percentage': progress.progress_percent
@@ -235,6 +250,141 @@ def get_book_details(book_id):
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>', methods=['PATCH'])
+def update_book(book_id):
+    """Manually edit a book's metadata. Edited fields are locked against
+    being overwritten by a future scan."""
+    try:
+        data = request.json or {}
+        allowed_fields = ('title', 'author', 'narrator', 'description', 'cover_url')
+        fields = {k: v for k, v in data.items() if k in allowed_fields}
+        if not fields:
+            return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
+
+        session = get_session()
+        book_repo = BookRepository(session)
+        book = book_repo.update_fields(book_id, fields, lock=True)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        return jsonify({'status': 'updated'})
+    except Exception as e:
+        logger.error(f"Failed to update book: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/match-candidates', methods=['GET'])
+def get_book_match_candidates(book_id):
+    """Search Open Library for candidate matches for a book (like Plex's
+    'Fix Match'). Defaults to the book's own title/author but accepts an
+    override query for a manual search."""
+    try:
+        book = library_service.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        query = request.args.get('query', '').strip()
+        title = query or book.title
+        author = None if query else book.author
+
+        candidates = online_metadata.search_book_candidates(title, author)
+        return jsonify(candidates)
+    except Exception as e:
+        logger.error(f"Failed to get match candidates: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/match', methods=['POST'])
+def apply_book_match(book_id):
+    """Apply a chosen Open Library candidate to a book. mode='replace'
+    overwrites description/cover unconditionally, mode='fill' (default)
+    only fills fields that are currently empty."""
+    try:
+        data = request.json or {}
+        work_key = data.get('work_key')
+        mode = data.get('mode', 'fill')
+        if not work_key:
+            return jsonify({'error': 'work_key requis'}), 400
+
+        session = get_session()
+        book_repo = BookRepository(session)
+        book = book_repo.get_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        details = online_metadata.get_book_work_details(work_key)
+        fields = {}
+        if details.get('description') and (mode == 'replace' or not book.description):
+            fields['description'] = details['description']
+        if details.get('cover_url') and (mode == 'replace' or not book.cover_url):
+            fields['cover_url'] = details['cover_url']
+
+        if not fields:
+            return jsonify({'status': 'no_change'})
+
+        book_repo.update_fields(book_id, fields, lock=True)
+        return jsonify({'status': 'matched', 'applied': list(fields.keys())})
+    except Exception as e:
+        logger.error(f"Failed to apply match: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/authors/<name>', methods=['PATCH'])
+def update_author(name):
+    """Manually edit an author's bio/photo. Since authors aren't a separate
+    table, this applies to every book currently attributed to that exact
+    author string."""
+    try:
+        data = request.json or {}
+        fields = {}
+        if 'bio' in data:
+            fields['author_bio'] = data['bio']
+        if 'photo' in data:
+            fields['author_photo'] = data['photo']
+        if not fields:
+            return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
+
+        session = get_session()
+        book_repo = BookRepository(session)
+        books = book_repo.get_by_author(name)
+        if not books:
+            return jsonify({'error': 'Auteur introuvable'}), 404
+
+        for book in books:
+            book_repo.update_fields(book.id, fields, lock=True)
+
+        return jsonify({'status': 'updated', 'books_updated': len(books)})
+    except Exception as e:
+        logger.error(f"Failed to update author: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/authors/<name>/refresh', methods=['POST'])
+def refresh_author(name):
+    """Force a fresh online lookup for an author (French Wikipedia first),
+    overwriting any existing bio/photo, and apply it to every book by that
+    author."""
+    try:
+        session = get_session()
+        book_repo = BookRepository(session)
+        books = book_repo.get_by_author(name)
+        if not books:
+            return jsonify({'error': 'Auteur introuvable'}), 404
+
+        info = online_metadata.fetch_author_info_online(name, force=True)
+        if not info.get('bio') and not info.get('photo'):
+            return jsonify({'status': 'not_found', 'bio': None, 'photo': None})
+
+        fields = {}
+        if info.get('bio'):
+            fields['author_bio'] = info['bio']
+        if info.get('photo'):
+            fields['author_photo'] = info['photo']
+
+        for book in books:
+            book_repo.update_fields(book.id, fields, lock=True)
+
+        return jsonify({'status': 'updated', 'bio': info.get('bio'), 'photo': info.get('photo')})
+    except Exception as e:
+        logger.error(f"Failed to refresh author: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/history', methods=['GET'])
@@ -262,6 +412,28 @@ def get_history():
         return jsonify(results)
     except Exception as e:
         logger.error(f"Failed to get history: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history/<int:session_id>', methods=['DELETE'])
+def delete_history_entry(session_id):
+    try:
+        session = get_session()
+        deleted = ReadingHistoryRepository(session).delete(session_id)
+        if not deleted:
+            return jsonify({'error': 'Session introuvable'}), 404
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        logger.error(f"Failed to delete history entry: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history', methods=['DELETE'])
+def clear_history():
+    try:
+        session = get_session()
+        count = ReadingHistoryRepository(session).delete_all()
+        return jsonify({'status': 'cleared', 'deleted': count})
+    except Exception as e:
+        logger.error(f"Failed to clear history: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/search', methods=['GET'])

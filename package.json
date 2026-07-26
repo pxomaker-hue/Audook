@@ -12,7 +12,7 @@
     "react-eject": "react-scripts eject",
     "electron-start": "electron .",
     "electron-dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && npm run electron-start\"",
-    "preelectron-build": "node -e \"const fs=require('fs'); fs.cpSync('electron/main.js', 'build/electron.js')\"",
+    "preelectron-build": "node -e \"const fs=require('fs'); fs.cpSync('electron/main.js', 'build/electron.js'); fs.cpSync('electron/preload.js', 'build/preload.js')\"",
     "electron-build": "npm run react-build && npm run preelectron-build && electron-builder",
     "build": "npm run electron-build",
     "start": "npm run electron-dev"

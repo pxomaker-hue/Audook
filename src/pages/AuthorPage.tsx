@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, User } from 'lucide-react';
+import { ArrowLeft, Play, User, Pencil, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -22,6 +22,31 @@ const formatDuration = (seconds: number) => {
   return hours > 0 ? `${hours}h${minutes.toString().padStart(2, '0')}` : `${minutes}min`;
 };
 
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 14px',
+  backgroundColor: 'var(--surface-muted)',
+  color: 'var(--text-primary)',
+  border: 'none',
+  borderRadius: '999px',
+  fontFamily: 'inherit',
+  fontSize: '13px'
+};
+
+const smallButtonStyle: React.CSSProperties = {
+  background: 'var(--primary)',
+  color: 'var(--secondary)',
+  border: 'none',
+  padding: '12px 24px',
+  borderRadius: '999px',
+  cursor: 'pointer',
+  fontSize: '14px',
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px'
+};
+
 const AuthorPage: React.FC = () => {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
@@ -29,22 +54,30 @@ const AuthorPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const authorName = name ? decodeURIComponent(name) : '';
 
-  useEffect(() => {
-    const fetchBooks = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${API_BASE}/books`);
-        setBooks(response.data.filter((b: Book) => b.author === authorName));
-      } catch (error) {
-        console.error('Failed to fetch author books:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editBio, setEditBio] = useState('');
+  const [editPhoto, setEditPhoto] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
+  const fetchBooks = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE}/books`);
+      setBooks(response.data.filter((b: Book) => b.author === authorName));
+    } catch (error) {
+      console.error('Failed to fetch author books:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (authorName) {
       fetchBooks();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorName]);
 
   const { bio, photo } = useMemo(() => {
@@ -59,6 +92,48 @@ const AuthorPage: React.FC = () => {
       await axios.post(`${API_BASE}/player/play`, { book_id: bookId });
     } catch (error) {
       console.error('Failed to play book:', error);
+    }
+  };
+
+  const openEditForm = () => {
+    setEditBio(bio || '');
+    setEditPhoto(photo || '');
+    setShowEditForm(!showEditForm);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      setSavingEdit(true);
+      await axios.patch(`${API_BASE}/authors/${encodeURIComponent(authorName)}`, {
+        bio: editBio.trim() || null,
+        photo: editPhoto.trim() || null
+      });
+      setShowEditForm(false);
+      await fetchBooks();
+    } catch (error) {
+      console.error('Failed to save author edit:', error);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleRefreshOnline = async () => {
+    try {
+      setRefreshing(true);
+      setRefreshMessage(null);
+      const response = await axios.post(`${API_BASE}/authors/${encodeURIComponent(authorName)}/refresh`);
+      if (response.data.status === 'not_found') {
+        setRefreshMessage("Rien trouvé en ligne pour cet auteur");
+      } else {
+        await fetchBooks();
+        setRefreshMessage('Mis à jour depuis Wikipédia');
+      }
+    } catch (error) {
+      console.error('Failed to refresh author:', error);
+      setRefreshMessage('Échec de la récupération');
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshMessage(null), 4000);
     }
   };
 
@@ -81,7 +156,7 @@ const AuthorPage: React.FC = () => {
         <ArrowLeft size={20} /> Retour
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '16px' }}>
         <div
           style={{
             width: '84px',
@@ -102,7 +177,7 @@ const AuthorPage: React.FC = () => {
             <User size={36} color="var(--text-tertiary)" />
           )}
         </div>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <h1 className="page-title" style={{ marginBottom: bio ? '8px' : 0 }}>{authorName}</h1>
           {bio && (
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6, maxWidth: '640px' }}>
@@ -111,6 +186,64 @@ const AuthorPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <button className="cta-button" style={smallButtonStyle} onClick={openEditForm}>
+          <Pencil size={14} /> Modifier
+        </button>
+        <button
+          className="cta-button"
+          style={{ ...smallButtonStyle, opacity: refreshing ? 0.7 : 1 }}
+          onClick={handleRefreshOnline}
+          disabled={refreshing}
+        >
+          <RefreshCw size={14} className={refreshing ? 'spin' : ''} /> Rafraîchir depuis le web
+        </button>
+        {refreshMessage && (
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{refreshMessage}</span>
+        )}
+      </div>
+
+      {showEditForm && (
+        <div
+          style={{
+            marginBottom: '30px',
+            backgroundColor: 'var(--surface)',
+            boxShadow: 'var(--shadow-pop)',
+            borderRadius: 'var(--radius-md)',
+            padding: '20px',
+            maxWidth: '520px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}
+        >
+          <textarea
+            value={editBio}
+            onChange={(e) => setEditBio(e.target.value)}
+            placeholder="Biographie"
+            rows={5}
+            style={{ ...inputStyle, borderRadius: 'var(--radius-sm)', resize: 'vertical', fontFamily: 'inherit' }}
+          />
+          <input
+            type="text"
+            value={editPhoto}
+            onChange={(e) => setEditPhoto(e.target.value)}
+            placeholder="URL de la photo"
+            style={inputStyle}
+          />
+          <div>
+            <button
+              className="cta-button"
+              style={{ ...smallButtonStyle, background: 'var(--primary)', color: 'var(--secondary)', opacity: savingEdit ? 0.6 : 1 }}
+              disabled={savingEdit}
+              onClick={handleSaveEdit}
+            >
+              {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>
