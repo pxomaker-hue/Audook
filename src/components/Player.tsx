@@ -1,31 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX, Bookmark, Loader2, Check } from 'lucide-react';
-import axios from 'axios';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
+import { usePlayerState, formatTime } from '../hooks/usePlayerState';
 
-// Click window (ms) to detect a double-click on the "previous chapter" button
-const PREVIOUS_DOUBLE_CLICK_WINDOW = 300;
-// Below this many elapsed seconds, a single click on "previous" also jumps to
-// the previous chapter instead of just restarting the current one.
-const RESTART_THRESHOLD_SECONDS = 2;
-const SEEK_STEP_SECONDS = 30;
-const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 // Below this window width the full side-panel player no longer fits (it used
 // to just disappear entirely) - switch to a compact horizontal bar instead.
 const COMPACT_BREAKPOINT = '(max-width: 1100px)';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
-
-interface PlayerState {
-  isPlaying: boolean;
-  currentBook: any | null;
-  currentChapterTitle: string | null;
-  currentChapterIndex: number | null;
-  position: number;
-  duration: number;
-  volume: number;
-  speed: number;
-}
 
 // Stable pseudo-random bar heights for the waveform decoration
 const WAVE_BARS = Array.from({ length: 32 }, (_, i) => {
@@ -41,22 +21,24 @@ const VolumeIcon = ({ volume }: { volume: number }) => {
 
 const Player: React.FC = () => {
   const navigate = useNavigate();
-  const [state, setState] = useState<PlayerState>({
-    isPlaying: false,
-    currentBook: null,
-    currentChapterTitle: null,
-    currentChapterIndex: null,
-    position: 0,
-    duration: 0,
-    volume: 80,
-    speed: 1
-  });
-  const [showVolume, setShowVolume] = useState(false);
-  const [addingBookmark, setAddingBookmark] = useState(false);
-  const [bookmarkAdded, setBookmarkAdded] = useState(false);
+  const {
+    state,
+    showVolume,
+    setShowVolume,
+    addingBookmark,
+    bookmarkAdded,
+    volumeWrapperRef,
+    handlePlayPause,
+    handlePreviousClick,
+    handleNextClick,
+    handleSeek,
+    handleSeekStep,
+    handleVolumeChange,
+    handleAddBookmark,
+    handleCycleSpeed,
+    SEEK_STEP_SECONDS
+  } = usePlayerState();
   const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_BREAKPOINT).matches);
-  const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const volumeWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mql = window.matchMedia(COMPACT_BREAKPOINT);
@@ -70,171 +52,6 @@ const Player: React.FC = () => {
       window.removeEventListener('resize', checkCompact);
     };
   }, []);
-
-  const fetchState = async () => {
-    try {
-      const response = await axios.get(`${API_BASE}/player/state`);
-      // Backend uses snake_case (is_playing); explicitly map it instead of
-      // relying on the spread, otherwise `isPlaying` never actually updates.
-      setState(prev => ({
-        ...prev,
-        ...response.data,
-        isPlaying: response.data.is_playing ?? prev.isPlaying
-      }));
-    } catch (error) {
-      console.error('Failed to get player state:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchState();
-
-    if (window.electron?.onPlayerState) {
-      window.electron.onPlayerState((newState: any) => {
-        setState(prev => ({ ...prev, ...newState }));
-      });
-    }
-
-    if (window.electron?.onPlayerPosition) {
-      window.electron.onPlayerPosition((data: any) => {
-        setState(prev => ({ ...prev, position: data.position }));
-      });
-    }
-
-    const interval = setInterval(fetchState, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Close the volume popover when clicking outside of it
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (volumeWrapperRef.current && !volumeWrapperRef.current.contains(e.target as Node)) {
-        setShowVolume(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handlePlayPause = async () => {
-    try {
-      if (state.isPlaying) {
-        await axios.post(`${API_BASE}/player/pause`);
-      } else {
-        await axios.post(`${API_BASE}/player/resume`);
-      }
-    } catch (error) {
-      console.error('Failed to toggle playback:', error);
-    } finally {
-      // Re-fetch the real state instead of optimistically flipping a boolean:
-      // if playback was started from another page moments ago, our local
-      // state can still be stale, which would otherwise send the wrong
-      // command (e.g. "resume" on an already-playing book).
-      fetchState();
-    }
-  };
-
-  const goToPreviousChapter = async () => {
-    try {
-      await axios.post(`${API_BASE}/player/previous-chapter`);
-    } catch (error) {
-      console.error('Failed to go to previous chapter:', error);
-    }
-  };
-
-  const restartChapter = async () => {
-    setState(prev => ({ ...prev, position: 0 }));
-    try {
-      await axios.post(`${API_BASE}/player/seek`, { position: 0 });
-    } catch (error) {
-      console.error('Failed to restart chapter:', error);
-    }
-  };
-
-  const handlePreviousClick = () => {
-    if (previousClickTimer.current) {
-      // Second click within the window: double-click -> previous chapter,
-      // regardless of elapsed time.
-      clearTimeout(previousClickTimer.current);
-      previousClickTimer.current = null;
-      goToPreviousChapter();
-      return;
-    }
-
-    previousClickTimer.current = setTimeout(() => {
-      previousClickTimer.current = null;
-      // Single click resolved: restart the current chapter if we're well
-      // into it, otherwise just go to the previous one.
-      if (state.position > RESTART_THRESHOLD_SECONDS) {
-        restartChapter();
-      } else {
-        goToPreviousChapter();
-      }
-    }, PREVIOUS_DOUBLE_CLICK_WINDOW);
-  };
-
-  const handleNextClick = async () => {
-    try {
-      await axios.post(`${API_BASE}/player/next-chapter`);
-    } catch (error) {
-      console.error('Failed to go to next chapter:', error);
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (previousClickTimer.current) {
-        clearTimeout(previousClickTimer.current);
-      }
-    };
-  }, []);
-
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const percentage = (e.clientX - rect.left) / rect.width;
-    const newPosition = percentage * state.duration;
-    setState(prev => ({ ...prev, position: newPosition }));
-    axios.post(`${API_BASE}/player/seek`, { position: newPosition });
-  };
-
-  const handleSeekStep = (deltaSeconds: number) => {
-    const newPosition = Math.max(0, Math.min(state.duration, state.position + deltaSeconds));
-    setState(prev => ({ ...prev, position: newPosition }));
-    axios.post(`${API_BASE}/player/seek`, { position: newPosition });
-  };
-
-  const handleVolumeChange = (volume: number) => {
-    setState(prev => ({ ...prev, volume }));
-    axios.post(`${API_BASE}/player/volume`, { volume });
-  };
-
-  const handleAddBookmark = async () => {
-    if (!state.currentBook) return;
-    try {
-      setAddingBookmark(true);
-      await axios.post(`${API_BASE}/books/${state.currentBook.id}/bookmarks`, {});
-      setBookmarkAdded(true);
-      setTimeout(() => setBookmarkAdded(false), 1800);
-    } catch (error) {
-      console.error('Failed to add bookmark:', error);
-    } finally {
-      setAddingBookmark(false);
-    }
-  };
-
-  const handleCycleSpeed = () => {
-    const currentIndex = SPEEDS.indexOf(state.speed);
-    const nextSpeed = SPEEDS[(currentIndex + 1) % SPEEDS.length] ?? 1;
-    setState(prev => ({ ...prev, speed: nextSpeed }));
-    axios.post(`${API_BASE}/player/speed`, { speed: nextSpeed });
-  };
-
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   if (!state.currentBook) {
     return (
@@ -271,6 +88,9 @@ const Player: React.FC = () => {
           <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
             <SkipBack size={14} />
           </button>
+          <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+            <Rewind size={14} />
+          </button>
           <button
             className="player-button main"
             onClick={handlePlayPause}
@@ -278,9 +98,59 @@ const Player: React.FC = () => {
           >
             {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
+          <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+            <FastForward size={14} />
+          </button>
           <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
             <SkipForward size={14} />
           </button>
+        </div>
+
+        <div className="player-extra-row compact">
+          <button
+            className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
+            onClick={handleAddBookmark}
+            disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+            title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
+          >
+            {addingBookmark ? (
+              <Loader2 size={14} className="spin" />
+            ) : bookmarkAdded ? (
+              <Check size={14} />
+            ) : (
+              <Bookmark size={14} />
+            )}
+          </button>
+          <div className="volume-popover-wrapper" ref={volumeWrapperRef}>
+            {showVolume && (
+              <div className="volume-popover">
+                <input
+                  type="range"
+                  className="volume-slider-vertical"
+                  min="0"
+                  max="100"
+                  value={state.volume}
+                  onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                />
+              </div>
+            )}
+            <button
+              className="player-button"
+              onClick={() => setShowVolume(!showVolume)}
+              title="Volume"
+            >
+              <VolumeIcon volume={state.volume} />
+            </button>
+          </div>
+          {window.electron?.miniPlayer && (
+            <button
+              className="player-button"
+              onClick={() => window.electron?.miniPlayer.activate()}
+              title="Détacher le mini-lecteur"
+            >
+              <PictureInPicture2 size={14} />
+            </button>
+          )}
           <button
             className="player-button"
             onClick={() => navigate(`/book/${state.currentBook.id}`)}
@@ -410,6 +280,15 @@ const Player: React.FC = () => {
             <VolumeIcon volume={state.volume} />
           </button>
         </div>
+        {window.electron?.miniPlayer && (
+          <button
+            className="player-button"
+            onClick={() => window.electron?.miniPlayer.activate()}
+            title="Détacher le mini-lecteur"
+          >
+            <PictureInPicture2 size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -42,7 +42,11 @@
     "files": [
       "build/**/*",
       "electron/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "assets/icons/*.ico"
+    ],
+    "asarUnpack": [
+      "assets/icons/*.ico"
     ],
     "extraResources": [
       {

@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
+import MiniPlayerView from './components/MiniPlayerView';
 import HomePage from './pages/HomePage';
 import ExplorePage from './pages/ExplorePage';
 import BookDetailPage from './pages/BookDetailPage';
@@ -10,6 +11,11 @@ import AuthorPage from './pages/AuthorPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import './App.css';
+
+// The detached mini-player (electron/main.js createMiniWindow) loads this
+// same app at the '#/mini' hash route - render just the player for it,
+// skipping the title bar / sidebar / routed pages entirely.
+const isMiniWindow = window.location.hash.startsWith('#/mini');
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -117,6 +123,10 @@ const App: React.FC = () => {
       );
     }
 
+    if (isMiniWindow) {
+      return <MiniPlayerView />;
+    }
+
     return (
       <HashRouter>
         <div className="app">
@@ -138,8 +148,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="app-shell">
-      <TitleBar />
+    <div className={`app-shell ${isMiniWindow ? 'mini-window' : ''}`}>
+      {!isMiniWindow && <TitleBar />}
       <div className="app-shell-body">{renderBody()}</div>
     </div>
   );

@@ -47,5 +47,11 @@ contextBridge.exposeInMainWorld('electron', {
   },
   onPlayerPosition: (callback) => {
     ipcRenderer.on('player:position', (event, data) => callback(data));
+  },
+
+  // Detached mini-player window
+  miniPlayer: {
+    activate: () => ipcRenderer.send('mini-player:activate'),
+    deactivate: () => ipcRenderer.send('mini-player:deactivate')
   }
 });

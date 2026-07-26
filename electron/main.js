@@ -1,11 +1,17 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
 
 let mainWindow;
+let miniWindow;
+let tray;
 let pythonProcess;
+let isMiniMode = false;
+
+const MINI_WINDOW_WIDTH = 360;
+const MINI_WINDOW_HEIGHT = 165;
 
 // Packaged apps have no visible console, so console.log/error are otherwise
 // invisible to the user. Mirror backend spawn output and errors to a file
@@ -95,6 +101,16 @@ function startPythonBackend() {
   });
 }
 
+// Resolves the app URL for a given hash route (e.g. '' for the main window,
+// '/mini' for the detached mini-player window). Both dev and packaged builds
+// use HashRouter, so the route is just appended as a URL fragment.
+function resolveAppUrl(hashRoute = '') {
+  const base = isDev
+    ? 'http://localhost:3000'
+    : `file://${path.join(__dirname, '../build/index.html')}`;
+  return `${base}#${hashRoute}`;
+}
+
 // Create window
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -113,11 +129,7 @@ function createWindow() {
     icon: path.join(__dirname, '../assets/icons/audook.ico')
   });
 
-  const startUrl = isDev
-    ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '../build/index.html')}`;
-
-  mainWindow.loadURL(startUrl);
+  mainWindow.loadURL(resolveAppUrl());
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
@@ -143,6 +155,110 @@ function createWindow() {
   });
 }
 
+// Small always-on-top window showing only the player, used when the user
+// wants to keep listening without the full library window taking up space.
+function createMiniWindow() {
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+
+  miniWindow = new BrowserWindow({
+    width: MINI_WINDOW_WIDTH,
+    height: MINI_WINDOW_HEIGHT,
+    x: screenWidth - MINI_WINDOW_WIDTH - 16,
+    y: screenHeight - MINI_WINDOW_HEIGHT - 16,
+    frame: false,
+    show: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      contextIsolation: true,
+      enableRemoteModule: false,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
+    icon: path.join(__dirname, '../assets/icons/audook.ico')
+  });
+
+  miniWindow.loadURL(resolveAppUrl('/mini'));
+
+  miniWindow.once('ready-to-show', () => {
+    miniWindow.show();
+  });
+
+  // Covers both the renderer's own restore button and the OS-level close
+  // (e.g. Alt+F4) - either way, falling back to the main window is correct.
+  miniWindow.on('closed', () => {
+    miniWindow = null;
+    if (isMiniMode) {
+      exitMiniMode();
+    }
+  });
+}
+
+function enterMiniMode() {
+  if (isMiniMode) {
+    miniWindow?.focus();
+    return;
+  }
+  isMiniMode = true;
+  createMiniWindow();
+  mainWindow?.hide();
+  updateTrayMenu();
+}
+
+function exitMiniMode() {
+  isMiniMode = false;
+  if (miniWindow) {
+    // Triggers the 'closed' handler above, but the isMiniMode flag is already
+    // false by then so it won't recurse back into exitMiniMode().
+    miniWindow.close();
+  }
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
+  updateTrayMenu();
+}
+
+function createTray() {
+  // Tray() throws (and takes down the whole main process, unlike a
+  // BrowserWindow icon which just fails silently) if the icon can't be
+  // loaded - e.g. a packaging config that doesn't ship assets/icons. The
+  // systray is a convenience, not core functionality, so degrade instead of
+  // crashing the app over it.
+  try {
+    tray = new Tray(path.join(__dirname, '../assets/icons/audook.ico'));
+  } catch (err) {
+    logToFile(`Failed to create tray icon (continuing without it): ${err}`);
+    return;
+  }
+  tray.setToolTip('Audook');
+  tray.on('click', () => {
+    if (isMiniMode) {
+      exitMiniMode();
+    } else {
+      enterMiniMode();
+    }
+  });
+  updateTrayMenu();
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: isMiniMode ? 'Fermer le mini-lecteur' : 'Ouvrir le mini-lecteur',
+      click: () => (isMiniMode ? exitMiniMode() : enterMiniMode())
+    },
+    { label: 'Afficher Audook', click: () => exitMiniMode() },
+    { type: 'separator' },
+    { label: 'Quitter', click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+
 // App events
 app.on('ready', () => {
   // Frameless window: no native title bar means no native menu bar either;
@@ -150,6 +266,7 @@ app.on('ready', () => {
   Menu.setApplicationMenu(null);
   startPythonBackend();
   createWindow();
+  createTray();
 });
 
 function killPythonBackend() {
@@ -197,6 +314,7 @@ app.on('before-quit', (event) => {
   }
   event.preventDefault();
   isQuitting = true;
+  tray?.destroy();
   gracefulShutdown().then(() => app.quit());
 });
 
@@ -245,3 +363,7 @@ ipcMain.on('window:close', () => {
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow?.isMaximized() ?? false;
 });
+
+// Detached mini-player window (see createMiniWindow/enterMiniMode above)
+ipcMain.on('mini-player:activate', () => enterMiniMode());
+ipcMain.on('mini-player:deactivate', () => exitMiniMode());

@@ -1,0 +1,85 @@
+import React from 'react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2 } from 'lucide-react';
+import { usePlayerState } from '../hooks/usePlayerState';
+
+// Rendered in the detached mini-player Electron window (see electron/main.js
+// createMiniWindow, loaded at the '#/mini' hash route). Deliberately shows
+// only the player, nothing else - the whole point is a small always-on-top
+// widget instead of the full library window.
+const MiniPlayerView: React.FC = () => {
+  const {
+    state,
+    handlePlayPause,
+    handlePreviousClick,
+    handleNextClick,
+    handleSeek,
+    handleSeekStep,
+    SEEK_STEP_SECONDS
+  } = usePlayerState();
+
+  const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
+
+  return (
+    <div className="mini-player">
+      <div className="mini-player-drag-region">
+        <button
+          className="player-button"
+          onClick={() => window.electron?.miniPlayer.deactivate()}
+          title="Revenir à la fenêtre principale"
+        >
+          <Minimize2 size={14} />
+        </button>
+      </div>
+
+      {!state.currentBook ? (
+        <div className="mini-player-empty">Aucune lecture en cours</div>
+      ) : (
+        <>
+          <div className="mini-player-body">
+            <div className="mini-player-cover-wrap">
+              {state.currentBook.cover_url ? (
+                <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+              ) : (
+                <span>📚</span>
+              )}
+            </div>
+            <div className="mini-player-info">
+              <div className="mini-player-title">
+                {state.currentChapterTitle || state.currentBook.title}
+              </div>
+              <div className="mini-player-subtitle">{state.currentBook.author}</div>
+            </div>
+          </div>
+
+          <div className="progress-bar" onClick={handleSeek}>
+            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+          </div>
+
+          <div className="player-controls">
+            <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
+              <SkipBack size={14} />
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+              <Rewind size={14} />
+            </button>
+            <button
+              className="player-button main"
+              onClick={handlePlayPause}
+              title={state.isPlaying ? 'Pause' : 'Lecture'}
+            >
+              {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+              <FastForward size={14} />
+            </button>
+            <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+              <SkipForward size={14} />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default MiniPlayerView;
