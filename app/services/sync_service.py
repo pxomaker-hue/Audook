@@ -17,6 +17,7 @@ class SyncService:
         self._syncing = False
         self._sync_thread: Optional[threading.Thread] = None
         self._on_sync_progress: Optional[Callable[[str, bool], None]] = None
+        self._last_message: str = ""
 
     def sync_all_servers(self, background: bool = False) -> bool:
         """
@@ -120,6 +121,10 @@ class SyncService:
         """Check if sync is in progress"""
         return self._syncing
 
+    def get_last_message(self) -> str:
+        """Get the last sync progress message"""
+        return self._last_message
+
     def on_sync_progress(self, callback: Callable[[str, bool], None]):
         """
         Set callback for sync progress
@@ -131,6 +136,7 @@ class SyncService:
 
     def _notify_progress(self, message: str, is_complete: bool):
         """Notify progress callback"""
+        self._last_message = message
         if self._on_sync_progress:
             try:
                 self._on_sync_progress(message, is_complete)

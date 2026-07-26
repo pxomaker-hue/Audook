@@ -1,26 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
 interface Book {
   id: string;
-  title: string;
   author: string;
-  narrator: string;
-  cover_url: string;
 }
+
+const AVATAR_COLORS = ['#ffc629', '#17161b', '#c3c2c9', '#f4f4f2'];
+
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(p => p[0]?.toUpperCase())
+    .join('');
 
 const ExplorePage: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const apiBase = 'http://localhost:5000/api';
 
   useEffect(() => {
     const fetchBooks = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${apiBase}/books`);
+        const response = await axios.get(`${API_BASE}/books`);
         setBooks(response.data);
       } catch (error) {
         console.error('Failed to fetch books:', error);
@@ -32,66 +42,60 @@ const ExplorePage: React.FC = () => {
     fetchBooks();
   }, []);
 
-  const handleBookClick = (bookId: string) => {
-    navigate(`/book/${bookId}`);
-  };
+  const authors = useMemo(() => {
+    const counts = new Map<string, number>();
+    books.forEach(b => counts.set(b.author, (counts.get(b.author) || 0) + 1));
+    let list = Array.from(counts.entries()).map(([author, count]) => ({ author, count }));
 
-  const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
-    e.stopPropagation();
-    try {
-      await axios.post(`${apiBase}/player/play`, { book_id: bookId });
-    } catch (error) {
-      console.error('Failed to play book:', error);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(a => a.author.toLowerCase().includes(q));
     }
-  };
+
+    return list.sort((a, b) => a.author.localeCompare(b.author));
+  }, [books, searchQuery]);
 
   return (
     <div className="page-content">
       <div className="page-header">
         <h1 className="page-title">Découvrir</h1>
-        <p className="page-subtitle">Explorez notre collection d'audiolivres</p>
+        <p className="page-subtitle">Parcourez votre bibliothèque par auteur</p>
       </div>
 
-      <h2 style={{ marginTop: '30px', marginBottom: '15px', color: 'var(--primary)' }}>
-        En vedette
-      </h2>
+      <div className="search-bar">
+        <Search size={16} />
+        <input
+          type="text"
+          placeholder="Rechercher un auteur..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
 
       {loading ? (
         <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>
-          Chargement des audiolivres...
+          Chargement...
         </div>
-      ) : books.length === 0 ? (
+      ) : authors.length === 0 ? (
         <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>
-          Aucun audiolive disponible
+          Aucun auteur trouvé
         </div>
       ) : (
-        <div className="books-grid">
-          {books.map(book => (
+        <div className="authors-grid" style={{ marginTop: '20px' }}>
+          {authors.map(({ author, count }, i) => (
             <div
-              key={book.id}
-              className="book-card"
-              onClick={() => handleBookClick(book.id)}
+              key={author}
+              className="author-row"
+              onClick={() => navigate(`/author/${encodeURIComponent(author)}`)}
             >
-              <div className="book-card-cover">
-                {book.cover_url ? (
-                  <img src={book.cover_url} alt={book.title} />
-                ) : (
-                  <span>📚</span>
-                )}
-                <div className="book-card-overlay">
-                  <button
-                    className="play-button"
-                    onClick={(e) => handlePlayBook(e, book.id)}
-                    title="Lire"
-                  >
-                    ▶
-                  </button>
-                </div>
+              <div
+                className="author-avatar"
+                style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+              >
+                {initials(author) || '?'}
               </div>
-              <div className="book-card-info">
-                <div className="book-card-title">{book.title}</div>
-                <div className="book-card-author">{book.author}</div>
-              </div>
+              <div className="author-name">{author}</div>
+              <div className="author-count">{count}</div>
             </div>
           ))}
         </div>

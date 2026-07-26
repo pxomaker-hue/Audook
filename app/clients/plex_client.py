@@ -73,8 +73,10 @@ class PlexClient:
             audiobooks = []
 
             for artist in self.server.library.sectionByID(int(library_id)).all():
+                author_bio = artist.summary or None
+                author_photo = self._get_image_url(artist.thumb)
                 for album in artist.albums():
-                    audiobook = self._parse_audiobook(album, artist.title)
+                    audiobook = self._parse_audiobook(album, artist.title, author_bio, author_photo)
                     if audiobook:
                         audiobooks.append(audiobook)
 
@@ -85,7 +87,9 @@ class PlexClient:
             logger.error(f"Failed to get audiobooks: {e}")
             return []
 
-    def _parse_audiobook(self, album, author_name: str) -> Optional[Dict[str, Any]]:
+    def _parse_audiobook(
+        self, album, author_name: str, author_bio: Optional[str] = None, author_photo: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """Parse a Plex album (audiobook) to standard format"""
         try:
             tracks = sorted(album.tracks(), key=lambda t: t.index or 0)
@@ -112,7 +116,11 @@ class PlexClient:
                 "description": album.summary or None,
                 "cover_url": self._get_image_url(album.thumb),
                 "chapters": chapters,
-                "duration": total_duration
+                "duration": total_duration,
+                "extra_metadata": {
+                    "author_bio": author_bio,
+                    "author_photo": author_photo
+                }
             }
 
         except Exception as e:

@@ -12,7 +12,7 @@ from flask_cors import CORS
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ServerRepository
+from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.clients import PlexClient, AudiobookshelfClient
@@ -189,6 +189,8 @@ def scan_server(server_id):
 def get_books():
     try:
         books = library_service.get_all_books()
+        session = get_session()
+        in_progress = ReadingProgressRepository(session).get_in_progress_map()
         return jsonify([{
             'id': book.id,
             'title': book.title,
@@ -197,7 +199,10 @@ def get_books():
             'cover_url': book.cover,
             'duration': book.duration,
             'description': book.description,
-            'source': book.source
+            'source': book.source,
+            'progress_percent': in_progress.get(book.id, 0),
+            'author_bio': book.metadata.get('author_bio'),
+            'author_photo': book.metadata.get('author_photo')
         } for book in books])
     except Exception as e:
         logger.error(f"Failed to get books: {e}")
@@ -230,6 +235,33 @@ def get_book_details(book_id):
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    try:
+        session = get_session()
+        history_repo = ReadingHistoryRepository(session)
+        book_repo = BookRepository(session)
+        sessions = history_repo.get_recent(limit=50)
+
+        results = []
+        for entry in sessions:
+            book = book_repo.get_by_id(entry.book_id)
+            if not book:
+                continue
+            results.append({
+                'session_id': entry.id,
+                'book_id': book.id,
+                'title': book.title,
+                'author': book.author,
+                'cover_url': book.cover_url,
+                'session_start': entry.session_start.isoformat() if entry.session_start else None,
+                'duration_seconds': entry.duration_seconds
+            })
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Failed to get history: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/search', methods=['GET'])
@@ -292,6 +324,26 @@ def stop_playback():
         logger.error(f"Failed to stop: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/player/next-chapter', methods=['POST'])
+def next_chapter():
+    try:
+        if not player_service.next_chapter():
+            return jsonify({'error': 'Pas de chapitre suivant'}), 400
+        return jsonify({'status': 'playing'})
+    except Exception as e:
+        logger.error(f"Failed to go to next chapter: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/player/previous-chapter', methods=['POST'])
+def previous_chapter():
+    try:
+        if not player_service.previous_chapter():
+            return jsonify({'error': 'Pas de chapitre précédent'}), 400
+        return jsonify({'status': 'playing'})
+    except Exception as e:
+        logger.error(f"Failed to go to previous chapter: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/player/seek', methods=['POST'])
 def seek():
     try:
@@ -329,12 +381,18 @@ def set_speed():
 def get_player_state():
     try:
         book = player_service.current_audiobook
+        chapter_index = player_service.current_chapter_index
+        chapter_title = None
+        if book and book.chapters and 0 <= chapter_index < len(book.chapters):
+            chapter_title = book.chapters[chapter_index].get('title')
+
         state = {
             'is_playing': player_service.is_playing(),
             'is_paused': player_service.is_paused(),
             'position': player_service.get_current_position(),
             'duration': player_service.get_current_duration(),
-            'currentChapterIndex': player_service.current_chapter_index,
+            'currentChapterIndex': chapter_index,
+            'currentChapterTitle': chapter_title,
             'currentBook': {
                 'id': book.id,
                 'title': book.title,
@@ -358,6 +416,13 @@ def sync_servers():
     except Exception as e:
         logger.error(f"Failed to sync: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sync/status', methods=['GET'])
+def sync_status():
+    return jsonify({
+        'syncing': sync_service.is_syncing(),
+        'message': sync_service.get_last_message()
+    })
 
 @app.route('/api/health', methods=['GET'])
 def health():

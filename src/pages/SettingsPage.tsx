@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
@@ -22,8 +23,8 @@ const TYPE_LABELS: Record<ServerType, string> = {
 
 const cardStyle: React.CSSProperties = {
   backgroundColor: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
+  borderRadius: 'var(--radius-md)',
+  boxShadow: 'var(--shadow-pop)',
   padding: '30px',
   maxWidth: '600px',
   marginTop: '30px'
@@ -31,38 +32,45 @@ const cardStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '10px',
-  backgroundColor: 'var(--background)',
+  padding: '11px 16px',
+  backgroundColor: 'var(--surface-muted)',
   color: 'var(--text-primary)',
-  border: '1px solid var(--border)',
-  borderRadius: '6px'
+  border: 'none',
+  borderRadius: '999px',
+  fontFamily: 'inherit',
+  fontSize: '14px'
 };
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
   marginBottom: '8px',
-  color: 'var(--text-primary)'
+  color: 'var(--text-primary)',
+  fontSize: '13px',
+  fontWeight: 600
 };
 
 const buttonStyle: React.CSSProperties = {
   background: 'var(--primary)',
   color: 'var(--secondary)',
   border: 'none',
-  padding: '10px 20px',
-  borderRadius: '6px',
+  padding: '11px 22px',
+  borderRadius: '999px',
   cursor: 'pointer',
   fontSize: '14px',
-  fontWeight: 600
+  fontWeight: 700,
+  transition: 'transform 0.15s'
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
-  background: 'transparent',
+  background: 'var(--surface-muted)',
   color: 'var(--text-primary)',
-  border: '1px solid var(--border)',
-  padding: '8px 14px',
-  borderRadius: '6px',
+  border: 'none',
+  padding: '9px 16px',
+  borderRadius: '999px',
   cursor: 'pointer',
-  fontSize: '13px'
+  fontSize: '13px',
+  fontWeight: 600,
+  transition: 'transform 0.15s'
 };
 
 const SettingsPage: React.FC = () => {
@@ -187,12 +195,27 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSyncAll = async () => {
+    if (syncingAll) return;
     try {
       setSyncingAll(true);
       await axios.post(`${API_BASE}/sync`);
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${API_BASE}/sync/status`);
+          if (!statusRes.data.syncing) {
+            clearInterval(pollInterval);
+            setSyncingAll(false);
+            await loadServers();
+          }
+        } catch (error) {
+          console.error('Failed to poll sync status:', error);
+          clearInterval(pollInterval);
+          setSyncingAll(false);
+        }
+      }, 800);
     } catch (error) {
       console.error('Failed to sync:', error);
-    } finally {
       setSyncingAll(false);
     }
   };
@@ -249,7 +272,7 @@ const SettingsPage: React.FC = () => {
           </label>
         </div>
 
-        <button onClick={handleSave} style={buttonStyle}>
+        <button className="cta-button" onClick={handleSave} style={buttonStyle}>
           Enregistrer les paramètres
         </button>
       </div>
@@ -261,8 +284,10 @@ const SettingsPage: React.FC = () => {
             <button
               onClick={handleSyncAll}
               disabled={syncingAll}
-              style={{ ...secondaryButtonStyle, opacity: syncingAll ? 0.6 : 1 }}
+              className="cta-button"
+              style={{ ...secondaryButtonStyle, display: 'flex', alignItems: 'center', gap: '8px', opacity: syncingAll ? 0.7 : 1 }}
             >
+              <RefreshCw size={14} className={syncingAll ? 'spin' : ''} />
               {syncingAll ? 'Synchronisation...' : 'Synchroniser tout'}
             </button>
             <button
@@ -270,6 +295,7 @@ const SettingsPage: React.FC = () => {
                 setShowAddForm(!showAddForm);
                 resetForm();
               }}
+              className="cta-button"
               style={buttonStyle}
             >
               {showAddForm ? 'Annuler' : '+ Ajouter un serveur'}
@@ -281,8 +307,8 @@ const SettingsPage: React.FC = () => {
           <form
             onSubmit={handleAddServer}
             style={{
-              border: '1px solid var(--border)',
-              borderRadius: '6px',
+              backgroundColor: 'var(--surface-muted)',
+              borderRadius: 'var(--radius-sm)',
               padding: '20px',
               marginBottom: '20px'
             }}
@@ -325,7 +351,7 @@ const SettingsPage: React.FC = () => {
                     placeholder="C:\Musique\Livres audio"
                     style={{ ...inputStyle, flex: 1 }}
                   />
-                  <button type="button" onClick={handleBrowseFolder} style={secondaryButtonStyle}>
+                  <button type="button" className="cta-button" onClick={handleBrowseFolder} style={secondaryButtonStyle}>
                     Parcourir
                   </button>
                 </div>
@@ -382,7 +408,7 @@ const SettingsPage: React.FC = () => {
               <p style={{ color: '#ff6b6b', fontSize: '13px', marginBottom: '15px' }}>{formError}</p>
             )}
 
-            <button type="submit" disabled={submitting} style={{ ...buttonStyle, opacity: submitting ? 0.6 : 1 }}>
+            <button type="submit" className="cta-button" disabled={submitting} style={{ ...buttonStyle, opacity: submitting ? 0.6 : 1 }}>
               {submitting ? 'Connexion...' : 'Enregistrer'}
             </button>
           </form>
@@ -401,9 +427,9 @@ const SettingsPage: React.FC = () => {
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '12px 16px'
+                  backgroundColor: 'var(--surface-muted)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '14px 18px'
                 }}
               >
                 <div>
@@ -424,6 +450,7 @@ const SettingsPage: React.FC = () => {
                   <button
                     onClick={() => handleScanServer(server.id)}
                     disabled={busyServerId === server.id}
+                    className="cta-button"
                     style={{ ...secondaryButtonStyle, opacity: busyServerId === server.id ? 0.6 : 1 }}
                   >
                     Scanner
@@ -431,6 +458,7 @@ const SettingsPage: React.FC = () => {
                   <button
                     onClick={() => handleDeleteServer(server.id, server.name)}
                     disabled={busyServerId === server.id}
+                    className="cta-button"
                     style={{ ...secondaryButtonStyle, color: '#ff6b6b', opacity: busyServerId === server.id ? 0.6 : 1 }}
                   >
                     Supprimer

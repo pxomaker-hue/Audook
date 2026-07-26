@@ -156,5 +156,6 @@ class LibraryService:
             source=db_book.server.type if db_book.server else "unknown",
             cover=db_book.cover_url,
             narrator=db_book.narrator,
-            description=db_book.description
+            description=db_book.description,
+            metadata=db_book.extra_metadata or {}
         )

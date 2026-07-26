@@ -59,6 +59,13 @@ class VLCPlayer:
         self._update_thread: Optional[threading.Thread] = None
         self._stop_update_thread: bool = False
 
+        # Serializes access to libvlc objects (self.player / media_player) between
+        # the background position-update thread and playback control calls coming
+        # from Flask request handlers. libvlc is not safe to drive concurrently
+        # from multiple threads - unsynchronized access has been observed to
+        # crash the whole process natively (segfault, not a catchable exception).
+        self._lock = threading.RLock()
+
         self._start_position_thread()
 
     def _start_position_thread(self):
@@ -72,19 +79,22 @@ class VLCPlayer:
         while not self._stop_update_thread:
             if self._is_playing and not self._is_paused:
                 try:
-                    media_player = self.player.get_media_player()
-                    if media_player and media_player.is_playing():
-                        length_ms = media_player.get_length()
-                        time_ms = media_player.get_time()
-                        if length_ms > 0 and time_ms >= 0:
-                            self._position = time_ms / 1000.0
-                            self._duration = length_ms / 1000.0
+                    with self._lock:
+                        media_player = self.player.get_media_player()
+                        is_playing = media_player and media_player.is_playing()
+                        if is_playing:
+                            length_ms = media_player.get_length()
+                            time_ms = media_player.get_time()
 
-                            if self._on_position_change:
-                                try:
-                                    self._on_position_change(self._position)
-                                except Exception as e:
-                                    logger.error(f"Position callback error: {e}")
+                    if is_playing and length_ms > 0 and time_ms >= 0:
+                        self._position = time_ms / 1000.0
+                        self._duration = length_ms / 1000.0
+
+                        if self._on_position_change:
+                            try:
+                                self._on_position_change(self._position)
+                            except Exception as e:
+                                logger.error(f"Position callback error: {e}")
 
                 except Exception as e:
                     logger.error(f"Error updating position: {e}")
@@ -159,11 +169,6 @@ class VLCPlayer:
                 logger.warning("No audiobook or chapter to play")
                 return False
 
-            self._current_audiobook = audiobook
-            self._current_chapter = chapter
-            self._current_chapter_index = chapter.get("index", 0)
-            self._position = start_position
-
             # Get audio file/URL
             audio_file = chapter.get("audio_file", "")
             if not audio_file:
@@ -173,31 +178,47 @@ class VLCPlayer:
             if not self._is_source_reachable(audio_file):
                 return False
 
-            # Create VLC media
-            media = self.instance.media_new(audio_file)
-            if not media:
-                logger.error(f"Failed to create VLC media: {audio_file}")
-                return False
+            with self._lock:
+                # Stop whatever is currently playing before loading the new source.
+                # set_media_list() while the list player is already active does not
+                # reliably tear down the previous stream - the old audio keeps
+                # playing underneath the new one otherwise.
+                if self._is_playing:
+                    self.player.stop()
 
-            # Clear current playlist and add new media
-            self.media_list = self.instance.media_list_new()
-            self.media_list.add_media(media)
-            self.player.set_media_list(self.media_list)
+                self._current_audiobook = audiobook
+                self._current_chapter = chapter
+                self._current_chapter_index = chapter.get("index", 0)
+                self._position = start_position
+                self._duration = 0.0
 
-            # Set volume and speed
-            self.player.get_media_player().audio_set_volume(self._volume)
+                # Create VLC media
+                media = self.instance.media_new(audio_file)
+                if not media:
+                    logger.error(f"Failed to create VLC media: {audio_file}")
+                    return False
 
-            # Start playback
-            self.player.play()
-            self._is_playing = True
-            self._is_paused = False
-            self._last_position_update = time.time()
+                # Clear current playlist and add new media
+                self.media_list = self.instance.media_list_new()
+                self.media_list.add_media(media)
+                self.player.set_media_list(self.media_list)
+
+                # Set volume and speed
+                media_player = self.player.get_media_player()
+                media_player.audio_set_volume(self._volume)
+                media_player.set_rate(self._speed)
+
+                # Start playback
+                self.player.play()
+                self._is_playing = True
+                self._is_paused = False
+                self._last_position_update = time.time()
+
+                # Seek to start position if specified
+                if start_position > 0:
+                    media_player.set_time(int(start_position * 1000))
 
             logger.info(f"Playing: {audiobook.title} - {chapter.get('title')}")
-
-            # Seek to start position if specified
-            if start_position > 0:
-                self.player.get_media_player().set_time(int(start_position * 1000))
 
             # Notify callbacks
             if self._on_playback_start:
@@ -215,17 +236,20 @@ class VLCPlayer:
     def pause(self) -> bool:
         """Pause playback"""
         try:
-            if self._is_playing and not self._is_paused:
-                self.player.pause()
-                self._is_paused = True
+            with self._lock:
+                if self._is_playing and not self._is_paused:
+                    self.player.pause()
+                    self._is_paused = True
+                else:
+                    return False
 
-                if self._on_playback_pause:
-                    try:
-                        self._on_playback_pause()
-                    except Exception as e:
-                        logger.error(f"Pause callback error: {e}")
+            if self._on_playback_pause:
+                try:
+                    self._on_playback_pause()
+                except Exception as e:
+                    logger.error(f"Pause callback error: {e}")
 
-                return True
+            return True
         except Exception as e:
             logger.error(f"Pause error: {e}")
 
@@ -234,18 +258,21 @@ class VLCPlayer:
     def resume(self) -> bool:
         """Resume playback"""
         try:
-            if self._is_playing and self._is_paused:
-                self.player.pause()
-                self._is_paused = False
-                self._last_position_update = time.time()
+            with self._lock:
+                if self._is_playing and self._is_paused:
+                    self.player.pause()
+                    self._is_paused = False
+                    self._last_position_update = time.time()
+                else:
+                    return False
 
-                if self._on_playback_resume:
-                    try:
-                        self._on_playback_resume()
-                    except Exception as e:
-                        logger.error(f"Resume callback error: {e}")
+            if self._on_playback_resume:
+                try:
+                    self._on_playback_resume()
+                except Exception as e:
+                    logger.error(f"Resume callback error: {e}")
 
-                return True
+            return True
         except Exception as e:
             logger.error(f"Resume error: {e}")
 
@@ -254,19 +281,22 @@ class VLCPlayer:
     def stop(self) -> bool:
         """Stop playback"""
         try:
-            if self._is_playing:
-                self.player.stop()
-                self._is_playing = False
-                self._is_paused = False
-                self.media_list = self.instance.media_list_new()
+            with self._lock:
+                if self._is_playing:
+                    self.player.stop()
+                    self._is_playing = False
+                    self._is_paused = False
+                    self.media_list = self.instance.media_list_new()
+                else:
+                    return False
 
-                if self._on_playback_stop:
-                    try:
-                        self._on_playback_stop()
-                    except Exception as e:
-                        logger.error(f"Stop callback error: {e}")
+            if self._on_playback_stop:
+                try:
+                    self._on_playback_stop()
+                except Exception as e:
+                    logger.error(f"Stop callback error: {e}")
 
-                return True
+            return True
         except Exception as e:
             logger.error(f"Stop error: {e}")
 
@@ -275,12 +305,13 @@ class VLCPlayer:
     def seek(self, position: float) -> bool:
         """Seek to position in seconds"""
         try:
-            if self._is_playing:
-                # Clamp position to valid range
-                position = max(0.0, min(position, self._duration))
-                self.player.get_media_player().set_time(int(position * 1000))
-                self._position = position
-                return True
+            with self._lock:
+                if self._is_playing:
+                    # Clamp position to valid range
+                    position = max(0.0, min(position, self._duration))
+                    self.player.get_media_player().set_time(int(position * 1000))
+                    self._position = position
+                    return True
         except Exception as e:
             logger.error(f"Seek error: {e}")
 
@@ -294,8 +325,9 @@ class VLCPlayer:
     def set_volume(self, volume: float) -> bool:
         """Set volume (0-100)"""
         try:
-            self._volume = max(0, min(100, int(volume)))
-            self.player.get_media_player().audio_set_volume(self._volume)
+            with self._lock:
+                self._volume = max(0, min(100, int(volume)))
+                self.player.get_media_player().audio_set_volume(self._volume)
             return True
         except Exception as e:
             logger.error(f"Set volume error: {e}")
@@ -306,8 +338,9 @@ class VLCPlayer:
         try:
             # VLC speed is rate (1.0 = normal, 2.0 = 2x, 0.5 = 0.5x)
             speed = max(0.5, min(2.0, speed))
-            self._speed = speed
-            self.player.get_media_player().set_rate(speed)
+            with self._lock:
+                self._speed = speed
+                self.player.get_media_player().set_rate(speed)
             return True
         except Exception as e:
             logger.error(f"Set speed error: {e}")

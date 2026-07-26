@@ -153,6 +153,14 @@ class ReadingProgressRepository(BaseRepository):
         progress = self.session.query(ReadingProgress).filter_by(book_id=book_id).first()
         return progress.position_seconds if progress else 0.0
 
+    def get_in_progress_map(self) -> dict:
+        """Get {book_id: progress_percent} for books that have been started but not finished"""
+        rows = self.session.query(ReadingProgress).filter(
+            ReadingProgress.progress_percent > 0,
+            ReadingProgress.is_finished == False  # noqa: E712
+        ).all()
+        return {row.book_id: row.progress_percent for row in rows}
+
 
 class ReadingHistoryRepository(BaseRepository):
     """Operations on ReadingHistory model"""

@@ -27,6 +27,7 @@ class AudiobookshelfClient:
         self.password = password
         self.session = requests.Session()
         self.auth_token = None
+        self._author_cache: Dict[str, Dict[str, Optional[str]]] = {}
         self._authenticate()
 
     def _authenticate(self):
@@ -158,6 +159,8 @@ class AudiobookshelfClient:
             series = metadata.get("series") or []
             series_names = ", ".join(s["name"] for s in series if s.get("name")) if isinstance(series, list) else series
 
+            author_info = self._get_author_info(authors[0]["id"]) if authors and authors[0].get("id") else {}
+
             audiobook = {
                 "id": f"abs_{book_id}",
                 "title": metadata.get("title", "Unknown"),
@@ -171,7 +174,9 @@ class AudiobookshelfClient:
                     "genre": metadata.get("genres", []),
                     "language": metadata.get("language"),
                     "publish_year": metadata.get("publishedYear"),
-                    "series": series_names
+                    "series": series_names,
+                    "author_bio": author_info.get("bio"),
+                    "author_photo": author_info.get("photo")
                 }
             }
 
@@ -180,6 +185,25 @@ class AudiobookshelfClient:
         except Exception as e:
             logger.error(f"Failed to parse audiobook: {e}")
             return None
+
+    def _get_author_info(self, author_id: str) -> Dict[str, Optional[str]]:
+        """Get an author's bio/photo, cached for the lifetime of this client"""
+        if author_id in self._author_cache:
+            return self._author_cache[author_id]
+
+        info: Dict[str, Optional[str]] = {"bio": None, "photo": None}
+        try:
+            response = self.session.get(f"{self.url}/api/authors/{author_id}")
+            response.raise_for_status()
+            data = response.json()
+            info["bio"] = data.get("description") or None
+            if data.get("imagePath"):
+                info["photo"] = f"{self.url}/api/authors/{author_id}/image?token={self.auth_token}"
+        except Exception as e:
+            logger.warning(f"Failed to get author info for {author_id}: {e}")
+
+        self._author_cache[author_id] = info
+        return info
 
     def _get_streaming_url(self, library_id: str, book_id: str, file_ino: str) -> Optional[str]:
         """Get direct streaming URL for a single audio file"""

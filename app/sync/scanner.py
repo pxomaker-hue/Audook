@@ -13,7 +13,7 @@ from app.database import get_session, ServerRepository, BookRepository
 from app.database.models import Server, Library, Book
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
-from app.utils import logger
+from app.utils import logger, online_metadata
 
 
 class ServerScanner:
@@ -42,6 +42,28 @@ class ServerScanner:
             logger.error(f"Failed to scan server {server.name}: {e}")
             return False
 
+    def _enrich_with_online_metadata(self, title, author, description, cover_url, extra_metadata):
+        """Fill gaps left by the source server using online lookups (Wikipedia for
+        author bio/photo, Open Library for book description/cover). Never
+        overwrites data the server already provided."""
+        extra_metadata = dict(extra_metadata or {})
+
+        if not extra_metadata.get("author_bio") or not extra_metadata.get("author_photo"):
+            author_info = online_metadata.fetch_author_info_online(author)
+            if not extra_metadata.get("author_bio"):
+                extra_metadata["author_bio"] = author_info.get("bio")
+            if not extra_metadata.get("author_photo"):
+                extra_metadata["author_photo"] = author_info.get("photo")
+
+        if not description or not cover_url:
+            book_info = online_metadata.fetch_book_info_online(title, author)
+            if not description:
+                description = book_info.get("description")
+            if not cover_url:
+                cover_url = book_info.get("cover_url")
+
+        return description, cover_url, extra_metadata
+
     def _scan_plex(self, server: Server) -> bool:
         """Scan Plex server"""
         try:
@@ -66,6 +88,10 @@ class ServerScanner:
 
                 for audiobook in audiobooks:
                     try:
+                        description, cover_url, extra_metadata = self._enrich_with_online_metadata(
+                            audiobook["title"], audiobook.get("author"), audiobook.get("description"),
+                            audiobook.get("cover_url"), audiobook.get("extra_metadata")
+                        )
                         book_repo.create(
                             book_id=audiobook["id"],
                             server_id=server.id,
@@ -73,10 +99,11 @@ class ServerScanner:
                             title=audiobook["title"],
                             author=audiobook.get("author"),
                             narrator=audiobook.get("narrator"),
-                            description=audiobook.get("description"),
+                            description=description,
                             duration=audiobook["duration"],
                             chapters=audiobook.get("chapters", []),
-                            cover_url=audiobook.get("cover_url")
+                            cover_url=cover_url,
+                            extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Plex audiobook: {audiobook['title']}")
                     except Exception as e:
@@ -120,6 +147,10 @@ class ServerScanner:
 
                 for audiobook in audiobooks:
                     try:
+                        description, cover_url, extra_metadata = self._enrich_with_online_metadata(
+                            audiobook["title"], audiobook.get("author"), audiobook.get("description"),
+                            audiobook.get("cover_url"), audiobook.get("extra_metadata")
+                        )
                         book_repo.create(
                             book_id=audiobook["id"],
                             server_id=server.id,
@@ -127,11 +158,11 @@ class ServerScanner:
                             title=audiobook["title"],
                             author=audiobook.get("author"),
                             narrator=audiobook.get("narrator"),
-                            description=audiobook.get("description"),
+                            description=description,
                             duration=audiobook["duration"],
                             chapters=audiobook.get("chapters", []),
-                            cover_url=audiobook.get("cover_url"),
-                            extra_metadata=audiobook.get("extra_metadata")
+                            cover_url=cover_url,
+                            extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Audiobookshelf audiobook: {audiobook['title']}")
                     except Exception as e:
@@ -167,6 +198,9 @@ class ServerScanner:
 
             for audiobook in audiobooks:
                 try:
+                    description, cover_url, extra_metadata = self._enrich_with_online_metadata(
+                        audiobook.title, audiobook.author, audiobook.description, audiobook.cover, None
+                    )
                     book_repo.create(
                         book_id=audiobook.id,
                         server_id=server.id,
@@ -174,10 +208,11 @@ class ServerScanner:
                         title=audiobook.title,
                         author=audiobook.author,
                         narrator=audiobook.narrator,
-                        description=audiobook.description,
+                        description=description,
                         duration=audiobook.duration,
                         chapters=audiobook.chapters,
-                        cover_url=audiobook.cover
+                        cover_url=cover_url,
+                        extra_metadata=extra_metadata
                     )
                     logger.info(f"Added local audiobook: {audiobook.title}")
                 except Exception as e:

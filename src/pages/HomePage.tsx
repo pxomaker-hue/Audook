@@ -13,6 +13,8 @@ interface Book {
   cover_url: string;
   duration: number;
   source: string;
+  progress_percent: number;
+  author_photo: string | null;
 }
 
 interface ServerEntry {
@@ -51,26 +53,25 @@ const HomePage: React.FC = () => {
   const [activeSource, setActiveSource] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        setLoading(true);
-        const [booksRes, serversRes] = await Promise.all([
-          axios.get(`${API_BASE}/books`),
-          axios.get(`${API_BASE}/servers`)
-        ]);
-        setBooks(booksRes.data);
-        setServers(serversRes.data);
-      } catch (error) {
-        console.error('Failed to fetch library:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchAll = async () => {
+    try {
+      const [booksRes, serversRes] = await Promise.all([
+        axios.get(`${API_BASE}/books`),
+        axios.get(`${API_BASE}/servers`)
+      ]);
+      setBooks(booksRes.data);
+      setServers(serversRes.data);
+    } catch (error) {
+      console.error('Failed to fetch library:', error);
+    }
+  };
 
-    fetchAll();
+  useEffect(() => {
+    setLoading(true);
+    fetchAll().finally(() => setLoading(false));
   }, []);
 
   const availableSources = useMemo(
@@ -94,11 +95,17 @@ const HomePage: React.FC = () => {
 
   const topAuthors = useMemo(() => {
     const counts = new Map<string, number>();
-    books.forEach(b => counts.set(b.author, (counts.get(b.author) || 0) + 1));
+    const photos = new Map<string, string>();
+    books.forEach(b => {
+      counts.set(b.author, (counts.get(b.author) || 0) + 1);
+      if (b.author_photo && !photos.has(b.author)) {
+        photos.set(b.author, b.author_photo);
+      }
+    });
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
-      .map(([author, count]) => ({ author, count }));
+      .map(([author, count]) => ({ author, count, photo: photos.get(author) || null }));
   }, [books]);
 
   const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
@@ -111,18 +118,75 @@ const HomePage: React.FC = () => {
   };
 
   const handleSync = async () => {
+    if (syncing) return;
     try {
       setSyncing(true);
+      setSyncMessage('Synchronisation...');
       await axios.post(`${API_BASE}/sync`);
+
+      // The sync runs in a background thread on the backend; poll its status
+      // until it's done, then refresh the library so new/updated books show up.
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${API_BASE}/sync/status`);
+          if (statusRes.data.message) {
+            setSyncMessage(statusRes.data.message);
+          }
+          if (!statusRes.data.syncing) {
+            clearInterval(pollInterval);
+            setSyncing(false);
+            await fetchAll();
+            setTimeout(() => setSyncMessage(null), 3000);
+          }
+        } catch (error) {
+          console.error('Failed to poll sync status:', error);
+          clearInterval(pollInterval);
+          setSyncing(false);
+        }
+      }, 800);
     } catch (error) {
       console.error('Failed to sync:', error);
-    } finally {
-      setTimeout(() => setSyncing(false), 1200);
+      setSyncing(false);
+      setSyncMessage('Échec de la synchronisation');
+      setTimeout(() => setSyncMessage(null), 3000);
     }
   };
 
-  const myBooks = books.slice(0, 3);
-  const libraryBooks = filteredBooks.slice(3);
+  // "In progress" = has been started but not finished. Shown bigger, above the
+  // full library grid, and excluded from it to avoid showing the same book twice.
+  const inProgressBooks = useMemo(
+    () => books.filter(b => b.progress_percent > 0 && b.progress_percent < 100),
+    [books]
+  );
+  const inProgressIds = useMemo(() => new Set(inProgressBooks.map(b => b.id)), [inProgressBooks]);
+  const libraryBooks = filteredBooks.filter(b => !inProgressIds.has(b.id));
+
+  const renderBookCard = (book: Book) => (
+    <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
+      <div className="book-card-cover">
+        {book.cover_url ? (
+          <img src={book.cover_url} alt={book.title} />
+        ) : (
+          <span>📚</span>
+        )}
+        <span className="book-card-badge">{formatDuration(book.duration)}</span>
+        <div className="book-card-overlay">
+          <button className="play-button" onClick={(e) => handlePlayBook(e, book.id)} title="Lire">
+            <Play size={18} fill="currentColor" />
+          </button>
+        </div>
+        {book.progress_percent > 0 && (
+          <div className="book-card-progress-bar">
+            <div className="book-card-progress-fill" style={{ width: `${book.progress_percent}%` }} />
+          </div>
+        )}
+      </div>
+      <div className="book-card-info">
+        <div className="book-card-title">{book.title}</div>
+        <div className="book-card-author">{book.author}</div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="page-content">
@@ -162,11 +226,14 @@ const HomePage: React.FC = () => {
           className="top-bar-icon-button dark"
           onClick={handleSync}
           title="Synchroniser les serveurs"
+          disabled={syncing}
         >
           <RefreshCw size={16} className={syncing ? 'spin' : ''} />
-          {servers.length > 0 && <span className="dot" />}
+          {servers.length > 0 && !syncing && <span className="dot" />}
         </button>
       </div>
+
+      {syncMessage && <div className="sync-toast">{syncMessage}</div>}
 
       {loading ? (
         <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>
@@ -178,54 +245,30 @@ const HomePage: React.FC = () => {
         </div>
       ) : (
         <>
-          {myBooks.length > 0 && (
+          {inProgressBooks.length > 0 && (
             <>
-              <h2 className="section-title">Mes livres</h2>
-              <div className="myrow">
-                {myBooks.map(book => (
-                  <div key={book.id} className="myrow-card" onClick={() => navigate(`/book/${book.id}`)}>
-                    <div className="myrow-cover">
-                      {book.cover_url ? (
-                        <img src={book.cover_url} alt={book.title} />
-                      ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '20px'
-                          }}
-                        >
-                          📚
-                        </div>
-                      )}
-                    </div>
-                    <div className="myrow-info">
-                      <div className="myrow-title">{book.title}</div>
-                      <div className="myrow-author">{book.author}</div>
-                      <button className="play-button" onClick={(e) => handlePlayBook(e, book.id)} title="Lire">
-                        <Play size={16} fill="currentColor" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <h2 className="section-title">Reprendre l'écoute</h2>
+              <div className="books-grid books-grid--featured">
+                {inProgressBooks.map(renderBookCard)}
               </div>
             </>
           )}
 
           {topAuthors.length > 0 && (
             <>
-              <h2 className="section-title">Meilleurs auteurs</h2>
+              <h2 className="section-title">Tri par auteurs</h2>
               <div className="authors-grid">
-                {topAuthors.map(({ author, count }, i) => (
-                  <div key={author} className="author-row">
+                {topAuthors.map(({ author, count, photo }, i) => (
+                  <div
+                    key={author}
+                    className="author-row"
+                    onClick={() => navigate(`/author/${encodeURIComponent(author)}`)}
+                  >
                     <div
                       className="author-avatar"
-                      style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                      style={{ backgroundColor: photo ? undefined : AVATAR_COLORS[i % AVATAR_COLORS.length] }}
                     >
-                      {initials(author) || '?'}
+                      {photo ? <img src={photo} alt={author} /> : (initials(author) || '?')}
                     </div>
                     <div className="author-name">{author}</div>
                     <div className="author-count">{count}</div>
@@ -242,27 +285,7 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <div className="books-grid">
-              {libraryBooks.map(book => (
-                <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
-                  <div className="book-card-cover">
-                    {book.cover_url ? (
-                      <img src={book.cover_url} alt={book.title} />
-                    ) : (
-                      <span>📚</span>
-                    )}
-                    <span className="book-card-badge">{formatDuration(book.duration)}</span>
-                    <div className="book-card-overlay">
-                      <button className="play-button" onClick={(e) => handlePlayBook(e, book.id)} title="Lire">
-                        <Play size={18} fill="currentColor" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="book-card-info">
-                    <div className="book-card-title">{book.title}</div>
-                    <div className="book-card-author">{book.author}</div>
-                  </div>
-                </div>
-              ))}
+              {libraryBooks.map(renderBookCard)}
             </div>
           )}
         </>
