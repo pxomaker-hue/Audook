@@ -10,6 +10,9 @@ const PREVIOUS_DOUBLE_CLICK_WINDOW = 300;
 const RESTART_THRESHOLD_SECONDS = 2;
 const SEEK_STEP_SECONDS = 30;
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+// Below this window width the full side-panel player no longer fits (it used
+// to just disappear entirely) - switch to a compact horizontal bar instead.
+const COMPACT_BREAKPOINT = '(max-width: 1100px)';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -51,8 +54,22 @@ const Player: React.FC = () => {
   const [showVolume, setShowVolume] = useState(false);
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
+  const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_BREAKPOINT).matches);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const mql = window.matchMedia(COMPACT_BREAKPOINT);
+    const checkCompact = () => setCompact(mql.matches);
+    mql.addEventListener('change', checkCompact);
+    // Belt and suspenders: also recheck on the raw resize event, in case
+    // `change` doesn't fire reliably (seen with some window-resize sources).
+    window.addEventListener('resize', checkCompact);
+    return () => {
+      mql.removeEventListener('change', checkCompact);
+      window.removeEventListener('resize', checkCompact);
+    };
+  }, []);
 
   const fetchState = async () => {
     try {
@@ -221,13 +238,60 @@ const Player: React.FC = () => {
 
   if (!state.currentBook) {
     return (
-      <div className="player">
+      <div className={`player ${compact ? 'compact' : ''}`}>
         <div className="player-empty">Sélectionnez un livre pour commencer</div>
       </div>
     );
   }
 
   const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
+
+  if (compact) {
+    return (
+      <div className="player compact">
+        <div className="player-cover-wrap">
+          {state.currentBook.cover_url ? (
+            <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+          ) : (
+            <span>📚</span>
+          )}
+        </div>
+
+        <div className="player-compact-info">
+          <div className="player-compact-title">
+            {state.currentChapterTitle || state.currentBook.title}
+          </div>
+          <div className="player-compact-subtitle">{state.currentBook.author}</div>
+          <div className="progress-bar" onClick={handleSeek}>
+            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+          </div>
+        </div>
+
+        <div className="player-controls">
+          <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
+            <SkipBack size={14} />
+          </button>
+          <button
+            className="player-button main"
+            onClick={handlePlayPause}
+            title={state.isPlaying ? 'Pause' : 'Lecture'}
+          >
+            {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
+          </button>
+          <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+            <SkipForward size={14} />
+          </button>
+          <button
+            className="player-button"
+            onClick={() => navigate(`/book/${state.currentBook.id}`)}
+            title="Voir les chapitres"
+          >
+            <ListMusic size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="player">
