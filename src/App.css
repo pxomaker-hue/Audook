@@ -797,17 +797,31 @@ input[type="checkbox"] {
   color: var(--text-primary);
 }
 
-/* Player (right panel) */
+/* Player (right panel). `.player` is just the card chrome; which of its two
+   children (.player-full / .player-compact-view) is visible is decided
+   purely by the media query below - no JS viewport state involved, so the
+   two can never end up desynced from the real window width (that used to
+   happen and would blow up the whole app layout - see the compact-view
+   rules further down). */
 .player {
   width: 300px;
   flex-shrink: 0;
   background-color: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 24px 22px;
+  overflow: hidden;
+  display: flex;
+}
+
+.player-full {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  width: 100%;
+  padding: 24px 22px;
+}
+
+.player-compact-view {
+  display: none;
 }
 
 .player-empty {
@@ -1057,6 +1071,11 @@ input[type="checkbox"] {
   margin-top: 16px;
 }
 
+.player-extra-row.compact {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
 .confirm-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -1163,6 +1182,64 @@ input[type="checkbox"] {
   z-index: 5;
 }
 
+/* Equalizer band sliders (SettingsPage -> EqualizerSettings.tsx). Each
+   vertical `writing-mode` range input reports an intrinsic content width
+   equal to its *height* (a Chromium quirk with vertical writing modes),
+   which used to blow out the flex row's auto min-width and crush the whole
+   page down to a few px with a giant horizontal scroll. Grid + explicit
+   fixed-width, overflow-hidden wrappers around each slider fully insulate
+   the layout from that. */
+.eq-band-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 20px;
+  min-width: 0;
+}
+
+.eq-band-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eq-band-slider-wrap {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.eq-band-bar-track {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.eq-band-bar-fill {
+  width: 6px;
+  min-height: 2px;
+  border-radius: 3px;
+  background-color: var(--accent-ink);
+}
+
+.eq-band-slider {
+  -webkit-appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: 110px;
+  cursor: pointer;
+  accent-color: var(--accent-ink);
+  flex-shrink: 0;
+}
+
 .volume-slider-vertical {
   -webkit-appearance: slider-vertical;
   writing-mode: vertical-lr;
@@ -1184,52 +1261,156 @@ input[type="checkbox"] {
   position: absolute;
   bottom: calc(100% + 12px);
   right: 0;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-soft);
-  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-end;
+  gap: 10px;
   z-index: 5;
-  min-width: 180px;
 }
 
-.more-menu-item {
+/* Each row unfolds upward with a "bouncy" overshoot, cascading top-to-bottom
+   (the last row - closest to the "..." button - appears first). */
+.more-menu-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 9px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background-color 0.15s;
+  justify-content: flex-end;
+  gap: 0;
+  animation: more-menu-unfold 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.more-menu-row:nth-child(1) { animation-delay: 0.06s; }
+.more-menu-row:nth-child(2) { animation-delay: 0.03s; }
+.more-menu-row:nth-child(3) { animation-delay: 0s; }
+
+@keyframes more-menu-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Label pill: collapsed by default, slides out to the left of its icon
+   button on hover. */
+.more-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 0;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
   white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: max-width 0.25s ease, opacity 0.2s ease, transform 0.25s ease, margin-right 0.25s ease, padding 0.25s ease;
 }
 
-.more-menu-item:hover {
-  background-color: var(--surface-muted);
-}
-
-.more-menu-item.active .more-menu-value {
-  color: var(--accent-ink);
-}
-
-.more-menu-value {
+.more-menu-label b {
   color: var(--text-tertiary);
   font-weight: 700;
 }
 
+.more-menu-row:hover .more-menu-label {
+  max-width: 180px;
+  margin-right: 8px;
+  padding: 8px 14px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.more-menu-icon.confirmed {
+  background-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Book detail header actions (Lire/Associer/Modifier/Marquer comme lu):
+   round icon-only buttons by default; hovering unfolds a label to the right
+   of the icon, in normal flow (not floating) so it actually pushes the
+   following buttons along - with a "bouncy" overshoot easing. */
+.icon-expand-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-expand-button {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.15s, background-color 0.2s, color 0.2s;
+}
+
+.icon-expand-button:hover {
+  transform: translateY(-2px);
+}
+
+.icon-expand-button:active {
+  transform: scale(0.96);
+}
+
+.icon-expand-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.icon-expand-button.primary {
+  background: var(--primary);
+  color: var(--secondary);
+}
+
+.icon-expand-button.confirmed {
+  background: #35c46a;
+  color: #ffffff;
+}
+
+.icon-expand-label {
+  display: inline-block;
+  max-width: 0;
+  margin-left: 0;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  opacity: 0;
+  transition: max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), margin-left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+
+.icon-expand-wrapper:hover .icon-expand-label,
+.icon-expand-wrapper:focus-within .icon-expand-label {
+  max-width: 200px;
+  margin-left: 8px;
+  padding: 8px 14px;
+  opacity: 1;
+}
+
 /* Responsive: below this width, the player switches to a compact horizontal
-   bar (see Player.tsx `compact` state) instead of disappearing entirely.
-   Switch .app to a grid so the compact player gets its own full-width row
-   under the sidebar+content row, which keeps the rest of its height. */
+   bar instead of disappearing entirely. Which of .player-full /
+   .player-compact-view is visible is decided here and only here. Switch
+   .app to a grid so the compact player gets its own full-width row under
+   the sidebar+content row, which keeps the rest of its height. */
 @media (max-width: 1100px) {
   .app {
     display: grid;
@@ -1247,20 +1428,28 @@ input[type="checkbox"] {
     grid-row: 1;
     min-height: 0;
   }
+
+  .player {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .player-full {
+    display: none;
+  }
+
+  .player-compact-view {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    gap: 16px;
+    padding: 10px 18px;
+  }
 }
 
-.player.compact {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  width: 100%;
-  height: auto;
-  flex-direction: row;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 18px;
-}
-
-.player.compact .player-cover-wrap {
+.player-compact-view .player-cover-wrap {
   width: 48px;
   height: 48px;
   aspect-ratio: unset;
@@ -1271,7 +1460,7 @@ input[type="checkbox"] {
   background-color: var(--surface-muted);
 }
 
-.player.compact .player-cover-wrap img {
+.player-compact-view .player-cover-wrap img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1302,18 +1491,13 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
-.player.compact .progress-bar {
+.player-compact-view .progress-bar {
   margin-top: 2px;
 }
 
-.player.compact .player-controls {
+.player-compact-view .player-controls {
   margin-top: 0;
   flex-shrink: 0;
-}
-
-.player.compact .player-empty {
-  padding: 10px;
-  font-size: 13px;
 }
 
 @media (max-width: 768px) {

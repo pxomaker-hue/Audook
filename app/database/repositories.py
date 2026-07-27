@@ -388,22 +388,40 @@ class EqualizerPresetRepository(BaseRepository):
     # (id, name, bands, preamp) - bands are 10 floats for 31Hz..16kHz, seeded
     # once on first use. "Voix" cuts rumble/mud and lifts the 1-4kHz presence
     # range where speech intelligibility lives, with a slight treble rolloff
-    # to tame sibilance/hiss on older or amateur recordings.
+    # to tame sibilance/hiss on older or amateur recordings - the rest are the
+    # classic genre-style curves (kept moderate since this is spoken-word
+    # audio, not music - a subtle shape rather than the usual aggressive
+    # music-EQ swings).
     BUILTIN_PRESETS = [
         ("builtin-flat", "Flat", [0.0] * 10, 0.0),
         ("builtin-voice", "Voix", [-4.0, -3.0, -1.0, 0.0, 1.0, 2.0, 3.0, 2.0, 0.0, -1.0], 1.5),
+        ("builtin-rock", "Rock", [4.0, 3.0, 1.0, -1.0, -2.0, 0.0, 2.0, 3.0, 4.0, 4.0], 1.0),
+        ("builtin-pop", "Pop", [-1.0, 0.0, 2.0, 3.0, 3.0, 2.0, 0.0, -1.0, -1.0, -2.0], 0.5),
+        ("builtin-jazz", "Jazz", [3.0, 2.0, 1.0, 0.0, -1.0, 0.0, 1.0, 2.0, 2.0, 3.0], 0.5),
+        ("builtin-classical", "Classique", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, -1.0, -2.0, -3.0], 0.0),
+        ("builtin-bass-boost", "Boost Basses", [7.0, 6.0, 5.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0], 2.0),
+        ("builtin-treble-boost", "Boost Aigus", [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 3.0, 5.0, 6.0, 7.0], 2.0),
     ]
 
     def ensure_builtins(self):
-        """Seed the built-in presets once, if they don't already exist"""
-        if self.session.query(EqualizerPreset).filter_by(is_builtin=True).first():
-            return
+        """Seed the built-in presets, adding any that don't already exist yet
+        (per-id, not just "any builtin exists") so growing this list later -
+        as happened here - backfills existing databases instead of silently
+        skipping them."""
+        existing_ids = {
+            row[0] for row in self.session.query(EqualizerPreset.id).filter_by(is_builtin=True).all()
+        }
+        added = False
         for i, (preset_id, name, bands, preamp) in enumerate(self.BUILTIN_PRESETS):
+            if preset_id in existing_ids:
+                continue
             self.session.add(EqualizerPreset(
                 id=preset_id, name=name, bands=bands, preamp=preamp,
                 is_builtin=True, position=i
             ))
-        self.session.commit()
+            added = True
+        if added:
+            self.session.commit()
 
     def get_all(self) -> List[EqualizerPreset]:
         """All presets (built-in first), in cycling order"""

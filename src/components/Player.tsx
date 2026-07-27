@@ -1,12 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Volume1, Volume2, VolumeX, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
 import { usePlayerState, formatTime } from '../hooks/usePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
-
-// Below this window width the full side-panel player no longer fits (it used
-// to just disappear entirely) - switch to a compact horizontal bar instead.
-const COMPACT_BREAKPOINT = '(max-width: 1100px)';
+import VolumeControl from './VolumeControl';
 
 // Stable pseudo-random bar heights for the waveform decoration
 const WAVE_BARS = Array.from({ length: 32 }, (_, i) => {
@@ -14,21 +11,12 @@ const WAVE_BARS = Array.from({ length: 32 }, (_, i) => {
   return 8 + Math.round((seed - Math.floor(seed)) * 24);
 });
 
-const VolumeIcon = ({ volume }: { volume: number }) => {
-  if (volume === 0) return <VolumeX size={16} />;
-  if (volume < 50) return <Volume1 size={16} />;
-  return <Volume2 size={16} />;
-};
-
 const Player: React.FC = () => {
   const navigate = useNavigate();
   const {
     state,
-    showVolume,
-    setShowVolume,
     addingBookmark,
     bookmarkAdded,
-    volumeWrapperRef,
     handlePlayPause,
     handlePreviousClick,
     handleNextClick,
@@ -42,24 +30,10 @@ const Player: React.FC = () => {
     handleToggleNormalization,
     SEEK_STEP_SECONDS
   } = usePlayerState();
-  const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_BREAKPOINT).matches);
-
-  useEffect(() => {
-    const mql = window.matchMedia(COMPACT_BREAKPOINT);
-    const checkCompact = () => setCompact(mql.matches);
-    mql.addEventListener('change', checkCompact);
-    // Belt and suspenders: also recheck on the raw resize event, in case
-    // `change` doesn't fire reliably (seen with some window-resize sources).
-    window.addEventListener('resize', checkCompact);
-    return () => {
-      mql.removeEventListener('change', checkCompact);
-      window.removeEventListener('resize', checkCompact);
-    };
-  }, []);
 
   if (!state.currentBook) {
     return (
-      <div className={`player ${compact ? 'compact' : ''}`}>
+      <div className="player">
         <div className="player-empty">Sélectionnez un livre pour commencer</div>
       </div>
     );
@@ -67,9 +41,148 @@ const Player: React.FC = () => {
 
   const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
 
-  if (compact) {
-    return (
-      <div className="player compact">
+  const moreMenu = (buttonSize?: number) => (
+    <PlayerMoreMenu
+      speed={state.speed}
+      onCycleSpeed={handleCycleSpeed}
+      equalizerPresetId={state.equalizerPresetId}
+      equalizerPresets={equalizerPresets}
+      onCycleEqualizer={handleCycleEqualizer}
+      normalizationEnabled={state.normalizationEnabled}
+      onToggleNormalization={handleToggleNormalization}
+      buttonSize={buttonSize}
+    />
+  );
+
+  const bookmarkButton = (size: number) => (
+    <button
+      className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
+      onClick={handleAddBookmark}
+      disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+      title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
+    >
+      {addingBookmark ? (
+        <Loader2 size={size} className="spin" />
+      ) : bookmarkAdded ? (
+        <Check size={size} />
+      ) : (
+        <Bookmark size={size} />
+      )}
+    </button>
+  );
+
+  const chaptersButton = (size: number) => (
+    <button
+      className="player-button"
+      onClick={() => navigate(`/book/${state.currentBook.id}`)}
+      title="Voir les chapitres"
+    >
+      <ListMusic size={size} />
+    </button>
+  );
+
+  const volumeControl = (size: number) => (
+    <VolumeControl volume={state.volume} onChange={handleVolumeChange} size={size} />
+  );
+
+  const miniPlayerButton = (size: number) =>
+    window.electron?.miniPlayer && (
+      <button
+        className="player-button"
+        onClick={() => window.electron?.miniPlayer.activate()}
+        title="Détacher le mini-lecteur"
+      >
+        <PictureInPicture2 size={size} />
+      </button>
+    );
+
+  return (
+    <div className="player">
+      {/* Full docked layout - visible above the compact breakpoint (see
+          App.css). Rendering both variants and letting CSS pick which one
+          shows (instead of a JS matchMedia state) avoids the two ever
+          getting out of sync with the real viewport width. */}
+      <div className="player-full">
+        <div className="player-title-bar">{state.currentBook.title}</div>
+
+        <div className="player-cover-wrap">
+          {state.currentBook.cover_url && (
+            <div
+              className="player-cover-glow"
+              style={{ backgroundImage: `url(${state.currentBook.cover_url})` }}
+            />
+          )}
+          <div className="player-cover">
+            {state.currentBook.cover_url ? (
+              <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+            ) : (
+              <span>📚</span>
+            )}
+          </div>
+        </div>
+
+        {state.currentChapterTitle && (
+          <div className="player-current-chapter">{state.currentChapterTitle}</div>
+        )}
+        <div className="player-author">{state.currentBook.author}</div>
+
+        {state.currentBook.description && (
+          <div className="player-description">{state.currentBook.description}</div>
+        )}
+
+        <div className={`player-waveform ${state.isPlaying ? 'playing' : ''}`}>
+          {WAVE_BARS.map((h, i) => (
+            <span key={i} style={{ height: `${h}px` }} />
+          ))}
+        </div>
+
+        <div className="player-progress">
+          <div className="progress-bar" onClick={handleSeek}>
+            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+          </div>
+          <div className="player-time-row">
+            <span className="player-time">{formatTime(state.position)}</span>
+            <span className="player-time">{formatTime(state.duration)}</span>
+          </div>
+        </div>
+
+        <div className="player-controls">
+          <button
+            className="player-button"
+            onClick={handlePreviousClick}
+            title="Chapitre précédent (2 clics) / Redémarrer le chapitre (1 clic)"
+          >
+            <SkipBack size={16} />
+          </button>
+          <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+            <Rewind size={16} />
+          </button>
+          <button
+            className="player-button main"
+            onClick={handlePlayPause}
+            title={state.isPlaying ? 'Pause' : 'Lecture'}
+          >
+            {state.isPlaying ? <Pause size={22} /> : <Play size={22} />}
+          </button>
+          <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+            <FastForward size={16} />
+          </button>
+          <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+            <SkipForward size={16} />
+          </button>
+        </div>
+
+        <div className="player-extra-row">
+          {bookmarkButton(16)}
+          {chaptersButton(16)}
+          {moreMenu()}
+          {volumeControl(16)}
+          {miniPlayerButton(16)}
+        </div>
+      </div>
+
+      {/* Compact horizontal bar - visible below the compact breakpoint. */}
+      <div className="player-compact-view">
         <div className="player-cover-wrap">
           {state.currentBook.cover_url ? (
             <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
@@ -111,204 +224,12 @@ const Player: React.FC = () => {
         </div>
 
         <div className="player-extra-row compact">
-          <button
-            className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
-            onClick={handleAddBookmark}
-            disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
-            title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
-          >
-            {addingBookmark ? (
-              <Loader2 size={14} className="spin" />
-            ) : bookmarkAdded ? (
-              <Check size={14} />
-            ) : (
-              <Bookmark size={14} />
-            )}
-          </button>
-          <div className="volume-popover-wrapper" ref={volumeWrapperRef}>
-            {showVolume && (
-              <div className="volume-popover">
-                <input
-                  type="range"
-                  className="volume-slider-vertical"
-                  min="0"
-                  max="100"
-                  value={state.volume}
-                  onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-                />
-              </div>
-            )}
-            <button
-              className="player-button"
-              onClick={() => setShowVolume(!showVolume)}
-              title="Volume"
-            >
-              <VolumeIcon volume={state.volume} />
-            </button>
-          </div>
-          {window.electron?.miniPlayer && (
-            <button
-              className="player-button"
-              onClick={() => window.electron?.miniPlayer.activate()}
-              title="Détacher le mini-lecteur"
-            >
-              <PictureInPicture2 size={14} />
-            </button>
-          )}
-          <button
-            className="player-button"
-            onClick={() => navigate(`/book/${state.currentBook.id}`)}
-            title="Voir les chapitres"
-          >
-            <ListMusic size={14} />
-          </button>
-          <PlayerMoreMenu
-            speed={state.speed}
-            onCycleSpeed={handleCycleSpeed}
-            equalizerPresetId={state.equalizerPresetId}
-            equalizerPresets={equalizerPresets}
-            onCycleEqualizer={handleCycleEqualizer}
-            normalizationEnabled={state.normalizationEnabled}
-            onToggleNormalization={handleToggleNormalization}
-            buttonSize={14}
-          />
+          {bookmarkButton(14)}
+          {chaptersButton(14)}
+          {moreMenu(14)}
+          {volumeControl(14)}
+          {miniPlayerButton(14)}
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="player">
-      <div className="player-title-bar">{state.currentBook.title}</div>
-
-      <div className="player-cover-wrap">
-        {state.currentBook.cover_url && (
-          <div
-            className="player-cover-glow"
-            style={{ backgroundImage: `url(${state.currentBook.cover_url})` }}
-          />
-        )}
-        <div className="player-cover">
-          {state.currentBook.cover_url ? (
-            <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
-          ) : (
-            <span>📚</span>
-          )}
-        </div>
-      </div>
-
-      {state.currentChapterTitle && (
-        <div className="player-current-chapter">{state.currentChapterTitle}</div>
-      )}
-      <div className="player-author">{state.currentBook.author}</div>
-
-      {state.currentBook.description && (
-        <div className="player-description">{state.currentBook.description}</div>
-      )}
-
-      <div className={`player-waveform ${state.isPlaying ? 'playing' : ''}`}>
-        {WAVE_BARS.map((h, i) => (
-          <span key={i} style={{ height: `${h}px` }} />
-        ))}
-      </div>
-
-      <div className="player-progress">
-        <div className="progress-bar" onClick={handleSeek}>
-          <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
-        </div>
-        <div className="player-time-row">
-          <span className="player-time">{formatTime(state.position)}</span>
-          <span className="player-time">{formatTime(state.duration)}</span>
-        </div>
-      </div>
-
-      <div className="player-controls">
-        <button
-          className="player-button"
-          onClick={handlePreviousClick}
-          title="Chapitre précédent (2 clics) / Redémarrer le chapitre (1 clic)"
-        >
-          <SkipBack size={16} />
-        </button>
-        <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
-          <Rewind size={16} />
-        </button>
-        <button
-          className="player-button main"
-          onClick={handlePlayPause}
-          title={state.isPlaying ? 'Pause' : 'Lecture'}
-        >
-          {state.isPlaying ? <Pause size={22} /> : <Play size={22} />}
-        </button>
-        <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
-          <FastForward size={16} />
-        </button>
-        <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
-          <SkipForward size={16} />
-        </button>
-      </div>
-
-      <div className="player-extra-row">
-        <button
-          className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
-          onClick={handleAddBookmark}
-          disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
-          title={state.currentChapterIndex === null ? 'Lancez la lecture pour marquer la position actuelle' : 'Marquer la position actuelle'}
-        >
-          {addingBookmark ? (
-            <Loader2 size={16} className="spin" />
-          ) : bookmarkAdded ? (
-            <Check size={16} />
-          ) : (
-            <Bookmark size={16} />
-          )}
-        </button>
-        <button
-          className="player-button"
-          onClick={() => navigate(`/book/${state.currentBook.id}`)}
-          title="Voir les chapitres"
-        >
-          <ListMusic size={16} />
-        </button>
-        <div className="volume-popover-wrapper" ref={volumeWrapperRef}>
-          {showVolume && (
-            <div className="volume-popover">
-              <input
-                type="range"
-                className="volume-slider-vertical"
-                min="0"
-                max="100"
-                value={state.volume}
-                onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-              />
-            </div>
-          )}
-          <button
-            className="player-button"
-            onClick={() => setShowVolume(!showVolume)}
-            title="Volume"
-          >
-            <VolumeIcon volume={state.volume} />
-          </button>
-        </div>
-        {window.electron?.miniPlayer && (
-          <button
-            className="player-button"
-            onClick={() => window.electron?.miniPlayer.activate()}
-            title="Détacher le mini-lecteur"
-          >
-            <PictureInPicture2 size={16} />
-          </button>
-        )}
-        <PlayerMoreMenu
-          speed={state.speed}
-          onCycleSpeed={handleCycleSpeed}
-          equalizerPresetId={state.equalizerPresetId}
-          equalizerPresets={equalizerPresets}
-          onCycleEqualizer={handleCycleEqualizer}
-          normalizationEnabled={state.normalizationEnabled}
-          onToggleNormalization={handleToggleNormalization}
-        />
       </div>
     </div>
   );

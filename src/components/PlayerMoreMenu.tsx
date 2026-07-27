@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Gauge, Waves, SlidersHorizontal } from 'lucide-react';
 import { EqualizerPreset } from '../hooks/usePlayerState';
 
 interface PlayerMoreMenuProps {
@@ -50,22 +50,34 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
     <div className="more-menu-wrapper" ref={wrapperRef}>
       {open && (
         <div className="more-menu-popover">
-          <button className="more-menu-item" onClick={onCycleSpeed} title="Changer la vitesse de lecture">
-            <span>Vitesse</span>
-            <span className="more-menu-value">{speed}×</span>
-          </button>
-          <button
-            className={`more-menu-item ${normalizationEnabled ? 'active' : ''}`}
-            onClick={onToggleNormalization}
-            title="Lisser les écarts de volume"
-          >
-            <span>Normalisation</span>
-            <span className="more-menu-value">{normalizationEnabled ? 'Activée' : 'Off'}</span>
-          </button>
-          <button className="more-menu-item" onClick={onCycleEqualizer} title="Changer de préréglage d'égaliseur">
-            <span>Égaliseur</span>
-            <span className="more-menu-value">{equalizerName}</span>
-          </button>
+          <div className="more-menu-row">
+            <span className="more-menu-label">
+              Vitesse <b>{speed}×</b>
+            </span>
+            <button className="player-button more-menu-icon" onClick={onCycleSpeed} title="Changer la vitesse de lecture">
+              <Gauge size={16} />
+            </button>
+          </div>
+          <div className="more-menu-row">
+            <span className="more-menu-label">
+              Normalisation <b>{normalizationEnabled ? 'Activée' : 'Off'}</b>
+            </span>
+            <button
+              className={`player-button more-menu-icon ${normalizationEnabled ? 'confirmed' : ''}`}
+              onClick={onToggleNormalization}
+              title="Lisser les écarts de volume"
+            >
+              <Waves size={16} />
+            </button>
+          </div>
+          <div className="more-menu-row">
+            <span className="more-menu-label">
+              Égaliseur <b>{equalizerName}</b>
+            </span>
+            <button className="player-button more-menu-icon" onClick={onCycleEqualizer} title="Changer de préréglage d'égaliseur">
+              <SlidersHorizontal size={16} />
+            </button>
+          </div>
         </div>
       )}
       <button className="player-button" onClick={() => setOpen(!open)} title="Plus d'options audio">

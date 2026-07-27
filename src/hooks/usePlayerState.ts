@@ -55,12 +55,10 @@ export function usePlayerState() {
     equalizerPresetId: null,
     normalizationEnabled: false
   });
-  const [showVolume, setShowVolume] = useState(false);
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
   const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const volumeWrapperRef = useRef<HTMLDivElement>(null);
 
   const fetchState = async () => {
     try {
@@ -100,17 +98,6 @@ export function usePlayerState() {
 
     const interval = setInterval(fetchState, 1000);
     return () => clearInterval(interval);
-  }, []);
-
-  // Close the volume popover when clicking outside of it
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (volumeWrapperRef.current && !volumeWrapperRef.current.contains(e.target as Node)) {
-        setShowVolume(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -249,11 +236,8 @@ export function usePlayerState() {
 
   return {
     state,
-    showVolume,
-    setShowVolume,
     addingBookmark,
     bookmarkAdded,
-    volumeWrapperRef,
     equalizerPresets,
     handlePlayPause,
     handlePreviousClick,

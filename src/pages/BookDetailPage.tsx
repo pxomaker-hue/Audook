@@ -424,50 +424,35 @@ const BookDetailPage: React.FC = () => {
           )}
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button
-              className="cta-button"
-              onClick={handlePlayBook}
-              style={{
-                background: 'var(--primary)',
-                color: 'var(--secondary)',
-                border: 'none',
-                padding: '12px 30px',
-                borderRadius: '999px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px'
-              }}
-            >
-              <Play size={20} /> Lire
-            </button>
-            <button className="cta-button" style={smallButtonStyle} onClick={openMatchPanel}>
-              <Search size={14} /> Associer
-            </button>
-            <button className="cta-button" style={smallButtonStyle} onClick={openEditForm}>
-              <Pencil size={14} /> Modifier
-            </button>
-            <button
-              className="cta-button"
-              style={{
-                ...mutedButtonStyle,
-                background: book.is_finished ? '#35c46a' : 'var(--surface-muted)',
-                color: book.is_finished ? '#ffffff' : 'var(--text-primary)',
-                opacity: togglingFinished ? 0.6 : 1
-              }}
-              disabled={togglingFinished}
-              onClick={handleToggleFinished}
-            >
-              {togglingFinished ? (
-                <Loader2 size={14} className="spin" />
-              ) : (
-                <>
-                  <CheckCircle2 size={14} /> {book.is_finished ? 'Lu' : 'Marquer comme lu'}
-                </>
-              )}
-            </button>
+            <div className="icon-expand-wrapper">
+              <button className="icon-expand-button primary" onClick={handlePlayBook} title="Lire">
+                <Play size={18} />
+              </button>
+              <span className="icon-expand-label">Lire</span>
+            </div>
+            <div className="icon-expand-wrapper">
+              <button className="icon-expand-button" onClick={openMatchPanel} title="Associer">
+                <Search size={16} />
+              </button>
+              <span className="icon-expand-label">Associer</span>
+            </div>
+            <div className="icon-expand-wrapper">
+              <button className="icon-expand-button" onClick={openEditForm} title="Modifier">
+                <Pencil size={16} />
+              </button>
+              <span className="icon-expand-label">Modifier</span>
+            </div>
+            <div className="icon-expand-wrapper">
+              <button
+                className={`icon-expand-button ${book.is_finished ? 'confirmed' : ''}`}
+                disabled={togglingFinished}
+                onClick={handleToggleFinished}
+                title={book.is_finished ? 'Lu' : 'Marquer comme lu'}
+              >
+                {togglingFinished ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
+              </button>
+              <span className="icon-expand-label">{book.is_finished ? 'Lu' : 'Marquer comme lu'}</span>
+            </div>
           </div>
 
           {showMatchPanel && (

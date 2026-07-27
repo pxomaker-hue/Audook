@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Pencil, Trash2, Check } from 'lucide-react';
+import { Pencil, Trash2, Check, ChevronDown } from 'lucide-react';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -27,7 +27,9 @@ const cardStyle: React.CSSProperties = {
   backgroundColor: 'var(--surface)',
   borderRadius: 'var(--radius-md)',
   boxShadow: 'var(--shadow-pop)',
-  padding: '30px'
+  padding: '30px',
+  maxWidth: '600px',
+  marginTop: '30px'
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -68,6 +70,7 @@ const EqualizerSettings: React.FC = () => {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -189,47 +192,84 @@ const EqualizerSettings: React.FC = () => {
                 {activePresetId === null && <Check size={16} color="var(--primary)" />}
               </div>
 
-              {presets.map(preset => (
-                <div
-                  key={preset.id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: 'var(--surface-muted)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '14px 18px',
-                    outline: activePresetId === preset.id ? '2px solid var(--primary)' : 'none'
-                  }}
-                >
-                  <span
-                    onClick={() => handleApply(preset.id)}
-                    style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', flex: 1 }}
+              {presets.map(preset => {
+                const isExpanded = expandedId === preset.id;
+                return (
+                  <div
+                    key={preset.id}
+                    style={{
+                      backgroundColor: 'var(--surface-muted)',
+                      borderRadius: 'var(--radius-sm)',
+                      outline: activePresetId === preset.id ? '2px solid var(--primary)' : 'none',
+                      overflow: 'hidden'
+                    }}
                   >
-                    {preset.name}
-                    {preset.is_builtin && (
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 400 }}> (intégré)</span>
-                    )}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {activePresetId === preset.id && <Check size={16} color="var(--primary)" />}
-                    {!preset.is_builtin && (
-                      <>
-                        <button onClick={() => startEdit(preset)} style={iconButtonStyle} title="Modifier">
-                          <Pencil size={14} />
-                        </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px' }}>
+                      <span
+                        onClick={() => handleApply(preset.id)}
+                        style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', flex: 1 }}
+                      >
+                        {preset.name}
+                        {preset.is_builtin && (
+                          <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 400 }}> (intégré)</span>
+                        )}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {activePresetId === preset.id && <Check size={16} color="var(--primary)" />}
+                        {!preset.is_builtin && (
+                          <>
+                            <button onClick={() => startEdit(preset)} style={iconButtonStyle} title="Modifier">
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(preset)}
+                              style={{ ...iconButtonStyle, color: '#ff6b6b' }}
+                              title="Supprimer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => handleDelete(preset)}
-                          style={{ ...iconButtonStyle, color: '#ff6b6b' }}
-                          title="Supprimer"
+                          onClick={() => setExpandedId(isExpanded ? null : preset.id)}
+                          style={iconButtonStyle}
+                          title={isExpanded ? 'Masquer les réglages' : 'Voir les réglages'}
                         >
-                          <Trash2 size={14} />
+                          <ChevronDown
+                            size={14}
+                            style={{ transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}
+                          />
                         </button>
-                      </>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ padding: '4px 18px 18px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '10px' }}>
+                          Préamplification : {preset.preamp > 0 ? '+' : ''}{preset.preamp} dB
+                        </div>
+                        <div className="eq-band-grid eq-band-grid--readonly">
+                          {BAND_LABELS.map((label, i) => {
+                            const value = preset.bands[i] ?? 0;
+                            const heightPct = ((value - BAND_MIN) / (BAND_MAX - BAND_MIN)) * 100;
+                            return (
+                              <div key={label} className="eq-band-column">
+                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', minHeight: '14px' }}>
+                                  {value > 0 ? '+' : ''}{value}
+                                </span>
+                                <div className="eq-band-bar-track">
+                                  <div className="eq-band-bar-fill" style={{ height: `${heightPct}%` }} />
+                                </div>
+                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -275,29 +315,23 @@ const EqualizerSettings: React.FC = () => {
               <label style={{ display: 'block', marginBottom: '12px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
                 Bandes de fréquence
               </label>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', marginBottom: '20px' }}>
+              <div className="eq-band-grid">
                 {BAND_LABELS.map((label, i) => (
-                  <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <div key={label} className="eq-band-column">
                     <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', minHeight: '14px' }}>
                       {form.bands[i] > 0 ? '+' : ''}{form.bands[i]}
                     </span>
-                    <input
-                      type="range"
-                      min={BAND_MIN}
-                      max={BAND_MAX}
-                      step={0.5}
-                      value={form.bands[i]}
-                      onChange={(e) => handleBandChange(i, parseFloat(e.target.value))}
-                      style={{
-                        WebkitAppearance: 'slider-vertical' as any,
-                        writingMode: 'vertical-lr' as any,
-                        direction: 'rtl',
-                        width: '6px',
-                        height: '110px',
-                        cursor: 'pointer',
-                        accentColor: 'var(--accent-ink)'
-                      }}
-                    />
+                    <div className="eq-band-slider-wrap">
+                      <input
+                        type="range"
+                        className="eq-band-slider"
+                        min={BAND_MIN}
+                        max={BAND_MAX}
+                        step={0.5}
+                        value={form.bands[i]}
+                        onChange={(e) => handleBandChange(i, parseFloat(e.target.value))}
+                      />
+                    </div>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{label}</span>
                   </div>
                 ))}

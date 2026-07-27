@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen, globalShortcut 
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 
 let mainWindow;
 let miniWindow;
@@ -389,12 +389,58 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
-function killPythonBackend() {
-  if (!pythonProcess || pythonProcess.killed) {
-    return;
-  }
+const BACKEND_PORT = 5000;
 
-  if (process.platform === 'win32') {
+// Last-resort safety net: kill whatever is actually listening on the
+// backend's port, regardless of what PID/image-name we *think* we spawned.
+// This is what actually fixes "there's still one lingering after I close
+// the app" - if Python gets launched through any indirection we don't have
+// the true PID for (a PATH shim, an App Execution Alias stub, a launcher),
+// the taskkill calls below target the wrong process and the real worker
+// survives as an orphan still holding the port.
+function killProcessOnPort(port) {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') {
+      resolve();
+      return;
+    }
+    exec(`netstat -ano | findstr :${port}`, (err, stdout) => {
+      if (err || !stdout) {
+        resolve();
+        return;
+      }
+      const pids = new Set();
+      stdout.split('\n').forEach((line) => {
+        const match = line.trim().match(/(\d+)\s*$/);
+        if (match) pids.add(match[1]);
+      });
+      if (pids.size === 0) {
+        resolve();
+        return;
+      }
+      let remaining = pids.size;
+      pids.forEach((pid) => {
+        exec(`taskkill /pid ${pid} /f /t`, () => {
+          remaining -= 1;
+          if (remaining === 0) resolve();
+        });
+      });
+    });
+  });
+}
+
+function killPythonBackend() {
+  return new Promise((resolve) => {
+    const finishWithPortSweep = () => killProcessOnPort(BACKEND_PORT).then(resolve);
+
+    if (!pythonProcess || process.platform !== 'win32') {
+      if (pythonProcess && !pythonProcess.killed) {
+        pythonProcess.kill();
+      }
+      finishWithPortSweep();
+      return;
+    }
+
     if (!isDev) {
       // The packaged backend is a PyInstaller --onefile .exe: what we
       // spawned is only a bootloader that self-extracts to a temp folder
@@ -402,27 +448,28 @@ function killPythonBackend() {
       // on it. Killing the bootloader's PID (even with /T for its tree)
       // doesn't reliably take the re-exec'd worker down with it, since
       // Windows has no parent-death cascade - it survives as an orphan
-      // still holding port 5000, which is the "it disappears, then comes
-      // back" this fixes. Killing by image name catches every instance
-      // (bootloader and worker share the same exe name) regardless of
-      // which temp path spawned it.
-      spawn('taskkill', ['/im', 'audook_backend.exe', '/f', '/t']);
+      // still holding port 5000. Killing by image name catches every
+      // instance (bootloader and worker share the same exe name) regardless
+      // of which temp path spawned it.
+      exec('taskkill /im audook_backend.exe /f /t', () => finishWithPortSweep());
       return;
     }
     // Dev mode: a plain `python audook_backend.py`, no bootloader/child
     // indirection - kill by PID like before (by image name here would risk
-    // killing unrelated python.exe processes elsewhere on the system).
-    spawn('taskkill', ['/pid', pythonProcess.pid, '/f', '/t']);
-  } else {
-    pythonProcess.kill();
-  }
+    // killing unrelated python.exe processes elsewhere on the system). The
+    // port sweep above still runs afterwards as the real guarantee, in case
+    // this PID isn't the one actually holding the port (e.g. a `python`
+    // PATH shim that re-execs into a different process).
+    exec(`taskkill /pid ${pythonProcess.pid} /f /t`, () => finishWithPortSweep());
+  });
 }
 
 // Give the backend a brief chance to close out the current reading session
 // (accurate end time/position) before force-killing it. If it's unreachable
 // or slow, we just proceed to the force-kill anyway - the periodic
 // checkpoint (every few seconds during playback) already limits how much
-// could be lost.
+// could be lost. Actually awaited (not fire-and-forget) so app.quit() only
+// happens once the port is confirmed free.
 async function gracefulShutdown() {
   try {
     const controller = new AbortController();
@@ -432,7 +479,7 @@ async function gracefulShutdown() {
   } catch (err) {
     logToFile(`Graceful shutdown request failed (continuing anyway): ${err}`);
   }
-  killPythonBackend();
+  await killPythonBackend();
 }
 
 let isQuitting = false;
