@@ -98,6 +98,7 @@ const BookDetailPage: React.FC = () => {
   const [matchLoading, setMatchLoading] = useState(false);
   const [matchMode, setMatchMode] = useState<'fill' | 'replace'>('fill');
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
+  const [showAllCandidates, setShowAllCandidates] = useState(false);
 
   // Manual edit form
   const [showEditForm, setShowEditForm] = useState(false);
@@ -247,6 +248,7 @@ const BookDetailPage: React.FC = () => {
     if (!showMatchPanel) {
       setMatchQuery('');
       setMatchCandidates([]);
+      setShowAllCandidates(false);
       handleSearchCandidates('');
     }
   };
@@ -255,6 +257,7 @@ const BookDetailPage: React.FC = () => {
     if (!book) return;
     try {
       setMatchLoading(true);
+      setShowAllCandidates(false);
       const response = await axios.get(`${apiBase}/books/${book.id}/match-candidates`, {
         params: query ? { query } : {}
       });
@@ -632,7 +635,13 @@ const BookDetailPage: React.FC = () => {
                 <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Aucun résultat</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto' }}>
-                  {matchCandidates.map((c) => (
+                  {(() => {
+                    const hasAudible = matchCandidates.some(c => c.work_key.startsWith('audible:'));
+                    const visible = (!showAllCandidates && hasAudible)
+                      ? matchCandidates.filter(c => c.work_key.startsWith('audible:'))
+                      : matchCandidates;
+                    return visible;
+                  })().map((c) => (
                     <div
                       key={c.work_key}
                       style={{
@@ -678,6 +687,24 @@ const BookDetailPage: React.FC = () => {
                       </button>
                     </div>
                   ))}
+                  {!showAllCandidates && matchCandidates.some(c => c.work_key.startsWith('audible:'))
+                    && matchCandidates.some(c => !c.work_key.startsWith('audible:')) && (
+                    <button
+                      onClick={() => setShowAllCandidates(true)}
+                      style={{
+                        alignSelf: 'flex-start',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        padding: '4px 0'
+                      }}
+                    >
+                      Voir plus (Open Library, Google Books)
+                    </button>
+                  )}
                 </div>
               )}
             </div>

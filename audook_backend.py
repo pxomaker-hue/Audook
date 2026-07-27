@@ -564,7 +564,11 @@ def get_book_match_candidates(book_id):
         title = query or re.sub(r'[_\s]+', ' ', book.title).strip()
         author = None if query else book.author
 
-        candidates = online_metadata.search_book_candidates(title, author)
+        # Fetch more than the usual default so the frontend has enough
+        # Open Library/Google Books results in reserve for its "Voir plus"
+        # button (Audible results are shown first/by default, these are
+        # extra/optional since audiobooks rarely need them).
+        candidates = online_metadata.search_book_candidates(title, author, limit=12)
         return jsonify(candidates)
     except Exception as e:
         logger.error(f"Failed to get match candidates: {e}")
@@ -597,26 +601,39 @@ def apply_book_match(book_id):
         details = online_metadata.get_book_work_details(work_key)
         existing_metadata = book.extra_metadata or {}
         existing_genre = existing_metadata.get('genre') or []
+        locked_fields = set(existing_metadata.get('manual_overrides') or [])
+
+        def should_apply(field_name, existing_value, candidate_value):
+            """Compléter (fill): only touches fields that are currently
+            empty, and never touches a locked field even if it's empty (a
+            locked-but-empty field means the user deliberately wants it left
+            blank). Remplacer (replace): overwrites regardless of whether
+            it's already filled, but a locked field is still protected -
+            that's the whole point of locking it."""
+            if not candidate_value or field_name in locked_fields:
+                return False
+            return mode == 'replace' or not existing_value
+
         fields = {}
-        if candidate_title and (mode == 'replace' or not book.title):
+        if should_apply('title', book.title, candidate_title):
             fields['title'] = candidate_title
-        if candidate_author and (mode == 'replace' or not book.author):
+        if should_apply('author', book.author, candidate_author):
             fields['author'] = candidate_author
-        if details.get('description') and (mode == 'replace' or not book.description):
+        if should_apply('description', book.description, details.get('description')):
             fields['description'] = details['description']
-        if details.get('cover_url') and (mode == 'replace' or not book.cover_url):
+        if should_apply('cover_url', book.cover_url, details.get('cover_url')):
             fields['cover_url'] = details['cover_url']
-        if details.get('genre') and (mode == 'replace' or not existing_genre):
+        if should_apply('genre', existing_genre, details.get('genre')):
             fields['genre'] = [details['genre']]
         # Audible-only fields: narrator/series/series_sequence - Open
         # Library/Google Books candidates never populate these (they're
         # book-catalog databases, not audiobook ones), so this is a no-op
         # for any match that didn't come from Audible.
-        if details.get('narrator') and (mode == 'replace' or not book.narrator):
+        if should_apply('narrator', book.narrator, details.get('narrator')):
             fields['narrator'] = details['narrator']
-        if details.get('series') and (mode == 'replace' or not existing_metadata.get('series')):
+        if should_apply('series', existing_metadata.get('series'), details.get('series')):
             fields['series'] = details['series']
-        if details.get('series_sequence') and (mode == 'replace' or not existing_metadata.get('series_sequence')):
+        if should_apply('series_sequence', existing_metadata.get('series_sequence'), details.get('series_sequence')):
             fields['series_sequence'] = details['series_sequence']
 
         if not fields:
