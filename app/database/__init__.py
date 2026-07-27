@@ -22,6 +22,7 @@ from app.database.models import (
     Bookmark,
     AppSettings,
     EqualizerPreset,
+    Collection,
 )
 
 from app.database.repositories import (
@@ -33,6 +34,7 @@ from app.database.repositories import (
     BookmarkRepository,
     EqualizerPresetRepository,
     AppSettingsRepository,
+    CollectionRepository,
 )
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "Bookmark",
     "AppSettings",
     "EqualizerPreset",
+    "Collection",
     "ServerRepository",
     "BookRepository",
     "ReadingProgressRepository",
@@ -59,4 +62,5 @@ __all__ = [
     "BookmarkRepository",
     "EqualizerPresetRepository",
     "AppSettingsRepository",
+    "CollectionRepository",
 ]

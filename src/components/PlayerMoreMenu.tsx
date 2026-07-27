@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreHorizontal, Gauge, Waves, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon } from 'lucide-react';
+import { MoreHorizontal, Gauge, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon, AudioLines, Activity } from 'lucide-react';
 import { EqualizerPreset } from '../hooks/usePlayerState';
 
 interface PlayerMoreMenuProps {
@@ -8,8 +8,10 @@ interface PlayerMoreMenuProps {
   equalizerPresetId: string | null;
   equalizerPresets: EqualizerPreset[];
   onCycleEqualizer: () => void;
-  normalizationEnabled: boolean;
-  onToggleNormalization: () => void;
+  loudnessNormalizationEnabled: boolean;
+  onToggleLoudnessNormalization: () => void;
+  compressionPreset: string | null;
+  onCycleCompression: () => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
   sleepTimerRemainingSeconds: number | null;
@@ -35,8 +37,10 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
   equalizerPresetId,
   equalizerPresets,
   onCycleEqualizer,
-  normalizationEnabled,
-  onToggleNormalization,
+  loudnessNormalizationEnabled,
+  onToggleLoudnessNormalization,
+  compressionPreset,
+  onCycleCompression,
   volume,
   onVolumeChange,
   sleepTimerRemainingSeconds,
@@ -58,6 +62,11 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
 
   const equalizerName = equalizerPresetId
     ? equalizerPresets.find(p => p.id === equalizerPresetId)?.name || '...'
+    : 'Off';
+
+  const compressionLabel = compressionPreset === 'leger' ? 'Léger'
+    : compressionPreset === 'modere' ? 'Modéré'
+    : compressionPreset === 'fort' ? 'Fort'
     : 'Off';
 
   const sleepTimerLabel = (() => {
@@ -82,14 +91,26 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
           </div>
           <div className="more-menu-row">
             <span className="more-menu-label">
-              Normalisation <b>{normalizationEnabled ? 'Activée' : 'Off'}</b>
+              Volume EBU <b>{loudnessNormalizationEnabled ? 'Activée' : 'Off'}</b>
             </span>
             <button
-              className={`player-button more-menu-icon ${normalizationEnabled ? 'confirmed' : ''}`}
-              onClick={onToggleNormalization}
-              title="Lisser les écarts de volume"
+              className={`player-button more-menu-icon ${loudnessNormalizationEnabled ? 'confirmed' : ''}`}
+              onClick={onToggleLoudnessNormalization}
+              title="Égaliser le volume moyen entre les livres"
             >
-              <Waves size={16} />
+              <AudioLines size={16} />
+            </button>
+          </div>
+          <div className="more-menu-row">
+            <span className="more-menu-label">
+              Compression <b>{compressionLabel}</b>
+            </span>
+            <button
+              className={`player-button more-menu-icon ${compressionPreset ? 'confirmed' : ''}`}
+              onClick={onCycleCompression}
+              title="Compression dynamique (resserre les écarts de volume)"
+            >
+              <Activity size={16} />
             </button>
           </div>
           <div className="more-menu-row">

@@ -55,7 +55,7 @@ def push_progress(book_id: str, chapter_index: int, position_seconds: float, fin
             return client.push_progress(book_id, book.chapters or [], chapter_index, position_seconds, finished)
 
         if server.type == "audiobookshelf":
-            client = AudiobookshelfClient(server.url, server.username, server.password)
+            client = AudiobookshelfClient(ServerRepository.active_url(server), server.username, server.password)
             item_id = book_id.replace("abs_", "", 1)
             cumulative = _cumulative_seconds(book.chapters or [], chapter_index, position_seconds)
             client.set_user_progress(item_id, cumulative, book.duration or 0.0, finished)
@@ -87,7 +87,7 @@ def pull_progress(book_id: str) -> Optional[Dict[str, Any]]:
             return client.pull_progress(book_id, book.chapters or [])
 
         if server.type == "audiobookshelf":
-            client = AudiobookshelfClient(server.url, server.username, server.password)
+            client = AudiobookshelfClient(ServerRepository.active_url(server), server.username, server.password)
             item_id = book_id.replace("abs_", "", 1)
             remote = client.get_user_progress(item_id)
             if not remote:

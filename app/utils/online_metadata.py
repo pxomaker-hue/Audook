@@ -11,6 +11,7 @@ first; Open Library candidates with a French-language edition are ranked
 first) per user preference.
 """
 
+import re
 from typing import Optional, Dict, List, Any
 from urllib.parse import quote
 
@@ -21,6 +22,15 @@ from app.utils import logger
 REQUEST_TIMEOUT = 5
 USER_AGENT = "Audook/1.0 (audiobook library manager)"
 UNKNOWN_AUTHOR_NAMES = ("unknown author", "unknown", "")
+
+# Audible's own (unauthenticated, read-only) catalog search API - the same
+# endpoint their own web/app clients use, and the one audiobook tools like
+# Audiobookshelf and audible-cli already rely on for exactly this purpose.
+# Hardcoded to the French store since these are audiobooks and real
+# audiobook-specific fields (narrator, series, genre) only exist here -
+# Open Library/Google Books are book-catalog databases that rarely carry
+# either.
+AUDIBLE_HOST = "api.audible.fr"
 
 # In-memory caches for the lifetime of the process - author/book metadata
 # doesn't change often enough to justify repeating a network call for the
@@ -159,43 +169,116 @@ def _search_google_books(title: str, author: Optional[str], limit: int, french_o
         return []
 
 
-def search_book_candidates(title: str, author: Optional[str] = None, limit: int = 6) -> List[Dict[str, Any]]:
-    """Search Open Library and Google Books for candidate matches for a book,
-    French editions ranked first, for use in a manual "Associer" (match)
-    picker. Each source's failure (including Google's anonymous rate limit)
-    is non-fatal - results just come from whichever source responded.
+def _strip_html(value: Optional[str]) -> Optional[str]:
+    """Audible's summary fields come as HTML (<p>, <b>, etc) - plain text
+    is what every other source in this file already returns, so strip tags
+    for a consistent result regardless of which source matched."""
+    if not value:
+        return value
+    text = re.sub(r'<[^>]+>', ' ', value)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text or None
 
-    Runs a French-restricted pass first (using each API's actual language
-    filter, not a guessed field) so well-known translated books - e.g. Harry
-    Potter - are reliably found in French, and so the "is_french" flag on a
-    result is verified rather than a best-effort guess."""
+
+def _search_audible(title: str, author: Optional[str], limit: int) -> List[Dict[str, Any]]:
+    try:
+        keywords = title
+        if author and author.strip().lower() not in UNKNOWN_AUTHOR_NAMES:
+            keywords = f"{title} {author}"
+
+        response = requests.get(
+            f"https://{AUDIBLE_HOST}/1.0/catalog/products",
+            params={
+                "keywords": keywords,
+                "num_results": limit,
+                "products_sort_by": "Relevance",
+                "response_groups": "product_desc,media,contributors,series,category_ladders"
+            },
+            timeout=REQUEST_TIMEOUT,
+            headers={"User-Agent": USER_AGENT}
+        )
+        if response.status_code != 200:
+            return []
+
+        products = response.json().get("products") or []
+        candidates = []
+        for product in products:
+            asin = product.get("asin")
+            if not asin or not product.get("title"):
+                continue
+            authors = ", ".join(a["name"] for a in (product.get("authors") or []) if a.get("name")) or None
+            images = product.get("product_images") or {}
+            cover_url = images.get("500") or images.get("1024") or images.get("2400")
+            candidates.append({
+                "work_key": f"audible:{asin}",
+                "title": product.get("title"),
+                "author": authors,
+                "year": (product.get("release_date") or "")[:4] or None,
+                "cover_url": cover_url,
+                # api.audible.fr is the French store - not a guarantee every
+                # result is a French-language edition, but a reasonable
+                # default given the store it came from.
+                "is_french": True
+            })
+        return candidates
+
+    except requests.RequestException as e:
+        logger.warning(f"Audible search failed for '{title}': {e}")
+        return []
+
+
+def search_book_candidates(title: str, author: Optional[str] = None, limit: int = 6) -> List[Dict[str, Any]]:
+    """Search Audible, Open Library and Google Books for candidate matches
+    for a book, for use in a manual "Associer" (match) picker. Audible
+    results are ranked first - since these are audiobooks, an Audible match
+    carries real audiobook-specific data (narrator, series, genre) that
+    Open Library/Google Books - book-catalog databases - usually lack.
+    Each source's failure is non-fatal - results just come from whichever
+    source(s) responded.
+
+    Runs a French-restricted pass first for Open Library/Google (using each
+    API's actual language filter, not a guessed field) so well-known
+    translated books - e.g. Harry Potter - are reliably found in French, and
+    so the "is_french" flag on a result is verified rather than a
+    best-effort guess."""
     if not title:
         return []
 
+    audible_candidates = _search_audible(title, author, limit)
     fr_ol = _search_open_library(title, author, limit, french_only=True)
     fr_google = _search_google_books(title, author, limit, french_only=True)
 
-    # Only bother with the broader, unrestricted passes if the French-only
-    # ones didn't already fill the quota.
-    remaining = max(0, limit - len(fr_ol) - len(fr_google))
+    # Only bother with the broader, unrestricted passes if the above didn't
+    # already fill the quota.
+    remaining = max(0, limit - len(audible_candidates) - len(fr_ol) - len(fr_google))
     ol_candidates = _search_open_library(title, author, limit) if remaining else []
     google_candidates = _search_google_books(title, author, limit) if remaining else []
 
     seen_keys = set()
     combined = []
-    for candidate in fr_ol + fr_google + ol_candidates + google_candidates:
+    for candidate in audible_candidates + fr_ol + fr_google + ol_candidates + google_candidates:
         key = candidate["work_key"]
         if key in seen_keys:
             continue
         seen_keys.add(key)
         combined.append(candidate)
 
-    combined.sort(key=lambda c: 0 if c.get("is_french") else 1)
+    # A wrong/messy author (common on local-file scans, e.g. a translator
+    # credit or a mangled tag) makes every author-filtered query above come
+    # back empty even though the title alone would have matched fine - retry
+    # title-only before giving up.
+    if not combined and author:
+        return search_book_candidates(title, author=None, limit=limit)
+
+    combined.sort(key=lambda c: (
+        0 if c["work_key"].startswith("audible:") else 1,
+        0 if c.get("is_french") else 1
+    ))
     return combined[:limit]
 
 
 def _get_open_library_work_details(work_key: str) -> Dict[str, Optional[str]]:
-    result: Dict[str, Optional[str]] = {"description": None, "cover_url": None}
+    result: Dict[str, Optional[str]] = {"description": None, "cover_url": None, "genre": None}
     try:
         response = requests.get(
             f"https://openlibrary.org{work_key}.json",
@@ -212,6 +295,13 @@ def _get_open_library_work_details(work_key: str) -> Dict[str, Optional[str]]:
             covers = data.get("covers") or []
             if covers:
                 result["cover_url"] = f"https://covers.openlibrary.org/b/id/{covers[0]}-L.jpg"
+
+            # Open Library has no dedicated "genre" field - its free-text
+            # "subjects" list is the closest equivalent, so use the first
+            # one as a best-effort genre tag.
+            subjects = data.get("subjects") or []
+            if subjects:
+                result["genre"] = subjects[0]
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch Open Library work details for '{work_key}': {e}")
 
@@ -219,7 +309,7 @@ def _get_open_library_work_details(work_key: str) -> Dict[str, Optional[str]]:
 
 
 def _get_google_book_details(item_id: str) -> Dict[str, Optional[str]]:
-    result: Dict[str, Optional[str]] = {"description": None, "cover_url": None}
+    result: Dict[str, Optional[str]] = {"description": None, "cover_url": None, "genre": None}
     try:
         response = requests.get(
             f"https://www.googleapis.com/books/v1/volumes/{item_id}",
@@ -233,17 +323,64 @@ def _get_google_book_details(item_id: str) -> Dict[str, Optional[str]]:
             cover = images.get("large") or images.get("medium") or images.get("thumbnail")
             if cover:
                 result["cover_url"] = cover.replace("http://", "https://")
+            categories = vi.get("categories") or []
+            if categories:
+                result["genre"] = categories[0]
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch Google Books details for '{item_id}': {e}")
 
     return result
 
 
+def _get_audible_details(asin: str) -> Dict[str, Optional[str]]:
+    result: Dict[str, Optional[str]] = {
+        "description": None, "cover_url": None, "genre": None,
+        "narrator": None, "series": None, "series_sequence": None
+    }
+    try:
+        response = requests.get(
+            f"https://{AUDIBLE_HOST}/1.0/catalog/products/{asin}",
+            params={"response_groups": "product_desc,media,contributors,series,category_ladders"},
+            timeout=REQUEST_TIMEOUT,
+            headers={"User-Agent": USER_AGENT}
+        )
+        if response.status_code == 200:
+            product = response.json().get("product", {})
+            result["description"] = _strip_html(product.get("merchandising_summary") or product.get("publisher_summary"))
+
+            images = product.get("product_images") or {}
+            result["cover_url"] = images.get("500") or images.get("1024") or images.get("2400")
+
+            narrators = product.get("narrators") or []
+            if narrators:
+                result["narrator"] = ", ".join(n["name"] for n in narrators if n.get("name")) or None
+
+            series_list = product.get("series") or []
+            if series_list:
+                result["series"] = series_list[0].get("title")
+                result["series_sequence"] = series_list[0].get("sequence")
+
+            # category_ladders is a list of {"ladder": [{"name": ...}, ...], "root": "Genres"}
+            # - the last entry in a ladder is the most specific genre tag.
+            for ladder_entry in (product.get("category_ladders") or []):
+                items = ladder_entry.get("ladder") or []
+                if items:
+                    result["genre"] = items[-1].get("name")
+                    break
+    except requests.RequestException as e:
+        logger.warning(f"Failed to fetch Audible details for '{asin}': {e}")
+
+    return result
+
+
 def get_book_work_details(work_key: str) -> Dict[str, Optional[str]]:
-    """Fetch full description/cover for a candidate returned by
-    search_book_candidates (used once the user picks one)."""
+    """Fetch full description/cover (and, for Audible, narrator/series/genre
+    too) for a candidate returned by search_book_candidates (used once the
+    user picks one)."""
     if work_key.startswith("google:"):
         return _get_google_book_details(work_key[len("google:"):])
+    if work_key.startswith("audible:"):
+        return _get_audible_details(work_key[len("audible:"):])
     if work_key.startswith("ol:"):
         return _get_open_library_work_details(work_key[len("ol:"):])
     # Backward compatibility with older raw Open Library keys (e.g. cached values)

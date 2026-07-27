@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Compass, History, Settings, Headphones } from 'lucide-react';
+import { LayoutGrid, Compass, History, Settings, Headphones, Library } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -17,6 +17,9 @@ const Sidebar: React.FC = () => {
       <nav className="sidebar-nav">
         <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`} title="Bibliothèque">
           <LayoutGrid size={20} />
+        </Link>
+        <Link to="/collections" className={`nav-item ${isActive('/collections') ? 'active' : ''}`} title="Collections">
+          <Library size={20} />
         </Link>
         <Link to="/explore" className={`nav-item ${isActive('/explore') ? 'active' : ''}`} title="Découvrir">
           <Compass size={20} />

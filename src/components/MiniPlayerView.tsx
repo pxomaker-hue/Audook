@@ -22,7 +22,8 @@ const MiniPlayerView: React.FC = () => {
     handleCycleSpeed,
     equalizerPresets,
     handleCycleEqualizer,
-    handleToggleNormalization,
+    handleToggleLoudnessNormalization,
+    handleCycleCompression,
     handleCycleSleepTimer,
     SEEK_STEP_SECONDS
   } = usePlayerState();
@@ -110,8 +111,10 @@ const MiniPlayerView: React.FC = () => {
               equalizerPresetId={state.equalizerPresetId}
               equalizerPresets={equalizerPresets}
               onCycleEqualizer={handleCycleEqualizer}
-              normalizationEnabled={state.normalizationEnabled}
-              onToggleNormalization={handleToggleNormalization}
+              loudnessNormalizationEnabled={state.loudnessNormalizationEnabled}
+              onToggleLoudnessNormalization={handleToggleLoudnessNormalization}
+              compressionPreset={state.compressionPreset}
+              onCycleCompression={handleCycleCompression}
               volume={state.volume}
               onVolumeChange={handleVolumeChange}
               sleepTimerRemainingSeconds={state.sleepTimerRemainingSeconds}

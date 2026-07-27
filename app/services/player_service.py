@@ -9,7 +9,8 @@ from app.player import player, progress_manager
 from app.models import Audiobook
 from app.utils import logger
 from app.sync import progress_sync
-from app.database import get_session, AppSettingsRepository, EqualizerPresetRepository
+from app.database import get_session, AppSettingsRepository, EqualizerPresetRepository, BookRepository
+from app.utils import audio_loudness
 
 # Consider the current chapter "fully listened" (for auto mark-as-finished)
 # once we're this close to the end of the last chapter.
@@ -29,7 +30,8 @@ class PlayerService:
         self._on_position_changed: Optional[Callable] = None
         self._auto_finished: bool = False
         self.equalizer_preset_id: Optional[str] = None
-        self.normalization_enabled: bool = False
+        self.loudness_normalization_enabled: bool = False
+        self.compression_preset: Optional[str] = None
         self._sleep_timer_end_time: Optional[float] = None
         self._sleep_timer_generation: int = 0
 
@@ -67,10 +69,14 @@ class PlayerService:
             # Start playback
             if chapter_idx < len(audiobook.chapters):
                 chapter = audiobook.chapters[chapter_idx]
+                cleaned_path = self._get_cleaned_chapter_path(audiobook.id, chapter_idx)
+                if cleaned_path:
+                    chapter = {**chapter, "audio_file": cleaned_path}
                 success = player.play(audiobook, chapter, position)
 
                 if success:
                     logger.info(f"Started playing: {audiobook.title}")
+                    self._apply_loudness_gain_for_current_book()
                     # Setup position updates and chapter auto-advance
                     player.on_position_change(self._on_player_position_changed)
                     player.on_playback_end(self._on_chapter_ended)
@@ -328,35 +334,166 @@ class PlayerService:
         finally:
             session.close()
 
-    def set_normalization(self, enabled: bool) -> bool:
-        """Toggle volume normalization and remember the choice for next
-        launch. Reloads the current chapter to take effect (see
-        VLCPlayer.set_normalization)."""
+    COMPRESSION_STEPS = [None, 'leger', 'modere', 'fort']
+
+    def cycle_compression(self) -> Optional[str]:
+        """Switch to the next compression preset (off -> léger -> modéré ->
+        fort -> off), for the "..." menu button. Returns the new preset key
+        (None if it landed back on "off")."""
         try:
-            if not player.set_normalization(enabled):
-                return False
-            self.normalization_enabled = enabled
-            self._save_setting('normalization_enabled', '1' if enabled else '0')
+            current_index = self.COMPRESSION_STEPS.index(self.compression_preset)
+        except ValueError:
+            current_index = 0
+        next_preset = self.COMPRESSION_STEPS[(current_index + 1) % len(self.COMPRESSION_STEPS)]
+
+        if player.set_compression(next_preset):
+            self.compression_preset = next_preset
+            self._save_setting('compression_preset', next_preset or '')
+        return self.compression_preset
+
+    def set_loudness_normalization(self, enabled: bool) -> bool:
+        """Toggle per-book EBU-style loudness matching and remember the
+        choice for next launch. Applies (or clears) the gain for whatever's
+        currently playing immediately."""
+        try:
+            self.loudness_normalization_enabled = enabled
+            self._save_setting('loudness_normalization_enabled', '1' if enabled else '0')
+            if enabled:
+                self._apply_loudness_gain_for_current_book()
+            else:
+                player.set_loudness_gain(0.0)
             return True
         except Exception as e:
-            logger.error(f"Failed to set normalization: {e}")
+            logger.error(f"Failed to set loudness normalization: {e}")
             return False
 
+    def _apply_loudness_gain_for_current_book(self):
+        """Apply the current book's cached loudness gain if one exists;
+        otherwise kick off a one-time background measurement (never blocks
+        playback) and apply it once ready. No-op if the feature is off."""
+        if not self.loudness_normalization_enabled or not self.current_audiobook:
+            return
+
+        book_id = self.current_audiobook.id
+        session = get_session()
+        try:
+            cached_gain = BookRepository(session).get_loudness_gain(book_id)
+        finally:
+            session.close()
+
+        if cached_gain is not None:
+            player.set_loudness_gain(cached_gain)
+            return
+
+        player.set_loudness_gain(0.0)
+        chapter = self.current_audiobook.chapters[self.current_chapter_index]
+        source = chapter.get("audio_file")
+        if not source:
+            return
+
+        def measure_and_apply():
+            gain = audio_loudness.measure_loudness_gain(source)
+            if gain is None:
+                return
+            measure_session = get_session()
+            try:
+                BookRepository(measure_session).set_loudness_gain(book_id, gain)
+            finally:
+                measure_session.close()
+            # Only apply live if we're still on the same book - avoids
+            # slapping a stale gain onto whatever's playing by the time this
+            # (potentially slow) measurement finishes.
+            if self.current_audiobook and self.current_audiobook.id == book_id:
+                player.set_loudness_gain(gain)
+
+        threading.Thread(target=measure_and_apply, daemon=True).start()
+
+    def _get_cleaned_chapter_path(self, book_id: str, chapter_index: int) -> Optional[str]:
+        """Local path of a previously-cleaned (noise-reduced) copy of this
+        chapter, if one exists - see start_noise_reduction below."""
+        session = get_session()
+        try:
+            return BookRepository(session).get_cleaned_chapter_path(book_id, chapter_index)
+        finally:
+            session.close()
+
+    def start_noise_reduction(self, book_id: str) -> bool:
+        """Kick off a one-time, opt-in noise-reduction pass over every
+        chapter of `book_id` (see app/utils/noise_reduction.py), in the
+        background - never blocks the caller. Cleaned chapters are used
+        automatically on the next play() once ready (see
+        _get_cleaned_chapter_path above). Returns False if it's already
+        running for this book."""
+        from app.services.library_service import LibraryService
+        from app.utils import noise_reduction, get_cache_path
+
+        session = get_session()
+        try:
+            repo = BookRepository(session)
+            if repo.get_noise_reduction_status(book_id) == 'processing':
+                return False
+            repo.set_noise_reduction_status(book_id, 'processing')
+        finally:
+            session.close()
+
+        def process():
+            try:
+                audiobook = LibraryService.get_book_by_id(book_id)
+                if not audiobook or not audiobook.chapters:
+                    raise ValueError("Book not found or has no chapters")
+
+                cleaned_count = 0
+                for index, chapter in enumerate(audiobook.chapters):
+                    source = chapter.get("audio_file")
+                    if not source:
+                        continue
+                    output_path = get_cache_path(book_id, f"clean_{index}")
+                    if noise_reduction.clean_audio_file(source, output_path):
+                        cleaned_count += 1
+                        clean_session = get_session()
+                        try:
+                            BookRepository(clean_session).set_cleaned_chapter_path(book_id, index, str(output_path))
+                        finally:
+                            clean_session.close()
+
+                # Every chapter failed (most commonly: ffmpeg isn't
+                # available) - don't report success when nothing was
+                # actually cleaned.
+                final_status = 'done' if cleaned_count > 0 else 'error'
+                done_session = get_session()
+                try:
+                    BookRepository(done_session).set_noise_reduction_status(book_id, final_status)
+                finally:
+                    done_session.close()
+            except Exception as e:
+                logger.error(f"Noise reduction failed for book {book_id}: {e}")
+                error_session = get_session()
+                try:
+                    BookRepository(error_session).set_noise_reduction_status(book_id, 'error')
+                finally:
+                    error_session.close()
+
+        threading.Thread(target=process, daemon=True).start()
+        return True
+
     def restore_audio_settings(self):
-        """Reapply the persisted equalizer/normalization preferences at
-        backend startup, before any playback begins."""
+        """Reapply the persisted equalizer/loudness/compression preferences
+        at backend startup, before any playback begins."""
         session = get_session()
         try:
             settings_repo = AppSettingsRepository(session)
             preset_id = settings_repo.get('equalizer_preset_id') or None
-            normalization = settings_repo.get('normalization_enabled') == '1'
+            loudness_normalization = settings_repo.get('loudness_normalization_enabled') == '1'
+            compression_preset = settings_repo.get('compression_preset') or None
 
             if preset_id:
                 preset = EqualizerPresetRepository(session).get_by_id(preset_id)
                 if preset:
                     self.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
-            if normalization:
-                self.set_normalization(True)
+            self.loudness_normalization_enabled = loudness_normalization
+            if compression_preset:
+                player.set_compression(compression_preset)
+                self.compression_preset = compression_preset
         except Exception as e:
             logger.error(f"Failed to restore audio settings: {e}")
         finally:

@@ -4,21 +4,24 @@ Audook Backend - Exposes services via HTTP API for Electron frontend
 """
 
 import sys
+import re
 from pathlib import Path
 import asyncio
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository
+from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository, CollectionRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.sync import progress_sync
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
 from app.utils import logger, generate_id, online_metadata
+from app.database.models import Book as DbBook
+from app import CACHE_DIR
 
 app = Flask(__name__)
 CORS(app)
@@ -88,6 +91,9 @@ def get_servers():
             'type': s.type,
             'name': s.name,
             'url': s.url,
+            'remote_url': s.remote_url,
+            'use_remote': s.use_remote,
+            'hidden': s.hidden,
             'sync_enabled': s.sync_enabled,
             'last_sync': s.last_sync.isoformat() if s.last_sync else None
         } for s in servers])
@@ -113,6 +119,9 @@ def add_server():
         api_key = data.get('api_key')
         username = data.get('username')
         password = data.get('password')
+        remote_url = data.get('remote_url') or None
+        if remote_url:
+            remote_url = _normalize_server_url(server_type, remote_url)
 
         ok, error = _test_server_connection(server_type, url, api_key, username, password)
         if not ok:
@@ -127,14 +136,17 @@ def add_server():
             url=url,
             api_key=api_key,
             username=username,
-            password=password
+            password=password,
+            remote_url=remote_url
         )
 
         return jsonify({
             'id': server.id,
             'type': server.type,
             'name': server.name,
-            'url': server.url
+            'url': server.url,
+            'remote_url': server.remote_url,
+            'use_remote': server.use_remote
         }), 201
     except Exception as e:
         logger.error(f"Failed to add server: {e}")
@@ -150,6 +162,63 @@ def delete_server(server_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete server: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers/<server_id>/remote-access', methods=['POST'])
+def set_server_remote_access(server_id):
+    """Audiobookshelf only: set the remote-reachable address and/or flip
+    the local/remote toggle. Note: chapter streaming URLs already scanned
+    into the library were built from whichever address was active at scan
+    time - switching this only affects new scans, not books already synced;
+    re-scan the server after switching to refresh them."""
+    try:
+        session = get_session()
+        server_repo = ServerRepository(session)
+        server = server_repo.get_by_id(server_id)
+        if not server:
+            return jsonify({'error': 'Serveur introuvable'}), 404
+        if server.type != 'audiobookshelf':
+            return jsonify({'error': "L'accès distant ne se règle que pour Audiobookshelf (Plex bascule automatiquement)"}), 400
+
+        data = request.json or {}
+        use_remote = data.get('use_remote')
+
+        if 'remote_url' in data:
+            remote_url = data.get('remote_url')
+            if remote_url:
+                remote_url = _normalize_server_url(server.type, remote_url)
+            updated = server_repo.set_remote_access(
+                server_id, remote_url=remote_url,
+                use_remote=bool(use_remote) if use_remote is not None else None
+            )
+        else:
+            updated = server_repo.set_remote_access(
+                server_id, use_remote=bool(use_remote) if use_remote is not None else None
+            )
+        return jsonify({
+            'id': updated.id,
+            'remote_url': updated.remote_url,
+            'use_remote': updated.use_remote
+        })
+    except Exception as e:
+        logger.error(f"Failed to set remote access: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/servers/<server_id>/hidden', methods=['POST'])
+def set_server_hidden(server_id):
+    """Show/hide this server's books in the library views - purely a
+    display filter, doesn't touch any synced data (see GET /api/books)."""
+    try:
+        data = request.json or {}
+        session = get_session()
+        updated = ServerRepository(session).set_hidden(server_id, bool(data.get('hidden')))
+        if not updated:
+            return jsonify({'error': 'Serveur introuvable'}), 404
+        return jsonify({'id': updated.id, 'hidden': updated.hidden})
+    except Exception as e:
+        logger.error(f"Failed to set server hidden state: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -197,6 +266,17 @@ def get_books():
         finished_ids = progress_repo.get_finished_book_ids()
         bookmarked_ids = BookmarkRepository(session).get_book_ids_with_bookmarks()
 
+        # Books from a hidden server are excluded from library views - the
+        # synced data itself is untouched, this is purely a display filter
+        # (see POST /api/servers/<id>/hidden).
+        hidden_server_ids = ServerRepository(session).get_hidden_server_ids()
+        if hidden_server_ids:
+            hidden_book_ids = {
+                row[0] for row in session.query(DbBook.id)
+                .filter(DbBook.server_id.in_(hidden_server_ids)).all()
+            }
+            books = [b for b in books if b.id not in hidden_book_ids]
+
         result = []
         for book in books:
             progress = in_progress.get(book.id)
@@ -217,6 +297,7 @@ def get_books():
                 'source': book.source,
                 'series': book.metadata.get('series'),
                 'series_sequence': book.metadata.get('series_sequence'),
+                'genre': book.metadata.get('genre') or [],
                 'progress_percent': progress.get('percent') if progress else 0,
                 'current_chapter_title': current_chapter_title,
                 'is_finished': book.id in finished_ids,
@@ -252,6 +333,7 @@ def get_book_details(book_id):
             'chapters': book.chapters,
             'series': book.metadata.get('series'),
             'series_sequence': book.metadata.get('series_sequence'),
+            'genre': book.metadata.get('genre') or [],
             'author_bio': book.metadata.get('author_bio'),
             'author_photo': book.metadata.get('author_photo'),
             'manual_overrides': book.metadata.get('manual_overrides', []),
@@ -260,6 +342,8 @@ def get_book_details(book_id):
                 'percentage': progress.progress_percent
             },
             'is_finished': progress.is_finished,
+            'noise_reduction_status': BookRepository(session).get_noise_reduction_status(book_id),
+            'use_cleaned_audio': BookRepository(session).get_use_cleaned_audio(book_id),
             'bookmarks': [{
                 'id': b.id,
                 'chapter_index': b.chapter_index,
@@ -294,6 +378,40 @@ def set_book_finished(book_id):
         return jsonify({'status': 'ok', 'is_finished': finished})
     except Exception as e:
         logger.error(f"Failed to set finished status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/clean-audio', methods=['POST'])
+def clean_book_audio(book_id):
+    """Kick off a one-time, opt-in noise-reduction pass over this book's
+    chapters (see PlayerService.start_noise_reduction). Runs in the
+    background - the caller polls GET /api/books/<id> for
+    noise_reduction_status ('processing' -> 'done'/'error')."""
+    try:
+        book = library_service.get_book_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        started = player_service.start_noise_reduction(book_id)
+        if not started:
+            return jsonify({'status': 'already_processing'})
+        return jsonify({'status': 'processing'})
+    except Exception as e:
+        logger.error(f"Failed to start noise reduction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/use-cleaned-audio', methods=['POST'])
+def set_book_use_cleaned_audio(book_id):
+    """Switch a book back to its original audio, or back to the cleaned
+    version - the cleaned files stay cached either way, so flipping this
+    is instant and doesn't require re-running the noise reduction pass."""
+    try:
+        data = request.json or {}
+        enabled = bool(data.get('enabled', True))
+        session = get_session()
+        BookRepository(session).set_use_cleaned_audio(book_id, enabled)
+        return jsonify({'status': 'ok', 'use_cleaned_audio': enabled})
+    except Exception as e:
+        logger.error(f"Failed to set use_cleaned_audio: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/<book_id>/bookmarks', methods=['POST'])
@@ -370,7 +488,7 @@ def update_book(book_id):
     being overwritten by a future scan."""
     try:
         data = request.json or {}
-        allowed_fields = ('title', 'author', 'narrator', 'description', 'cover_url', 'series')
+        allowed_fields = ('title', 'author', 'narrator', 'description', 'cover_url', 'series', 'genre')
         fields = {k: v for k, v in data.items() if k in allowed_fields}
         if not fields:
             return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
@@ -386,6 +504,49 @@ def update_book(book_id):
         logger.error(f"Failed to update book: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/books/<book_id>/lock', methods=['POST'])
+def lock_book_fields(book_id):
+    """Lock fields against being overwritten by a future scan or online
+    match/replace, without changing their value - lets the user freely lock
+    a field, not just get it locked as a side effect of editing it."""
+    try:
+        data = request.json or {}
+        fields = data.get('fields')
+        if not fields or not isinstance(fields, list):
+            return jsonify({'error': 'fields (liste) requis'}), 400
+
+        session = get_session()
+        book_repo = BookRepository(session)
+        book = book_repo.lock_fields(book_id, fields)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        return jsonify({'status': 'locked', 'fields': fields})
+    except Exception as e:
+        logger.error(f"Failed to lock book fields: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/unlock', methods=['POST'])
+def unlock_book_fields(book_id):
+    """Unlock previously-manually-edited fields so the next scan or online
+    match/replace can overwrite them again."""
+    try:
+        data = request.json or {}
+        fields = data.get('fields')
+        if not fields or not isinstance(fields, list):
+            return jsonify({'error': 'fields (liste) requis'}), 400
+
+        session = get_session()
+        book_repo = BookRepository(session)
+        book = book_repo.unlock_fields(book_id, fields)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        return jsonify({'status': 'unlocked', 'fields': fields})
+    except Exception as e:
+        logger.error(f"Failed to unlock book fields: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/books/<book_id>/match-candidates', methods=['GET'])
 def get_book_match_candidates(book_id):
     """Search Open Library for candidate matches for a book (like Plex's
@@ -397,7 +558,10 @@ def get_book_match_candidates(book_id):
             return jsonify({'error': 'Book not found'}), 404
 
         query = request.args.get('query', '').strip()
-        title = query or book.title
+        # Local-folder scans sometimes fall back to the raw filename/folder
+        # name as the title (e.g. "Harry_Potter_a_L_Ecole_des_sorciers"),
+        # which searches poorly - clean it up before using it as a query.
+        title = query or re.sub(r'[_\s]+', ' ', book.title).strip()
         author = None if query else book.author
 
         candidates = online_metadata.search_book_candidates(title, author)
@@ -415,6 +579,12 @@ def apply_book_match(book_id):
         data = request.json or {}
         work_key = data.get('work_key')
         mode = data.get('mode', 'fill')
+        # The candidate's title/author come from the search result itself
+        # (search_book_candidates), not from get_book_work_details below -
+        # that only fetches description/cover/genre, so without these the
+        # title/author shown in the search list never actually got applied.
+        candidate_title = (data.get('title') or '').strip()
+        candidate_author = (data.get('author') or '').strip()
         if not work_key:
             return jsonify({'error': 'work_key requis'}), 400
 
@@ -425,11 +595,29 @@ def apply_book_match(book_id):
             return jsonify({'error': 'Book not found'}), 404
 
         details = online_metadata.get_book_work_details(work_key)
+        existing_metadata = book.extra_metadata or {}
+        existing_genre = existing_metadata.get('genre') or []
         fields = {}
+        if candidate_title and (mode == 'replace' or not book.title):
+            fields['title'] = candidate_title
+        if candidate_author and (mode == 'replace' or not book.author):
+            fields['author'] = candidate_author
         if details.get('description') and (mode == 'replace' or not book.description):
             fields['description'] = details['description']
         if details.get('cover_url') and (mode == 'replace' or not book.cover_url):
             fields['cover_url'] = details['cover_url']
+        if details.get('genre') and (mode == 'replace' or not existing_genre):
+            fields['genre'] = [details['genre']]
+        # Audible-only fields: narrator/series/series_sequence - Open
+        # Library/Google Books candidates never populate these (they're
+        # book-catalog databases, not audiobook ones), so this is a no-op
+        # for any match that didn't come from Audible.
+        if details.get('narrator') and (mode == 'replace' or not book.narrator):
+            fields['narrator'] = details['narrator']
+        if details.get('series') and (mode == 'replace' or not existing_metadata.get('series')):
+            fields['series'] = details['series']
+        if details.get('series_sequence') and (mode == 'replace' or not existing_metadata.get('series_sequence')):
+            fields['series_sequence'] = details['series_sequence']
 
         if not fields:
             return jsonify({'status': 'no_change'})
@@ -546,6 +734,96 @@ def clear_history():
         return jsonify({'status': 'cleared', 'deleted': count})
     except Exception as e:
         logger.error(f"Failed to clear history: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections', methods=['GET'])
+def get_collections():
+    try:
+        session = get_session()
+        collections = CollectionRepository(session).get_all()
+        return jsonify([
+            {
+                'id': c.id,
+                'name': c.name,
+                'book_ids': c.book_ids or [],
+            }
+            for c in collections
+        ])
+    except Exception as e:
+        logger.error(f"Failed to get collections: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections', methods=['POST'])
+def create_collection():
+    try:
+        data = request.json or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Nom requis'}), 400
+
+        session = get_session()
+        collection = CollectionRepository(session).create(name)
+        return jsonify({'id': collection.id, 'name': collection.name, 'book_ids': []})
+    except Exception as e:
+        logger.error(f"Failed to create collection: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections/<collection_id>', methods=['PATCH'])
+def rename_collection(collection_id):
+    try:
+        data = request.json or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Nom requis'}), 400
+
+        session = get_session()
+        collection = CollectionRepository(session).rename(collection_id, name)
+        if not collection:
+            return jsonify({'error': 'Collection introuvable'}), 404
+        return jsonify({'status': 'updated'})
+    except Exception as e:
+        logger.error(f"Failed to rename collection: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections/<collection_id>', methods=['DELETE'])
+def delete_collection(collection_id):
+    try:
+        session = get_session()
+        deleted = CollectionRepository(session).delete(collection_id)
+        if not deleted:
+            return jsonify({'error': 'Collection introuvable'}), 404
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        logger.error(f"Failed to delete collection: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections/<collection_id>/books', methods=['POST'])
+def add_book_to_collection(collection_id):
+    try:
+        data = request.json or {}
+        book_id = data.get('book_id')
+        if not book_id:
+            return jsonify({'error': 'book_id requis'}), 400
+
+        session = get_session()
+        collection = CollectionRepository(session).add_book(collection_id, book_id)
+        if not collection:
+            return jsonify({'error': 'Collection introuvable'}), 404
+        return jsonify({'status': 'added', 'book_ids': collection.book_ids or []})
+    except Exception as e:
+        logger.error(f"Failed to add book to collection: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/collections/<collection_id>/books/<book_id>', methods=['DELETE'])
+def remove_book_from_collection(collection_id, book_id):
+    try:
+        session = get_session()
+        collection = CollectionRepository(session).remove_book(collection_id, book_id)
+        if not collection:
+            return jsonify({'error': 'Collection introuvable'}), 404
+        return jsonify({'status': 'removed', 'book_ids': collection.book_ids or []})
+    except Exception as e:
+        logger.error(f"Failed to remove book from collection: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/<book_id>/progress', methods=['DELETE'])
@@ -715,15 +993,29 @@ def cycle_player_equalizer():
         logger.error(f"Failed to cycle equalizer: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/player/normalization', methods=['POST'])
-def set_player_normalization():
+@app.route('/api/player/compression/cycle', methods=['POST'])
+def cycle_player_compression():
+    """Cycle dynamic range compression: off -> léger -> modéré -> fort ->
+    off (see VLCPlayer.COMPRESSOR_PRESETS)."""
+    try:
+        new_preset = player_service.cycle_compression()
+        return jsonify({'status': 'compression_cycled', 'preset': new_preset})
+    except Exception as e:
+        logger.error(f"Failed to cycle compression: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/player/loudness-normalization', methods=['POST'])
+def set_player_loudness_normalization():
+    """Toggle per-book EBU-style loudness matching (see
+    app/utils/audio_loudness.py) - distinct from the real-time
+    'Normalisation' filter above."""
     try:
         data = request.json or {}
         enabled = bool(data.get('enabled'))
-        player_service.set_normalization(enabled)
-        return jsonify({'status': 'normalization_set', 'enabled': enabled})
+        player_service.set_loudness_normalization(enabled)
+        return jsonify({'status': 'loudness_normalization_set', 'enabled': enabled})
     except Exception as e:
-        logger.error(f"Failed to set normalization: {e}")
+        logger.error(f"Failed to set loudness normalization: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/player/sleep-timer', methods=['POST'])
@@ -804,18 +1096,24 @@ def update_equalizer_preset(preset_id):
             bands=[float(b) for b in bands] if bands is not None else None,
             preamp=float(preamp) if preamp is not None else None
         )
-        session.close()
 
         if not preset:
+            session.close()
             return jsonify({'error': 'Preset introuvable ou en lecture seule'}), 404
+
+        # Read everything off the ORM object before closing the session -
+        # commit() (inside repo.update()) expires its attributes, so touching
+        # them after close() raises a DetachedInstanceError.
+        result = {'id': preset.id, 'name': preset.name, 'bands': preset.bands,
+                  'preamp': preset.preamp, 'is_builtin': preset.is_builtin}
+        session.close()
 
         # If this preset is the one currently active, re-apply it so the
         # edit takes effect immediately instead of on the next switch.
-        if player_service.equalizer_preset_id == preset.id:
-            player_service.set_equalizer_preset(preset.id, preset.bands, preset.preamp)
+        if player_service.equalizer_preset_id == result['id']:
+            player_service.set_equalizer_preset(result['id'], result['bands'], result['preamp'])
 
-        return jsonify({'id': preset.id, 'name': preset.name, 'bands': preset.bands,
-                         'preamp': preset.preamp, 'is_builtin': preset.is_builtin})
+        return jsonify(result)
     except Exception as e:
         logger.error(f"Failed to update equalizer preset: {e}")
         return jsonify({'error': str(e)}), 500
@@ -857,7 +1155,8 @@ def get_player_state():
             'volume': player_service.get_volume(),
             'speed': player_service.get_speed(),
             'equalizer_preset_id': player_service.equalizer_preset_id,
-            'normalization_enabled': player_service.normalization_enabled,
+            'loudness_normalization_enabled': player_service.loudness_normalization_enabled,
+            'compression_preset': player_service.compression_preset,
             'sleep_timer_remaining_seconds': player_service.get_sleep_timer_remaining_seconds(),
             'currentChapterIndex': chapter_index,
             'currentChapterTitle': chapter_title,
@@ -895,6 +1194,23 @@ def sync_status():
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/api/local-cover/<book_id>', methods=['GET'])
+def get_local_cover(book_id):
+    """Serves a cover cached by LocalAudiobookScanner (sibling cover file or
+    embedded tag art) for a local-folder book - the cover_url stored on
+    these books just points here (see app/local/scanner.py:_resolve_cover)."""
+    try:
+        # Extension isn't known ahead of time (sibling covers keep their
+        # original format) - try the common ones the scanner writes.
+        for ext in ('jpg', 'jpeg', 'png'):
+            candidate = CACHE_DIR / f"local_cover_{book_id}.{ext}"
+            if candidate.exists():
+                return send_file(candidate)
+        return jsonify({'error': 'Cover not found'}), 404
+    except Exception as e:
+        logger.error(f"Failed to serve local cover for {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown_backend():

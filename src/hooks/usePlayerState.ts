@@ -23,7 +23,8 @@ export interface PlayerState {
   volume: number;
   speed: number;
   equalizerPresetId: string | null;
-  normalizationEnabled: boolean;
+  loudnessNormalizationEnabled: boolean;
+  compressionPreset: string | null;
   sleepTimerRemainingSeconds: number | null;
 }
 
@@ -56,7 +57,8 @@ export function usePlayerState() {
     volume: 80,
     speed: 1,
     equalizerPresetId: null,
-    normalizationEnabled: false,
+    loudnessNormalizationEnabled: false,
+    compressionPreset: null,
     sleepTimerRemainingSeconds: null
   });
   const [addingBookmark, setAddingBookmark] = useState(false);
@@ -75,7 +77,8 @@ export function usePlayerState() {
         ...response.data,
         isPlaying: response.data.is_playing ?? prev.isPlaying,
         equalizerPresetId: response.data.equalizer_preset_id ?? null,
-        normalizationEnabled: response.data.normalization_enabled ?? false,
+        loudnessNormalizationEnabled: response.data.loudness_normalization_enabled ?? false,
+        compressionPreset: response.data.compression_preset ?? null,
         sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null
       }));
     } catch (error) {
@@ -228,15 +231,23 @@ export function usePlayerState() {
     }
   };
 
-  const handleToggleNormalization = async () => {
-    const next = !state.normalizationEnabled;
-    setState(prev => ({ ...prev, normalizationEnabled: next }));
+  const handleToggleLoudnessNormalization = async () => {
+    const next = !state.loudnessNormalizationEnabled;
+    setState(prev => ({ ...prev, loudnessNormalizationEnabled: next }));
     try {
-      await axios.post(`${API_BASE}/player/normalization`, { enabled: next });
+      await axios.post(`${API_BASE}/player/loudness-normalization`, { enabled: next });
     } catch (error) {
-      console.error('Failed to toggle normalization:', error);
-      // Roll back the optimistic update if the request actually failed
-      setState(prev => ({ ...prev, normalizationEnabled: !next }));
+      console.error('Failed to toggle loudness normalization:', error);
+      setState(prev => ({ ...prev, loudnessNormalizationEnabled: !next }));
+    }
+  };
+
+  const handleCycleCompression = async () => {
+    try {
+      const response = await axios.post(`${API_BASE}/player/compression/cycle`);
+      setState(prev => ({ ...prev, compressionPreset: response.data.preset ?? null }));
+    } catch (error) {
+      console.error('Failed to cycle compression:', error);
     }
   };
 
@@ -266,7 +277,8 @@ export function usePlayerState() {
     handleAddBookmark,
     handleCycleSpeed,
     handleCycleEqualizer,
-    handleToggleNormalization,
+    handleToggleLoudnessNormalization,
+    handleCycleCompression,
     handleCycleSleepTimer,
     SEEK_STEP_SECONDS
   };

@@ -9,7 +9,7 @@ import threading
 import time
 import asyncio
 
-from app.database import get_session, ServerRepository, BookRepository
+from app.database import get_session, ServerRepository, BookRepository, BookmarkRepository
 from app.database.models import Server, Library, Book
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
@@ -126,7 +126,7 @@ class ServerScanner:
         """Scan Audiobookshelf server"""
         try:
             client = AudiobookshelfClient(
-                server.url,
+                ServerRepository.active_url(server),
                 server.username,
                 server.password
             )
@@ -181,6 +181,47 @@ class ServerScanner:
             logger.error(f"Audiobookshelf scan failed: {e}")
             return False
 
+    def _delete_local_book_if_safe(self, session, book_id: str) -> bool:
+        """Delete a local book row unless it has reading progress or
+        bookmarks tied to it, so nothing the user did gets lost. Returns
+        whether it was deleted."""
+        from app.database.models import ReadingProgress
+
+        book_repo = BookRepository(session)
+        bookmark_repo = BookmarkRepository(session)
+
+        # Query directly (not via get_or_create) - that helper creates an
+        # empty progress row as a side effect, which would pollute the DB
+        # with rows for every book just from checking this.
+        existing_progress = session.query(ReadingProgress).filter_by(book_id=book_id).first()
+        has_progress = bool(existing_progress and existing_progress.progress_percent > 0)
+        has_bookmarks = len(bookmark_repo.get_by_book(book_id)) > 0
+        if has_progress or has_bookmarks:
+            logger.info(f"Keeping local duplicate '{book_id}' - it has reading progress or bookmarks")
+            return False
+
+        book_repo.delete(book_id)
+        return True
+
+    def _cleanup_existing_local_duplicates(self, session, local_server_id: str) -> int:
+        """Remove local-folder books left over from *before* the dedup
+        check in _scan_local existed, that duplicate a book from a real
+        server - only when it's safe to do so (see _delete_local_book_if_safe)."""
+        book_repo = BookRepository(session)
+
+        local_books = book_repo.get_by_server(local_server_id)
+        removed = 0
+        for local_book in local_books:
+            duplicate = book_repo.find_existing_from_other_source(
+                local_book.title, local_book.author, local_server_id
+            )
+            if not duplicate:
+                continue
+            if self._delete_local_book_if_safe(session, local_book.id):
+                removed += 1
+
+        return removed
+
     def _scan_local(self, server: Server) -> bool:
         """Scan a local audiobook folder"""
         try:
@@ -195,9 +236,36 @@ class ServerScanner:
 
             session = get_session()
             book_repo = BookRepository(session)
+            skipped_duplicates = 0
 
             for audiobook in audiobooks:
                 try:
+                    # Skip books already present from a real server (Plex/
+                    # Audiobookshelf) - very common when the local folder
+                    # points at the same NAS path those already scan, and
+                    # those sources have much richer metadata (series,
+                    # genres, proper covers) that a plain folder scan can't
+                    # match. Prevents the same book showing up twice with
+                    # inconsistent metadata between the two copies.
+                    duplicate = book_repo.find_existing_from_other_source(
+                        audiobook.title, audiobook.author, server.id
+                    )
+                    if duplicate:
+                        skipped_duplicates += 1
+                        logger.info(
+                            f"Skipped local duplicate of '{audiobook.title}' "
+                            f"(already present from server {duplicate.server_id})"
+                        )
+                        # A pre-existing DB row for this same local book may
+                        # already exist with stale data from before it was
+                        # recognized as a duplicate (e.g. author metadata
+                        # that has since been extracted more accurately) -
+                        # remove it now rather than leaving it stuck with
+                        # outdated info forever, since it'll never go
+                        # through book_repo.create() again to refresh it.
+                        self._delete_local_book_if_safe(session, audiobook.id)
+                        continue
+
                     description, cover_url, extra_metadata = self._enrich_with_online_metadata(
                         audiobook.title, audiobook.author, audiobook.description, audiobook.cover, None
                     )
@@ -218,7 +286,18 @@ class ServerScanner:
                 except Exception as e:
                     logger.warning(f"Failed to add audiobook {audiobook.title}: {e}")
 
+            if skipped_duplicates:
+                logger.info(f"Local scan skipped {skipped_duplicates} book(s) already present from another server")
+
             session.commit()
+
+            # One-time cleanup: remove local duplicates created by *earlier*
+            # scans, before this dedup check existed - only when it's safe
+            # to do so (no reading progress or bookmarks tied to that
+            # specific local copy, so nothing is lost).
+            removed_duplicates = self._cleanup_existing_local_duplicates(session, server.id)
+            if removed_duplicates:
+                logger.info(f"Removed {removed_duplicates} pre-existing local duplicate(s)")
 
             ServerRepository(session).update_sync_timestamp(server.id)
             session.close()

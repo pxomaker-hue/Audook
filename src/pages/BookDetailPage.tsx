@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Play, ArrowLeft, Search, Pencil, Lock, Bookmark, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
+import { Play, ArrowLeft, Search, Pencil, Lock, Unlock, Bookmark, Trash2, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import axios from 'axios';
 
 interface BookmarkEntry {
@@ -21,6 +21,7 @@ interface BookDetail {
   description: string;
   series: string | null;
   series_sequence: string | number | null;
+  genre: string[];
   chapters: Array<{
     id: string;
     title: string;
@@ -34,6 +35,8 @@ interface BookDetail {
     percentage: number;
   };
   is_finished: boolean;
+  noise_reduction_status: 'idle' | 'processing' | 'done' | 'error';
+  use_cleaned_audio: boolean;
 }
 
 interface MatchCandidate {
@@ -104,9 +107,13 @@ const BookDetailPage: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [editCoverUrl, setEditCoverUrl] = useState('');
   const [editSeries, setEditSeries] = useState('');
+  const [editGenre, setEditGenre] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [unlockingField, setUnlockingField] = useState<string | null>(null);
   const [resumingBookmarkId, setResumingBookmarkId] = useState<number | null>(null);
   const [togglingFinished, setTogglingFinished] = useState(false);
+  const [startingCleanAudio, setStartingCleanAudio] = useState(false);
+  const [togglingCleanedAudio, setTogglingCleanedAudio] = useState(false);
 
   const fetchBookDetail = async () => {
     try {
@@ -146,6 +153,15 @@ const BookDetailPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [id]);
 
+  // While a noise-reduction pass is running in the background, poll for it
+  // to finish so the button/status updates without a manual refresh.
+  useEffect(() => {
+    if (book?.noise_reduction_status !== 'processing') return;
+    const interval = setInterval(fetchBookDetail, 3000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book?.noise_reduction_status]);
+
   const handlePlayBook = async () => {
     if (book) {
       try {
@@ -176,6 +192,32 @@ const BookDetailPage: React.FC = () => {
       console.error('Failed to toggle finished status:', error);
     } finally {
       setTogglingFinished(false);
+    }
+  };
+
+  const handleCleanAudio = async () => {
+    if (!book) return;
+    try {
+      setStartingCleanAudio(true);
+      await axios.post(`${apiBase}/books/${book.id}/clean-audio`);
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to start noise reduction:', error);
+    } finally {
+      setStartingCleanAudio(false);
+    }
+  };
+
+  const handleToggleUseCleanedAudio = async () => {
+    if (!book) return;
+    try {
+      setTogglingCleanedAudio(true);
+      await axios.post(`${apiBase}/books/${book.id}/use-cleaned-audio`, { enabled: !book.use_cleaned_audio });
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to toggle cleaned audio:', error);
+    } finally {
+      setTogglingCleanedAudio(false);
     }
   };
 
@@ -224,11 +266,20 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
-  const handleApplyMatch = async (workKey: string) => {
+  const handleApplyMatch = async (candidate: MatchCandidate) => {
     if (!book) return;
     try {
-      setApplyingKey(workKey);
-      await axios.post(`${apiBase}/books/${book.id}/match`, { work_key: workKey, mode: matchMode });
+      setApplyingKey(candidate.work_key);
+      // The candidate's title/author come straight from the search result -
+      // get_book_work_details only fetches description/cover/genre, so
+      // without sending these along, picking a match never actually
+      // corrected the title/author shown in the search list.
+      await axios.post(`${apiBase}/books/${book.id}/match`, {
+        work_key: candidate.work_key,
+        mode: matchMode,
+        title: candidate.title,
+        author: candidate.author
+      });
       setShowMatchPanel(false);
       await fetchBookDetail();
     } catch (error) {
@@ -247,6 +298,7 @@ const BookDetailPage: React.FC = () => {
     setEditDescription(book.description || '');
     setEditCoverUrl(book.cover_url || '');
     setEditSeries(book.series || '');
+    setEditGenre((book.genre || []).join(', '));
     setShowEditForm(!showEditForm);
   };
 
@@ -254,20 +306,50 @@ const BookDetailPage: React.FC = () => {
     if (!book) return;
     try {
       setSavingEdit(true);
-      await axios.patch(`${apiBase}/books/${book.id}`, {
-        title: editTitle.trim(),
-        author: editAuthor.trim(),
-        narrator: editNarrator.trim() || null,
-        description: editDescription.trim() || null,
-        cover_url: editCoverUrl.trim() || null,
-        series: editSeries.trim() || null
-      });
+      // Only send fields the user actually changed - the backend locks
+      // every field it receives, so resending the whole form unconditionally
+      // would silently re-lock a field the user had just unlocked (even
+      // without touching it) the moment "Enregistrer" is clicked.
+      const payload: Record<string, any> = {};
+      const nextTitle = editTitle.trim();
+      const nextAuthor = editAuthor.trim();
+      const nextNarrator = editNarrator.trim() || null;
+      const nextDescription = editDescription.trim() || null;
+      const nextCoverUrl = editCoverUrl.trim() || null;
+      const nextSeries = editSeries.trim() || null;
+      const nextGenre = editGenre.split(',').map(g => g.trim()).filter(Boolean);
+
+      if (nextTitle !== book.title) payload.title = nextTitle;
+      if (nextAuthor !== book.author) payload.author = nextAuthor;
+      if (nextNarrator !== (book.narrator || null)) payload.narrator = nextNarrator;
+      if (nextDescription !== (book.description || null)) payload.description = nextDescription;
+      if (nextCoverUrl !== (book.cover_url || null)) payload.cover_url = nextCoverUrl;
+      if (nextSeries !== (book.series || null)) payload.series = nextSeries;
+      if (JSON.stringify(nextGenre) !== JSON.stringify(book.genre || [])) payload.genre = nextGenre;
+
+      if (Object.keys(payload).length > 0) {
+        await axios.patch(`${apiBase}/books/${book.id}`, payload);
+      }
       setShowEditForm(false);
       await fetchBookDetail();
     } catch (error) {
       console.error('Failed to save edit:', error);
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleToggleFieldLock = async (field: string, currentlyLocked: boolean) => {
+    if (!book) return;
+    try {
+      setUnlockingField(field);
+      const action = currentlyLocked ? 'unlock' : 'lock';
+      await axios.post(`${apiBase}/books/${book.id}/${action}`, { fields: [field] });
+      await fetchBookDetail();
+    } catch (error) {
+      console.error(`Failed to ${currentlyLocked ? 'unlock' : 'lock'} field:`, error);
+    } finally {
+      setUnlockingField(null);
     }
   };
 
@@ -424,34 +506,83 @@ const BookDetailPage: React.FC = () => {
           )}
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <div className="icon-expand-wrapper">
-              <button className="icon-expand-button primary" onClick={handlePlayBook} title="Lire">
+            <div className="icon-expand-wrapper" onClick={handlePlayBook} role="button" tabIndex={0}>
+              <button className="icon-expand-button primary" title="Lire" tabIndex={-1}>
                 <Play size={18} />
               </button>
               <span className="icon-expand-label">Lire</span>
             </div>
-            <div className="icon-expand-wrapper">
-              <button className="icon-expand-button" onClick={openMatchPanel} title="Associer">
+            <div className="icon-expand-wrapper" onClick={openMatchPanel} role="button" tabIndex={0}>
+              <button className="icon-expand-button" title="Associer" tabIndex={-1}>
                 <Search size={16} />
               </button>
               <span className="icon-expand-label">Associer</span>
             </div>
-            <div className="icon-expand-wrapper">
-              <button className="icon-expand-button" onClick={openEditForm} title="Modifier">
+            <div className="icon-expand-wrapper" onClick={openEditForm} role="button" tabIndex={0}>
+              <button className="icon-expand-button" title="Modifier" tabIndex={-1}>
                 <Pencil size={16} />
               </button>
               <span className="icon-expand-label">Modifier</span>
             </div>
-            <div className="icon-expand-wrapper">
+            <div
+              className="icon-expand-wrapper"
+              onClick={() => !togglingFinished && handleToggleFinished()}
+              role="button"
+              tabIndex={0}
+            >
               <button
                 className={`icon-expand-button ${book.is_finished ? 'confirmed' : ''}`}
                 disabled={togglingFinished}
-                onClick={handleToggleFinished}
                 title={book.is_finished ? 'Lu' : 'Marquer comme lu'}
+                tabIndex={-1}
               >
                 {togglingFinished ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
               </button>
               <span className="icon-expand-label">{book.is_finished ? 'Lu' : 'Marquer comme lu'}</span>
+            </div>
+            <div
+              className="icon-expand-wrapper"
+              onClick={() => {
+                if (startingCleanAudio || togglingCleanedAudio || book.noise_reduction_status === 'processing') return;
+                // Once cleaned, clicking flips between the cleaned and
+                // original audio instead of re-running the pass - the
+                // cleaned files stay cached, so this is instant either way.
+                if (book.noise_reduction_status === 'done') {
+                  handleToggleUseCleanedAudio();
+                } else {
+                  handleCleanAudio();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <button
+                className={`icon-expand-button ${book.noise_reduction_status === 'done' && book.use_cleaned_audio ? 'confirmed' : ''}`}
+                disabled={startingCleanAudio || togglingCleanedAudio || book.noise_reduction_status === 'processing'}
+                title={
+                  book.noise_reduction_status === 'done'
+                    ? (book.use_cleaned_audio ? 'Audio nettoyé actif - cliquer pour revenir à l\'original' : 'Audio original actif - cliquer pour reprendre la version nettoyée')
+                    : book.noise_reduction_status === 'processing' ? 'Nettoyage en cours...'
+                    : book.noise_reduction_status === 'error' ? 'Échec (ffmpeg manquant ?) - Réessayer'
+                    : 'Nettoyer le souffle/bruit de fond (traitement en arrière-plan)'
+                }
+                tabIndex={-1}
+              >
+                {startingCleanAudio || togglingCleanedAudio || book.noise_reduction_status === 'processing' ? (
+                  <Loader2 size={16} className="spin" />
+                ) : book.noise_reduction_status === 'done' && book.use_cleaned_audio ? (
+                  <CheckCircle2 size={16} />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+              </button>
+              <span className="icon-expand-label">
+                {book.noise_reduction_status === 'done'
+                  ? (book.use_cleaned_audio ? 'Audio nettoyé' : 'Original (revenir au nettoyé)')
+                  : book.noise_reduction_status === 'processing' ? 'Nettoyage en cours...'
+                  : book.noise_reduction_status === 'error' ? 'Échec - Réessayer'
+                  : 'Nettoyer le souffle'}
+              </span>
             </div>
           </div>
 
@@ -519,6 +650,14 @@ const BookDetailPage: React.FC = () => {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           {c.title}
+                          {c.work_key.startsWith('audible:') && (
+                            <span
+                              style={{ fontSize: '10px', fontWeight: 700, color: 'var(--secondary)', background: 'var(--primary)', padding: '2px 6px', borderRadius: '999px' }}
+                              title="Résultat Audible - inclut narrateur/série/genre réels"
+                            >
+                              Audible
+                            </span>
+                          )}
                           {c.is_french && (
                             <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent-ink)', background: 'var(--accent)', padding: '2px 6px', borderRadius: '999px' }}>
                               FR
@@ -533,7 +672,7 @@ const BookDetailPage: React.FC = () => {
                         className="cta-button"
                         style={{ ...mutedButtonStyle, opacity: applyingKey === c.work_key ? 0.6 : 1 }}
                         disabled={applyingKey === c.work_key}
-                        onClick={() => handleApplyMatch(c.work_key)}
+                        onClick={() => handleApplyMatch(c)}
                       >
                         {applyingKey === c.work_key ? <Loader2 size={14} className="spin" /> : 'Choisir'}
                       </button>
@@ -558,18 +697,54 @@ const BookDetailPage: React.FC = () => {
                 gap: '12px'
               }}
             >
-              <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titre" style={inputStyle} />
-              <input type="text" value={editAuthor} onChange={(e) => setEditAuthor(e.target.value)} placeholder="Auteur" style={inputStyle} />
-              <input type="text" value={editSeries} onChange={(e) => setEditSeries(e.target.value)} placeholder="Série" style={inputStyle} />
-              <input type="text" value={editNarrator} onChange={(e) => setEditNarrator(e.target.value)} placeholder="Narrateur" style={inputStyle} />
-              <textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Description"
-                rows={4}
-                style={{ ...inputStyle, borderRadius: 'var(--radius-sm)', resize: 'vertical', fontFamily: 'inherit' }}
-              />
-              <input type="text" value={editCoverUrl} onChange={(e) => setEditCoverUrl(e.target.value)} placeholder="URL de couverture" style={inputStyle} />
+              {([
+                ['title', <input key="title" type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Titre" style={inputStyle} />],
+                ['author', <input key="author" type="text" value={editAuthor} onChange={(e) => setEditAuthor(e.target.value)} placeholder="Auteur" style={inputStyle} />],
+                ['series', <input key="series" type="text" value={editSeries} onChange={(e) => setEditSeries(e.target.value)} placeholder="Série" style={inputStyle} />],
+                ['genre', <input key="genre" type="text" value={editGenre} onChange={(e) => setEditGenre(e.target.value)} placeholder="Genre(s), séparés par des virgules" style={inputStyle} />],
+                ['narrator', <input key="narrator" type="text" value={editNarrator} onChange={(e) => setEditNarrator(e.target.value)} placeholder="Narrateur" style={inputStyle} />],
+                ['description', (
+                  <textarea
+                    key="description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Description"
+                    rows={4}
+                    style={{ ...inputStyle, borderRadius: 'var(--radius-sm)', resize: 'vertical', fontFamily: 'inherit' }}
+                  />
+                )],
+                ['cover_url', <input key="cover_url" type="text" value={editCoverUrl} onChange={(e) => setEditCoverUrl(e.target.value)} placeholder="URL de couverture" style={inputStyle} />]
+              ] as const).map(([field, input]) => {
+                const isLocked = Boolean(book.manual_overrides?.includes(field));
+                const isBusy = unlockingField === field;
+                return (
+                  <div key={field} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                    <div style={{ flex: 1 }}>{input}</div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFieldLock(field, isLocked)}
+                      disabled={isBusy}
+                      title={
+                        isLocked
+                          ? 'Champ verrouillé - cliquer pour déverrouiller (autorise une future synchronisation ou un remplacement à le modifier)'
+                          : 'Champ déverrouillé - cliquer pour verrouiller (protège sa valeur actuelle des prochaines synchronisations/remplacements)'
+                      }
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: isBusy ? 'default' : 'pointer',
+                        color: isLocked ? 'var(--primary)' : 'var(--text-tertiary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '10px 4px',
+                        opacity: isBusy ? 0.5 : 1
+                      }}
+                    >
+                      {isBusy ? <Loader2 size={14} className="spin" /> : isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+                    </button>
+                  </div>
+                );
+              })}
               <div>
                 <button
                   className="cta-button"
@@ -585,7 +760,7 @@ const BookDetailPage: React.FC = () => {
 
           {book.manual_overrides && book.manual_overrides.length > 0 && (
             <p style={{ marginTop: '14px', fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Lock size={11} /> Modifié manuellement, protégé des prochaines synchronisations
+              <Lock size={11} /> Modifié manuellement, protégé des prochaines synchronisations (ouvrir "Modifier" pour déverrouiller un champ)
             </p>
           )}
         </div>

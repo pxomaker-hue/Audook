@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, Routes, Route } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
+import CollectionsPage from '../pages/CollectionsPage';
 import ExplorePage from '../pages/ExplorePage';
 import BookDetailPage from '../pages/BookDetailPage';
 import AuthorPage from '../pages/AuthorPage';
@@ -17,6 +18,7 @@ const AnimatedRoutes: React.FC = () => {
     <div key={location.pathname} className="page-transition">
       <Routes location={location}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/collections" element={<CollectionsPage />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/book/:id" element={<BookDetailPage />} />
         <Route path="/author/:name" element={<AuthorPage />} />

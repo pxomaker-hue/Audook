@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, RotateCcw } from 'lucide-react';
+import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
 import EqualizerSettings from '../components/EqualizerSettings';
@@ -13,6 +13,9 @@ interface ServerEntry {
   type: ServerType;
   name: string;
   url: string;
+  remote_url: string | null;
+  use_remote: boolean;
+  hidden: boolean;
   sync_enabled: boolean;
   last_sync: string | null;
 }
@@ -75,6 +78,14 @@ const secondaryButtonStyle: React.CSSProperties = {
   transition: 'transform 0.15s'
 };
 
+const iconButtonStyle: React.CSSProperties = {
+  ...secondaryButtonStyle,
+  padding: '9px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
+};
+
 const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState('dark');
   const [volume, setVolume] = useState(80);
@@ -95,6 +106,9 @@ const SettingsPage: React.FC = () => {
   const [busyServerId, setBusyServerId] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
   const [resettingProgress, setResettingProgress] = useState(false);
+  const [remoteUrlDrafts, setRemoteUrlDrafts] = useState<Record<string, string>>({});
+  const [savingRemoteId, setSavingRemoteId] = useState<string | null>(null);
+  const [togglingHiddenId, setTogglingHiddenId] = useState<string | null>(null);
 
   const loadServers = useCallback(async () => {
     try {
@@ -206,6 +220,43 @@ const SettingsPage: React.FC = () => {
       console.error('Failed to scan server:', error);
     } finally {
       setBusyServerId(null);
+    }
+  };
+
+  const handleSaveRemoteUrl = async (id: string) => {
+    const remoteUrl = (remoteUrlDrafts[id] ?? '').trim();
+    try {
+      setSavingRemoteId(id);
+      await axios.post(`${API_BASE}/servers/${id}/remote-access`, { remote_url: remoteUrl || null });
+      await loadServers();
+    } catch (error) {
+      console.error('Failed to save remote URL:', error);
+    } finally {
+      setSavingRemoteId(null);
+    }
+  };
+
+  const handleToggleRemote = async (server: ServerEntry) => {
+    try {
+      setSavingRemoteId(server.id);
+      await axios.post(`${API_BASE}/servers/${server.id}/remote-access`, { use_remote: !server.use_remote });
+      await loadServers();
+    } catch (error) {
+      console.error('Failed to toggle remote access:', error);
+    } finally {
+      setSavingRemoteId(null);
+    }
+  };
+
+  const handleToggleHidden = async (server: ServerEntry) => {
+    try {
+      setTogglingHiddenId(server.id);
+      await axios.post(`${API_BASE}/servers/${server.id}/hidden`, { hidden: !server.hidden });
+      await loadServers();
+    } catch (error) {
+      console.error('Failed to toggle server visibility:', error);
+    } finally {
+      setTogglingHiddenId(null);
     }
   };
 
@@ -467,46 +518,112 @@ const SettingsPage: React.FC = () => {
               <div
                 key={server.id}
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
                   backgroundColor: 'var(--surface-muted)',
                   borderRadius: 'var(--radius-sm)',
                   padding: '14px 18px'
                 }}
               >
-                <div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {server.name}{' '}
-                    <span style={{ color: 'var(--primary)', fontSize: '12px', fontWeight: 400 }}>
-                      ({TYPE_LABELS[server.type]})
-                    </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {server.name}{' '}
+                      <span style={{ color: 'var(--primary)', fontSize: '12px', fontWeight: 400 }}>
+                        ({TYPE_LABELS[server.type]})
+                      </span>
+                      {server.hidden && (
+                        <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', fontWeight: 400 }}> · masqué de la bibliothèque</span>
+                      )}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                      {server.use_remote && server.remote_url ? server.remote_url : server.url}
+                      {server.use_remote && server.remote_url && (
+                        <span style={{ color: 'var(--primary)', fontWeight: 600 }}> (distant)</span>
+                      )}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
+                      {server.last_sync ? `Dernière sync : ${new Date(server.last_sync).toLocaleString('fr-FR')}` : 'Jamais synchronisé'}
+                    </div>
                   </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                    {server.url}
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
-                    {server.last_sync ? `Dernière sync : ${new Date(server.last_sync).toLocaleString('fr-FR')}` : 'Jamais synchronisé'}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => handleToggleHidden(server)}
+                      disabled={togglingHiddenId === server.id}
+                      className="cta-button"
+                      title={server.hidden ? 'Afficher dans la bibliothèque' : 'Masquer de la bibliothèque'}
+                      style={{
+                        ...iconButtonStyle,
+                        opacity: togglingHiddenId === server.id ? 0.6 : 1,
+                        color: server.hidden ? 'var(--text-tertiary)' : 'var(--text-primary)'
+                      }}
+                    >
+                      {server.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleScanServer(server.id)}
+                      disabled={busyServerId === server.id}
+                      className="cta-button"
+                      style={{ ...secondaryButtonStyle, opacity: busyServerId === server.id ? 0.6 : 1 }}
+                    >
+                      Scanner
+                    </button>
+                    <button
+                      onClick={() => handleDeleteServer(server.id, server.name)}
+                      disabled={busyServerId === server.id}
+                      className="cta-button"
+                      style={{ ...secondaryButtonStyle, color: '#ff6b6b', opacity: busyServerId === server.id ? 0.6 : 1 }}
+                    >
+                      Supprimer
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => handleScanServer(server.id)}
-                    disabled={busyServerId === server.id}
-                    className="cta-button"
-                    style={{ ...secondaryButtonStyle, opacity: busyServerId === server.id ? 0.6 : 1 }}
+
+                {server.type === 'audiobookshelf' && (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      paddingTop: '12px',
+                      borderTop: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      flexWrap: 'wrap'
+                    }}
                   >
-                    Scanner
-                  </button>
-                  <button
-                    onClick={() => handleDeleteServer(server.id, server.name)}
-                    disabled={busyServerId === server.id}
-                    className="cta-button"
-                    style={{ ...secondaryButtonStyle, color: '#ff6b6b', opacity: busyServerId === server.id ? 0.6 : 1 }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
+                    <input
+                      type="text"
+                      value={remoteUrlDrafts[server.id] ?? server.remote_url ?? ''}
+                      onChange={(e) => setRemoteUrlDrafts(prev => ({ ...prev, [server.id]: e.target.value }))}
+                      onBlur={() => {
+                        if ((remoteUrlDrafts[server.id] ?? server.remote_url ?? '') !== (server.remote_url ?? '')) {
+                          handleSaveRemoteUrl(server.id);
+                        }
+                      }}
+                      placeholder="URL distante (ex: https://abs.mondomaine.com)"
+                      style={{ ...inputStyle, flex: 1, minWidth: '220px', padding: '8px 14px', fontSize: '12px' }}
+                    />
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '12px',
+                        color: 'var(--text-primary)',
+                        cursor: server.remote_url ? 'pointer' : 'not-allowed',
+                        opacity: server.remote_url ? 1 : 0.5,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={server.use_remote}
+                        disabled={!server.remote_url || savingRemoteId === server.id}
+                        onChange={() => handleToggleRemote(server)}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                      />
+                      Accès distant
+                    </label>
+                  </div>
+                )}
               </div>
             ))}
           </div>

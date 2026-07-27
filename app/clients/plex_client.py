@@ -9,6 +9,7 @@ from app.utils import logger
 
 try:
     from plexapi.server import PlexServer
+    from plexapi.myplex import MyPlexAccount
     from plexapi.audio import Track
     PLEX_AVAILABLE = True
 except ImportError:
@@ -33,9 +34,32 @@ class PlexClient:
         self._connect()
 
     def _connect(self):
-        """Connect to Plex server"""
+        """Connect to Plex server.
+
+        Tries the account-based connection first: authenticating via the
+        account token and asking plex.tv for this server's resource lets
+        plexapi test every known connection (local network AND the
+        plex.tv remote-access relay) and automatically pick whichever one
+        is actually reachable right now - the same thing the official Plex
+        apps do, and exactly what makes Plex usable outside the home
+        network without any VPN/manual URL juggling.
+
+        Falls back to a direct connection using the stored `url` (the old
+        behavior) if the account lookup fails for any reason - invalid/
+        server-only token, no network path to plex.tv, account has no
+        matching server resource, etc. This keeps local-only setups working
+        exactly as before.
+        """
         if not PLEX_AVAILABLE:
             raise ImportError("plexapi not installed - cannot connect to Plex")
+
+        try:
+            self.server = self._connect_via_account()
+            if self.server:
+                logger.info(f"Connected to Plex server via account: {self.server.friendlyName}")
+                return
+        except Exception as e:
+            logger.warning(f"Account-based Plex connection failed, falling back to direct URL: {e}")
 
         try:
             self.server = PlexServer(self.url, self.token)
@@ -43,6 +67,27 @@ class PlexClient:
         except Exception as e:
             logger.error(f"Failed to connect to Plex server: {e}")
             raise
+
+    def _connect_via_account(self) -> Optional["PlexServer"]:
+        """Resolve this server via the plex.tv account and let plexapi pick
+        the best reachable connection. Returns None (not an exception) if the
+        account has no server resource to match, so the caller falls back to
+        the direct URL cleanly."""
+        account = MyPlexAccount(token=self.token)
+        resources = [r for r in account.resources() if "server" in (r.provides or "")]
+        if not resources:
+            return None
+
+        # Prefer a resource whose known connections include the host we
+        # have on file (disambiguates when the account has several Plex
+        # servers) - otherwise just take the first server resource.
+        from urllib.parse import urlparse
+        target_host = urlparse(self.url).hostname
+        resource = next(
+            (r for r in resources if any(target_host and target_host in (c.address or "") for c in r.connections)),
+            resources[0]
+        )
+        return resource.connect()
 
     def get_audiobook_libraries(self) -> List[Dict[str, Any]]:
         """Get all audiobook libraries from server"""

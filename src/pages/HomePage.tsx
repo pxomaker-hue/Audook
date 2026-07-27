@@ -17,6 +17,7 @@ interface Book {
   source: string;
   series: string | null;
   series_sequence: string | number | null;
+  genre: string[];
   progress_percent: number;
   current_chapter_title: string | null;
   is_finished: boolean;
@@ -30,15 +31,25 @@ interface ServerEntry {
   name: string;
 }
 
-type SortMode = 'series' | 'alphabetical' | 'author' | 'progress' | 'bookmark';
+interface CollectionEntry {
+  id: string;
+  name: string;
+  book_ids: string[];
+}
+
+type SortMode = 'series' | 'alphabetical' | 'author' | 'genre' | 'collection' | 'progress' | 'bookmark';
 
 const SORT_LABELS: Record<SortMode, string> = {
   series: 'Par séries',
   alphabetical: 'Ordre alphabétique',
   author: 'Par auteurs',
+  genre: 'Par genre',
+  collection: 'Par collection',
   progress: 'Par progression',
   bookmark: 'Marque-pages'
 };
+
+const NO_COLLECTION_LABEL = 'Sans collection';
 
 const SOURCE_LABELS: Record<string, string> = {
   audiobookshelf: 'Audiobookshelf',
@@ -63,14 +74,21 @@ const formatDuration = (seconds: number) => {
   return hours > 0 ? `${hours}h${minutes.toString().padStart(2, '0')}` : `${minutes}min`;
 };
 
-// The sort key used for "Par séries": the series name when set, otherwise the
-// author - so the whole library sorts into one alphabetical sequence of
-// series-or-author groups.
-const seriesGroupKey = (book: Book) => (book.series && book.series.trim()) || book.author;
+// The sort key used for "Par séries": the series name when set, otherwise a
+// single shared "Sans série" bucket - grouping standalone books one-by-one
+// under their own author name looked like a broken/author sort instead of a
+// series sort, so every standalone book now lands in the same bucket.
+const NO_SERIES_LABEL = 'Sans série';
+const seriesGroupKey = (book: Book) => (book.series && book.series.trim()) || NO_SERIES_LABEL;
+
+// Same grouping idea for "Par genre" - the book's first genre tag, or a
+// fallback bucket for books with no genre data at all.
+const genreGroupKey = (book: Book) => (book.genre && book.genre.length > 0 ? book.genre[0] : 'Genre inconnu');
 
 const HomePage: React.FC = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [servers, setServers] = useState<ServerEntry[]>([]);
+  const [collections, setCollections] = useState<CollectionEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSource, setActiveSource] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -90,12 +108,14 @@ const HomePage: React.FC = () => {
 
   const fetchAll = async () => {
     try {
-      const [booksRes, serversRes] = await Promise.all([
+      const [booksRes, serversRes, collectionsRes] = await Promise.all([
         axios.get(`${API_BASE}/books`),
-        axios.get(`${API_BASE}/servers`)
+        axios.get(`${API_BASE}/servers`),
+        axios.get(`${API_BASE}/collections`)
       ]);
       setBooks(booksRes.data);
       setServers(serversRes.data);
+      setCollections(collectionsRes.data);
     } catch (error) {
       console.error('Failed to fetch library:', error);
     }
@@ -246,10 +266,30 @@ const HomePage: React.FC = () => {
           if (a.has_bookmark !== b.has_bookmark) return a.has_bookmark ? -1 : 1;
           return a.title.localeCompare(b.title);
         });
+      case 'genre':
+        return list.sort((a, b) => {
+          const keyCompare = genreGroupKey(a).localeCompare(genreGroupKey(b));
+          return keyCompare || a.title.localeCompare(b.title);
+        });
+      case 'collection':
+        // Actual grouping/ordering for this mode comes from collectionGroups
+        // below (a book can belong to several collections, unlike
+        // series/genre) - this is just a sane base order.
+        return list.sort((a, b) => a.title.localeCompare(b.title));
       case 'series':
       default:
         return list.sort((a, b) => {
-          const keyCompare = seriesGroupKey(a).localeCompare(seriesGroupKey(b));
+          const aKey = seriesGroupKey(a);
+          const bKey = seriesGroupKey(b);
+          const aNoSeries = aKey === NO_SERIES_LABEL;
+          const bNoSeries = bKey === NO_SERIES_LABEL;
+          // Real series first (alphabetically), the "Sans série" bucket last,
+          // sorted by author then title within it.
+          if (aNoSeries !== bNoSeries) return aNoSeries ? 1 : -1;
+          if (aNoSeries && bNoSeries) {
+            return a.author.localeCompare(b.author) || a.title.localeCompare(b.title);
+          }
+          const keyCompare = aKey.localeCompare(bKey);
           if (keyCompare) return keyCompare;
           // Within the same series, order by tome/sequence number (as
           // Audiobookshelf reports it) instead of alphabetically by title -
@@ -262,13 +302,15 @@ const HomePage: React.FC = () => {
     }
   }, [filteredBooks, sortMode]);
 
-  // When sorting "by series", group consecutive books under their series/author
-  // key so it reads as an actual grouped catalog, not just a flat sorted list.
+  // When sorting "by series" or "by genre", group consecutive books under
+  // their series/author (or genre) key so it reads as an actual grouped
+  // catalog, not just a flat sorted list.
   const seriesGroups = useMemo(() => {
-    if (sortMode !== 'series') return null;
+    if (sortMode !== 'series' && sortMode !== 'genre') return null;
+    const keyFn = sortMode === 'genre' ? genreGroupKey : seriesGroupKey;
     const groups: { key: string; books: Book[] }[] = [];
     for (const book of sortedLibraryBooks) {
-      const key = seriesGroupKey(book);
+      const key = keyFn(book);
       const last = groups[groups.length - 1];
       if (last && last.key === key) {
         last.books.push(book);
@@ -278,6 +320,34 @@ const HomePage: React.FC = () => {
     }
     return groups;
   }, [sortedLibraryBooks, sortMode]);
+
+  // "Par collection" groups differently from series/genre: a book can
+  // belong to several collections at once, so it's not a single-key
+  // partition - each collection contributes its own group (in membership
+  // order), and anything left over falls into a shared "Sans collection"
+  // bucket.
+  const collectionGroups = useMemo(() => {
+    if (sortMode !== 'collection') return null;
+    const byId = new Map(filteredBooks.map(b => [b.id, b]));
+    const groups: { key: string; books: Book[] }[] = [];
+    const seen = new Set<string>();
+    collections.forEach(collection => {
+      const groupBooks = collection.book_ids
+        .map(id => byId.get(id))
+        .filter((b): b is Book => Boolean(b));
+      groupBooks.forEach(b => seen.add(b.id));
+      if (groupBooks.length > 0) {
+        groups.push({ key: collection.name, books: groupBooks });
+      }
+    });
+    const remaining = filteredBooks
+      .filter(b => !seen.has(b.id))
+      .sort((a, b) => a.author.localeCompare(b.author) || a.title.localeCompare(b.title));
+    if (remaining.length > 0) {
+      groups.push({ key: NO_COLLECTION_LABEL, books: remaining });
+    }
+    return groups;
+  }, [sortMode, collections, filteredBooks]);
 
   const renderBookCard = (book: Book, discreet = false) => (
     <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
@@ -455,8 +525,17 @@ const HomePage: React.FC = () => {
             <div style={{ color: 'var(--text-secondary)', padding: '20px 0' }}>
               Aucun audiolivre ne correspond.
             </div>
-          ) : sortMode === 'series' && seriesGroups ? (
+          ) : (sortMode === 'series' || sortMode === 'genre') && seriesGroups ? (
             seriesGroups.map(group => (
+              <div key={group.key} style={{ marginBottom: '30px' }}>
+                <h3 className="library-group-title">{group.key}</h3>
+                <div className="books-grid">
+                  {group.books.map(b => renderBookCard(b, true))}
+                </div>
+              </div>
+            ))
+          ) : sortMode === 'collection' && collectionGroups ? (
+            collectionGroups.map(group => (
               <div key={group.key} style={{ marginBottom: '30px' }}>
                 <h3 className="library-group-title">{group.key}</h3>
                 <div className="books-grid">

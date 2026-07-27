@@ -7,12 +7,20 @@ import vlc
 from typing import Optional, Callable, Dict, Any
 from pathlib import Path
 from urllib.parse import urlparse
+import re
 import socket
 import threading
 import time
 from datetime import datetime
 
 import requests
+
+# A Windows drive-letter path (C:\..., Y:\...) parses under urlparse() as if
+# the drive letter were a URL scheme ("c") with no netloc/hostname - matched
+# up front so these are treated as local files, not sent into the
+# network-scheme branch below where they'd always fail with "cannot
+# determine host".
+WINDOWS_DRIVE_PATH = re.compile(r'^[a-zA-Z]:[\\/]')
 
 from app.models import Audiobook
 from app.utils import logger, format_duration
@@ -22,6 +30,16 @@ from app.utils import logger, format_duration
 # been observed to crash libvlc natively (segfault, not a catchable Python
 # exception), which takes the whole Flask process down with it.
 SOURCE_VALIDATION_TIMEOUT = 5
+
+# VLC's built-in "compressor" audio filter, tuned to three intensities.
+# threshold/knee/makeup_gain in dB, attack/release in ms, ratio is X:1.
+# Levels out quiet vs loud passages continuously (unlike the one-shot
+# per-book loudness gain) - useful in noisy environments (car, transit).
+COMPRESSOR_PRESETS = {
+    "leger": {"threshold": -15.0, "ratio": 2.0, "attack": 25.0, "release": 150.0, "makeup_gain": 3.0, "knee": 3.0},
+    "modere": {"threshold": -18.0, "ratio": 3.0, "attack": 20.0, "release": 120.0, "makeup_gain": 5.0, "knee": 3.0},
+    "fort": {"threshold": -22.0, "ratio": 4.5, "attack": 15.0, "release": 100.0, "makeup_gain": 7.0, "knee": 2.5},
+}
 
 
 class VLCPlayer:
@@ -41,13 +59,18 @@ class VLCPlayer:
         self._volume: float = 80  # 0-100
         self._speed: float = 1.0  # 0.5-2.0
 
-        # Audio enhancement: equalizer (None = disabled) and volume
-        # normalization. Both are re-applied to the media_player on every
-        # play() call (see below) since a fresh VLC Media/track is loaded
-        # for each chapter.
+        # Audio enhancement: equalizer (None = disabled), re-applied to the
+        # media_player on every play() call (see below) since a fresh VLC
+        # Media/track is loaded for each chapter.
         self._equalizer_bands: Optional[list] = None  # 10 floats, dB gain
         self._equalizer_preamp: float = 0.0
-        self._normalization_enabled: bool = False
+        # Per-book EBU-style loudness gain (see app.utils.audio_loudness) -
+        # applied as extra preamp, additive with any user equalizer preset.
+        self._loudness_gain_db: float = 0.0
+        # Dynamic range compression - None means off, otherwise a key into
+        # COMPRESSOR_PRESETS. Same "per-media filter" constraint as
+        # normalization (see set_compression).
+        self._compressor_preset: Optional[str] = None
 
         # Position tracking
         self._position: float = 0.0
@@ -134,6 +157,12 @@ class VLCPlayer:
         that is unreachable or resolves to a dead host. Validating
         reachability first keeps that failure mode inside Python.
         """
+        if WINDOWS_DRIVE_PATH.match(audio_file):
+            if not Path(audio_file).exists():
+                logger.error(f"Audio file not found: {audio_file}")
+                return False
+            return True
+
         parsed = urlparse(audio_file)
 
         if parsed.scheme in ("http", "https"):
@@ -222,11 +251,19 @@ class VLCPlayer:
                     logger.error(f"Failed to create VLC media: {audio_file}")
                     return False
 
-                # Volume normalization is a per-media audio filter (VLC has
-                # no clean way to toggle it on an already-playing stream) -
-                # has to be set before the media is handed to the player.
-                if self._normalization_enabled:
-                    media.add_option(':audio-filter=normvol')
+                # Compression is a per-media audio filter (VLC has no clean
+                # way to toggle it on an already-playing stream) - has to be
+                # set before the media is handed to the player. Built as a
+                # list (rather than a single hardcoded filter) since more
+                # per-media filters may be added later and VLC only applies
+                # the last `audio-filter` option set otherwise.
+                filters = []
+                if self._compressor_preset:
+                    filters.append('compressor')
+                    for key, value in COMPRESSOR_PRESETS[self._compressor_preset].items():
+                        media.add_option(f':compressor-{key.replace("_", "-")}={value}')
+                if filters:
+                    media.add_option(f':audio-filter={",".join(filters)}')
 
                 # Clear current playlist and add new media
                 self.media_list = self.instance.media_list_new()
@@ -378,16 +415,18 @@ class VLCPlayer:
             return False
 
     def _apply_equalizer(self, media_player) -> None:
-        """Builds a VLC AudioEqualizer from the current bands/preamp and
-        applies it to the given media_player, or clears it if disabled. Must
-        be called with self._lock held - it only touches libvlc objects."""
-        if self._equalizer_bands is None:
+        """Builds a VLC AudioEqualizer from the current bands/preamp plus any
+        per-book loudness gain, and applies it to the given media_player (or
+        clears it if neither is active). Must be called with self._lock
+        held - it only touches libvlc objects."""
+        if self._equalizer_bands is None and self._loudness_gain_db == 0.0:
             media_player.set_equalizer(None)
             return
 
         eq = vlc.AudioEqualizer()
-        eq.set_preamp(self._equalizer_preamp)
-        for i, amp in enumerate(self._equalizer_bands):
+        eq.set_preamp(self._equalizer_preamp + self._loudness_gain_db)
+        bands = self._equalizer_bands if self._equalizer_bands is not None else [0.0] * 10
+        for i, amp in enumerate(bands):
             eq.set_amp_at_index(float(amp), i)
         media_player.set_equalizer(eq)
 
@@ -410,13 +449,28 @@ class VLCPlayer:
         """Returns (bands, preamp) - bands is None if disabled"""
         return self._equalizer_bands, self._equalizer_preamp
 
-    def set_normalization(self, enabled: bool) -> bool:
-        """Toggle volume normalization. This is a per-media VLC audio filter
-        (see play()), so unlike volume/speed/equalizer it can't be applied to
-        an already-loaded track - reloads the current chapter at its current
-        position to take effect immediately."""
+    def set_loudness_gain(self, gain_db: float) -> bool:
+        """Set (or clear, with 0.0) the per-book loudness gain. Applies live
+        to the current track, no reload needed - same as set_equalizer."""
         try:
-            self._normalization_enabled = enabled
+            with self._lock:
+                self._loudness_gain_db = gain_db
+                if self._is_playing:
+                    self._apply_equalizer(self.player.get_media_player())
+            return True
+        except Exception as e:
+            logger.error(f"Set loudness gain error: {e}")
+            return False
+
+    def set_compression(self, preset: Optional[str]) -> bool:
+        """Set (or clear, with preset=None) dynamic range compression - one
+        of COMPRESSOR_PRESETS' keys. Per-media filter like the equalizer/
+        loudness gain aren't: reloads the current chapter to take effect."""
+        try:
+            if preset is not None and preset not in COMPRESSOR_PRESETS:
+                logger.error(f"Unknown compressor preset: {preset}")
+                return False
+            self._compressor_preset = preset
             if self._current_audiobook and self._current_chapter:
                 was_paused = self._is_paused
                 self.play(self._current_audiobook, self._current_chapter, self._position)
@@ -424,11 +478,11 @@ class VLCPlayer:
                     self.pause()
             return True
         except Exception as e:
-            logger.error(f"Set normalization error: {e}")
+            logger.error(f"Set compression error: {e}")
             return False
 
-    def get_normalization(self) -> bool:
-        return self._normalization_enabled
+    def get_compression(self) -> Optional[str]:
+        return self._compressor_preset
 
     def next_chapter(self) -> bool:
         """Play next chapter"""

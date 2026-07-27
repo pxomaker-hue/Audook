@@ -8,6 +8,7 @@ const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 interface Book {
   id: string;
   author: string;
+  author_photo: string | null;
 }
 
 const AVATAR_COLORS = ['#ffc629', '#17161b', '#c3c2c9', '#f4f4f2'];
@@ -44,8 +45,18 @@ const ExplorePage: React.FC = () => {
 
   const authors = useMemo(() => {
     const counts = new Map<string, number>();
-    books.forEach(b => counts.set(b.author, (counts.get(b.author) || 0) + 1));
-    let list = Array.from(counts.entries()).map(([author, count]) => ({ author, count }));
+    const photos = new Map<string, string>();
+    books.forEach(b => {
+      counts.set(b.author, (counts.get(b.author) || 0) + 1);
+      if (b.author_photo && !photos.has(b.author)) {
+        photos.set(b.author, b.author_photo);
+      }
+    });
+    let list = Array.from(counts.entries()).map(([author, count]) => ({
+      author,
+      count,
+      photo: photos.get(author) || null
+    }));
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -82,7 +93,7 @@ const ExplorePage: React.FC = () => {
         </div>
       ) : (
         <div className="authors-grid" style={{ marginTop: '20px' }}>
-          {authors.map(({ author, count }, i) => (
+          {authors.map(({ author, count, photo }, i) => (
             <div
               key={author}
               className="author-row"
@@ -90,9 +101,9 @@ const ExplorePage: React.FC = () => {
             >
               <div
                 className="author-avatar"
-                style={{ backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+                style={{ backgroundColor: photo ? undefined : AVATAR_COLORS[i % AVATAR_COLORS.length] }}
               >
-                {initials(author) || '?'}
+                {photo ? <img src={photo} alt={author} /> : (initials(author) || '?')}
               </div>
               <div className="author-name">{author}</div>
               <div className="author-count">{count}</div>

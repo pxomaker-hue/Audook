@@ -55,16 +55,35 @@ function saveSettings(partial) {
 // mainWindow 'close' handler in createWindow() below.
 let closeBehavior = loadSettings().closeBehavior || 'ask';
 
+// Resolves the bundled ffmpeg.exe (used by the backend for loudness
+// normalization/noise reduction - see app/utils/audio_loudness.py) and
+// returns an env override to hand it to the Python process, or {} if it's
+// not present (the backend degrades gracefully and falls back to any
+// ffmpeg on PATH in that case).
+function resolveFfmpegEnv() {
+  const ffmpegPath = isDev
+    ? path.join(__dirname, '../assets/bin/ffmpeg.exe')
+    : path.join(process.resourcesPath, 'ffmpeg.exe');
+
+  if (!fs.existsSync(ffmpegPath)) {
+    logToFile(`ffmpeg not found at ${ffmpegPath} - loudness/noise-reduction features will be disabled`);
+    return {};
+  }
+  return { AUDOOK_FFMPEG_PATH: ffmpegPath };
+}
+
 // Spawn Python backend
 function startPythonBackend() {
   logToFile('--- startPythonBackend ---');
+  const ffmpegEnv = resolveFfmpegEnv();
 
   if (isDev) {
     // Development: run Python directly
     const pythonScript = path.join(__dirname, '../audook_backend.py');
     pythonProcess = spawn('python', [pythonScript], {
       detached: false,
-      stdio: 'pipe'
+      stdio: 'pipe',
+      env: { ...process.env, ...ffmpegEnv }
     });
 
     pythonProcess.stdout?.on('data', (data) => {
@@ -95,7 +114,8 @@ function startPythonBackend() {
     try {
       pythonProcess = spawn(pythonExe, [], {
         detached: false,
-        stdio: 'pipe'
+        stdio: 'pipe',
+        env: { ...process.env, ...ffmpegEnv }
       });
 
       pythonProcess.stdout?.on('data', (data) => {

@@ -23,6 +23,20 @@ class Server(Base):
     username = Column(String(255), nullable=True)
     password = Column(String(255), nullable=True)
 
+    # Audiobookshelf only: an optional second (remote-reachable) address,
+    # manually toggled between local/remote via use_remote - see
+    # ServerRepository.set_use_remote. Plex doesn't need this: it resolves
+    # local vs remote automatically via the account-based connection (see
+    # PlexClient), so there's nothing to toggle there.
+    remote_url = Column(String(500), nullable=True)
+    use_remote = Column(Boolean, default=False)
+
+    # Hides this server's books from the library views without touching any
+    # synced data - toggled from Settings, independent of the home page's
+    # source filter pills (those just filter the current view, this is a
+    # persisted preference). See ServerRepository.set_hidden.
+    hidden = Column(Boolean, default=False)
+
     # Sync info
     last_sync = Column(DateTime, nullable=True)
     sync_enabled = Column(Boolean, default=True)
@@ -241,6 +255,27 @@ class AppSettings(Base):
 
     def __repr__(self):
         return f"<AppSettings {self.key}>"
+
+
+class Collection(Base):
+    """A user-created custom grouping of books (e.g. "À relire", "SF pour
+    les vacances"), independent of series/genre. book_ids is a plain JSON
+    list rather than a join table - books can come from different
+    servers/sources and there's no need for relational integrity here,
+    just an ordered membership list, consistent with how chapters/
+    extra_metadata are already stored as JSON on Book."""
+    __tablename__ = "collections"
+
+    id = Column(String(50), primary_key=True)
+    name = Column(String(255), nullable=False)
+    book_ids = Column(JSON, nullable=False, default=list)
+    position = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Collection {self.name} ({len(self.book_ids or [])} books)>"
 
 
 class EqualizerPreset(Base):

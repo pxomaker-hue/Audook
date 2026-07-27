@@ -4,6 +4,7 @@ Utility functions for Audook
 
 import json
 import hashlib
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
@@ -15,6 +16,16 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def get_ffmpeg_path() -> str:
+    """Path to the ffmpeg binary to use for loudness measurement/noise
+    reduction. Electron sets AUDOOK_FFMPEG_PATH when it spawns this backend,
+    pointing at the copy bundled alongside the app (see
+    electron/main.js:resolveFfmpegEnv) so users don't need ffmpeg on PATH.
+    Falls back to plain 'ffmpeg' (PATH lookup) when running the backend
+    standalone (e.g. `python audook_backend.py` outside Electron)."""
+    return os.environ.get('AUDOOK_FFMPEG_PATH') or 'ffmpeg'
 
 
 def format_duration(seconds: float) -> str:

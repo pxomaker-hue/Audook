@@ -10,9 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     Server, Library, Book, ReadingProgress, ReadingHistory,
-    SyncLog, Device, Bookmark, AppSettings, EqualizerPreset
+    SyncLog, Device, Bookmark, AppSettings, EqualizerPreset, Collection
 )
 from app.utils import logger
+
+# Sentinel for optional repository params where None is a valid value to set
+# (e.g. "clear this field") and must be distinguishable from "not provided".
+_UNSET = object()
 
 
 class BaseRepository:
@@ -26,11 +30,12 @@ class ServerRepository(BaseRepository):
     """Operations on Server model"""
 
     def create(self, server_id: str, type: str, name: str, url: str, api_key: str = None,
-               username: str = None, password: str = None) -> Server:
+               username: str = None, password: str = None, remote_url: str = None) -> Server:
         """Create a new server"""
         server = Server(
             id=server_id, type=type, name=name, url=url,
-            api_key=api_key, username=username, password=password
+            api_key=api_key, username=username, password=password,
+            remote_url=remote_url
         )
         self.session.add(server)
         self.session.commit()
@@ -52,6 +57,45 @@ class ServerRepository(BaseRepository):
             server.last_sync = datetime.utcnow()
             self.session.commit()
 
+    def set_remote_access(self, server_id: str, remote_url=_UNSET, use_remote: bool = None) -> Optional[Server]:
+        """Update the remote (Audiobookshelf) address and/or which one
+        (local `url` vs `remote_url`) is currently active. remote_url left
+        at its default (_UNSET) leaves the stored value untouched; passing
+        None/'' explicitly clears it."""
+        server = self.get_by_id(server_id)
+        if not server:
+            return None
+        if remote_url is not _UNSET:
+            server.remote_url = remote_url or None
+        if use_remote is not None:
+            server.use_remote = use_remote
+        self.session.commit()
+        return server
+
+    def set_hidden(self, server_id: str, hidden: bool) -> Optional[Server]:
+        """Hide/show this server's books in the library views, without
+        touching any synced data - see Book queries filtering on this."""
+        server = self.get_by_id(server_id)
+        if not server:
+            return None
+        server.hidden = hidden
+        self.session.commit()
+        return server
+
+    def get_hidden_server_ids(self) -> set:
+        """Server ids currently hidden - used to filter book listings."""
+        rows = self.session.query(Server.id).filter_by(hidden=True).all()
+        return {row[0] for row in rows}
+
+    @staticmethod
+    def active_url(server: Server) -> str:
+        """The address to actually connect to right now, honoring the
+        local/remote toggle - falls back to the local url if "remote" is
+        selected but none was ever set."""
+        if server.use_remote and server.remote_url:
+            return server.remote_url
+        return server.url
+
     def delete(self, server_id: str):
         """Delete a server"""
         server = self.get_by_id(server_id)
@@ -66,7 +110,7 @@ class BookRepository(BaseRepository):
 
     # Fields inside extra_metadata (as opposed to real columns) that can be
     # locked against being overwritten by a scan - see `manual_overrides`.
-    _EXTRA_METADATA_LOCKABLE_FIELDS = ("author_bio", "author_photo", "series")
+    _EXTRA_METADATA_LOCKABLE_FIELDS = ("author_bio", "author_photo", "series", "series_sequence", "genre")
 
     def create(self, book_id: str, server_id: str, library_id: str, title: str,
                author: str = None, narrator: str = None, description: str = None, duration: float = 0.0,
@@ -139,9 +183,89 @@ class BookRepository(BaseRepository):
         self.session.commit()
         return book
 
+    def lock_fields(self, book_id: str, field_names: List[str]) -> Optional[Book]:
+        """Lock fields against being overwritten by a future scan or online
+        match/replace, without changing their current value - lets the user
+        freely lock a field they're happy with instead of only ever getting
+        locked as a side effect of editing/saving it."""
+        book = self.get_by_id(book_id)
+        if not book:
+            return None
+
+        extra = dict(book.extra_metadata or {})
+        overrides = set(extra.get("manual_overrides") or [])
+        overrides.update(field_names)
+        extra["manual_overrides"] = list(overrides)
+        book.extra_metadata = extra
+
+        self.session.commit()
+        return book
+
+    def unlock_fields(self, book_id: str, field_names: List[str]) -> Optional[Book]:
+        """Remove fields from manual_overrides so a future scan or online
+        match/replace is free to overwrite them again - the counterpart to
+        the automatic locking that happens on manual edit/match."""
+        book = self.get_by_id(book_id)
+        if not book:
+            return None
+
+        extra = dict(book.extra_metadata or {})
+        overrides = set(extra.get("manual_overrides") or [])
+        overrides.difference_update(field_names)
+
+        if overrides:
+            extra["manual_overrides"] = list(overrides)
+        else:
+            extra.pop("manual_overrides", None)
+        book.extra_metadata = extra
+
+        self.session.commit()
+        return book
+
     def get_by_id(self, book_id: str) -> Optional[Book]:
         """Get book by ID"""
         return self.session.query(Book).filter_by(id=book_id).first()
+
+    @staticmethod
+    def _normalize_for_dedup(text: Optional[str]) -> str:
+        """Loose normalization for title/author dedup matching across
+        sources (accent/case/punctuation-insensitive) - "Le Baptême du feu"
+        from Audiobookshelf and a locally-ripped folder named similarly
+        should be recognized as the same book."""
+        import unicodedata
+        import re
+        if not text:
+            return ""
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+        text = re.sub(r"[^a-z0-9]+", "", text.lower())
+        return text
+
+    @staticmethod
+    def _primary_author(author: Optional[str]) -> str:
+        """First author only, normalized - local file tags often append
+        narrator/translator credits after a comma (e.g. "Andrzej Sapkowski,
+        Lydia Cantin-Waleryszak - traducteur") that a server-sourced author
+        field won't have, which would otherwise defeat dedup matching."""
+        if not author:
+            return ""
+        return author.split(",")[0]
+
+    def find_existing_from_other_source(self, title: str, author: str, exclude_server_id: str) -> Optional[Book]:
+        """A book with a matching (normalized) title+author already scanned
+        from a *different* server - used so a local-folder scan doesn't
+        create a duplicate entry for a book already present via Plex/
+        Audiobookshelf with richer metadata (series, tags, etc)."""
+        target_title = self._normalize_for_dedup(title)
+        target_author = self._normalize_for_dedup(self._primary_author(author))
+        if not target_title:
+            return None
+
+        candidates = self.session.query(Book).filter(Book.server_id != exclude_server_id).all()
+        for candidate in candidates:
+            if (self._normalize_for_dedup(candidate.title) == target_title
+                    and self._normalize_for_dedup(self._primary_author(candidate.author)) == target_author):
+                return candidate
+        return None
 
     def get_by_library(self, library_id: str) -> List[Book]:
         """Get all books in a library"""
@@ -169,6 +293,84 @@ class BookRepository(BaseRepository):
         if book:
             self.session.delete(book)
             self.session.commit()
+
+    def get_noise_reduction_status(self, book_id: str) -> str:
+        """'idle' | 'processing' | 'done' | 'error' - see
+        app/utils/noise_reduction.py and POST /api/books/<id>/clean-audio."""
+        book = self.get_by_id(book_id)
+        if not book or not book.extra_metadata:
+            return 'idle'
+        return book.extra_metadata.get('noise_reduction_status', 'idle')
+
+    def set_noise_reduction_status(self, book_id: str, status: str):
+        book = self.get_by_id(book_id)
+        if not book:
+            return
+        extra = dict(book.extra_metadata or {})
+        extra['noise_reduction_status'] = status
+        book.extra_metadata = extra
+        self.session.commit()
+
+    def get_cleaned_chapter_path(self, book_id: str, chapter_index: int) -> Optional[str]:
+        book = self.get_by_id(book_id)
+        if not book or not book.extra_metadata:
+            return None
+        # Respect the user's choice to revert to the original source (see
+        # set_use_cleaned_audio) even though the cleaned copy is still
+        # cached - flipping this back on later doesn't require re-cleaning.
+        if not book.extra_metadata.get('use_cleaned_audio', True):
+            return None
+        paths = book.extra_metadata.get('cleaned_chapter_paths') or {}
+        return paths.get(str(chapter_index))
+
+    def get_use_cleaned_audio(self, book_id: str) -> bool:
+        book = self.get_by_id(book_id)
+        if not book or not book.extra_metadata:
+            return True
+        return book.extra_metadata.get('use_cleaned_audio', True)
+
+    def set_use_cleaned_audio(self, book_id: str, enabled: bool):
+        """Switch a book back to its original audio (enabled=False) or back
+        to the cleaned version (enabled=True), without touching the cached
+        cleaned files either way - see clean-audio's 'Nettoyer à nouveau' vs
+        just re-toggling this."""
+        book = self.get_by_id(book_id)
+        if not book:
+            return
+        extra = dict(book.extra_metadata or {})
+        extra['use_cleaned_audio'] = enabled
+        book.extra_metadata = extra
+        self.session.commit()
+
+    def set_cleaned_chapter_path(self, book_id: str, chapter_index: int, path: str):
+        book = self.get_by_id(book_id)
+        if not book:
+            return
+        extra = dict(book.extra_metadata or {})
+        paths = dict(extra.get('cleaned_chapter_paths') or {})
+        paths[str(chapter_index)] = path
+        extra['cleaned_chapter_paths'] = paths
+        book.extra_metadata = extra
+        self.session.commit()
+
+    def get_loudness_gain(self, book_id: str) -> Optional[float]:
+        """dB gain previously measured for this book (see app.utils.audio_loudness),
+        or None if it hasn't been analyzed yet."""
+        book = self.get_by_id(book_id)
+        if not book or not book.extra_metadata:
+            return None
+        gain = book.extra_metadata.get("loudness_gain_db")
+        return float(gain) if gain is not None else None
+
+    def set_loudness_gain(self, book_id: str, gain_db: float):
+        """Cache a measured loudness gain so it's only computed once per book."""
+        book = self.get_by_id(book_id)
+        if not book:
+            return
+        extra = dict(book.extra_metadata or {})
+        extra["loudness_gain_db"] = gain_db
+        book.extra_metadata = extra
+        self.session.commit()
 
 
 class ReadingProgressRepository(BaseRepository):
@@ -486,3 +688,57 @@ class AppSettingsRepository(BaseRepository):
             row = AppSettings(key=key, value=value)
             self.session.add(row)
         self.session.commit()
+
+
+class CollectionRepository(BaseRepository):
+    """Operations on Collection model - user-created custom groupings of
+    books, membership stored as a plain JSON list of book ids."""
+
+    def get_all(self) -> List[Collection]:
+        return self.session.query(Collection).order_by(Collection.position, Collection.created_at).all()
+
+    def get_by_id(self, collection_id: str) -> Optional[Collection]:
+        return self.session.query(Collection).filter_by(id=collection_id).first()
+
+    def create(self, name: str) -> Collection:
+        max_position = self.session.query(Collection).count()
+        collection = Collection(id=str(uuid.uuid4()), name=name, book_ids=[], position=max_position)
+        self.session.add(collection)
+        self.session.commit()
+        return collection
+
+    def rename(self, collection_id: str, name: str) -> Optional[Collection]:
+        collection = self.get_by_id(collection_id)
+        if not collection:
+            return None
+        collection.name = name
+        self.session.commit()
+        return collection
+
+    def delete(self, collection_id: str) -> bool:
+        collection = self.get_by_id(collection_id)
+        if not collection:
+            return False
+        self.session.delete(collection)
+        self.session.commit()
+        return True
+
+    def add_book(self, collection_id: str, book_id: str) -> Optional[Collection]:
+        collection = self.get_by_id(collection_id)
+        if not collection:
+            return None
+        book_ids = list(collection.book_ids or [])
+        if book_id not in book_ids:
+            book_ids.append(book_id)
+            collection.book_ids = book_ids
+            self.session.commit()
+        return collection
+
+    def remove_book(self, collection_id: str, book_id: str) -> Optional[Collection]:
+        collection = self.get_by_id(collection_id)
+        if not collection:
+            return None
+        book_ids = [b for b in (collection.book_ids or []) if b != book_id]
+        collection.book_ids = book_ids
+        self.session.commit()
+        return collection

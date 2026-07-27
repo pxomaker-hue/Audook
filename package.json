@@ -53,6 +53,11 @@
         "from": "dist/audook_backend",
         "to": ".",
         "filter": ["audook_backend.exe"]
+      },
+      {
+        "from": "assets/bin",
+        "to": ".",
+        "filter": ["ffmpeg.exe"]
       }
     ],
     "win": {
