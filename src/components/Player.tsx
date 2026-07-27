@@ -28,6 +28,7 @@ const Player: React.FC = () => {
     equalizerPresets,
     handleCycleEqualizer,
     handleToggleNormalization,
+    handleCycleSleepTimer,
     SEEK_STEP_SECONDS
   } = usePlayerState();
 
@@ -50,6 +51,10 @@ const Player: React.FC = () => {
       onCycleEqualizer={handleCycleEqualizer}
       normalizationEnabled={state.normalizationEnabled}
       onToggleNormalization={handleToggleNormalization}
+      volume={state.volume}
+      onVolumeChange={handleVolumeChange}
+      sleepTimerRemainingSeconds={state.sleepTimerRemainingSeconds}
+      onCycleSleepTimer={handleCycleSleepTimer}
       buttonSize={buttonSize}
     />
   );
@@ -158,7 +163,7 @@ const Player: React.FC = () => {
             <Rewind size={16} />
           </button>
           <button
-            className="player-button main"
+            className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
             onClick={handlePlayPause}
             title={state.isPlaying ? 'Pause' : 'Lecture'}
           >
@@ -209,7 +214,7 @@ const Player: React.FC = () => {
             <Rewind size={14} />
           </button>
           <button
-            className="player-button main"
+            className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
             onClick={handlePlayPause}
             title={state.isPlaying ? 'Pause' : 'Lecture'}
           >

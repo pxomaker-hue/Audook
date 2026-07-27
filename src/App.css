@@ -809,7 +809,6 @@ input[type="checkbox"] {
   background-color: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  overflow: hidden;
   display: flex;
 }
 
@@ -854,6 +853,12 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Was relying on the whole .player card's overflow:hidden to clip the
+     glow's blur bleed - moved here so the card itself can be overflow
+     visible and let the "..." menu popover escape its bounds instead of
+     getting clipped/truncated at the card edge. */
+  overflow: hidden;
+  border-radius: var(--radius-lg);
 }
 
 .player-cover-glow {
@@ -1038,6 +1043,26 @@ input[type="checkbox"] {
 
 .player-button.main:active {
   transform: scale(0.92);
+}
+
+/* Subtle "breathing" pulse while playback is active - a ring of the accent
+   color expanding and fading, on both the docked/compact player and the
+   mini-player's play/pause button. Animates box-shadow only (not transform)
+   so it doesn't fight the hover/active scale rules above. */
+@keyframes play-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(23, 22, 27, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(23, 22, 27, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(23, 22, 27, 0);
+  }
+}
+
+.player-button.main.playing {
+  animation: play-pulse 2s ease-out infinite;
 }
 
 .player-current-chapter {
@@ -1278,9 +1303,11 @@ input[type="checkbox"] {
   animation: more-menu-unfold 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
 
-.more-menu-row:nth-child(1) { animation-delay: 0.06s; }
-.more-menu-row:nth-child(2) { animation-delay: 0.03s; }
-.more-menu-row:nth-child(3) { animation-delay: 0s; }
+.more-menu-row:nth-child(1) { animation-delay: 0.12s; }
+.more-menu-row:nth-child(2) { animation-delay: 0.09s; }
+.more-menu-row:nth-child(3) { animation-delay: 0.06s; }
+.more-menu-row:nth-child(4) { animation-delay: 0.03s; }
+.more-menu-row:nth-child(5) { animation-delay: 0s; }
 
 @keyframes more-menu-unfold {
   from {
@@ -1331,6 +1358,40 @@ input[type="checkbox"] {
 .more-menu-icon.confirmed {
   background-color: var(--accent);
   color: var(--accent-ink);
+}
+
+/* Volume row: same collapse/expand shell as .more-menu-label, but holding a
+   live horizontal slider instead of static text - unfolds "like the other
+   '...' buttons" per request, rather than the separate floating vertical
+   popup the docked player's standalone volume button still uses. */
+.more-menu-volume-slider {
+  display: flex;
+  align-items: center;
+  max-width: 0;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: max-width 0.25s ease, opacity 0.2s ease, transform 0.25s ease, margin-right 0.25s ease, padding 0.25s ease;
+}
+
+.more-menu-row:hover .more-menu-volume-slider,
+.more-menu-row:focus-within .more-menu-volume-slider {
+  max-width: 140px;
+  margin-right: 8px;
+  padding: 0 14px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.more-menu-volume-slider input[type='range'] {
+  width: 100px;
+  cursor: pointer;
+  accent-color: var(--accent-ink);
 }
 
 /* Book detail header actions (Lire/Associer/Modifier/Marquer comme lu):

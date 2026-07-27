@@ -8,6 +8,8 @@ const PREVIOUS_DOUBLE_CLICK_WINDOW = 300;
 const RESTART_THRESHOLD_SECONDS = 2;
 const SEEK_STEP_SECONDS = 30;
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+// Sleep timer cycle: null (off) then each duration in minutes, looping.
+const SLEEP_TIMER_STEPS: Array<number | null> = [null, 5, 10, 15, 20, 30, 60];
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
@@ -22,6 +24,7 @@ export interface PlayerState {
   speed: number;
   equalizerPresetId: string | null;
   normalizationEnabled: boolean;
+  sleepTimerRemainingSeconds: number | null;
 }
 
 export interface EqualizerPreset {
@@ -53,11 +56,13 @@ export function usePlayerState() {
     volume: 80,
     speed: 1,
     equalizerPresetId: null,
-    normalizationEnabled: false
+    normalizationEnabled: false,
+    sleepTimerRemainingSeconds: null
   });
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
   const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
+  const [sleepTimerStepIndex, setSleepTimerStepIndex] = useState(0);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchState = async () => {
@@ -70,7 +75,8 @@ export function usePlayerState() {
         ...response.data,
         isPlaying: response.data.is_playing ?? prev.isPlaying,
         equalizerPresetId: response.data.equalizer_preset_id ?? null,
-        normalizationEnabled: response.data.normalization_enabled ?? false
+        normalizationEnabled: response.data.normalization_enabled ?? false,
+        sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null
       }));
     } catch (error) {
       console.error('Failed to get player state:', error);
@@ -234,6 +240,18 @@ export function usePlayerState() {
     }
   };
 
+  const handleCycleSleepTimer = async () => {
+    const nextIndex = (sleepTimerStepIndex + 1) % SLEEP_TIMER_STEPS.length;
+    const minutes = SLEEP_TIMER_STEPS[nextIndex];
+    setSleepTimerStepIndex(nextIndex);
+    try {
+      const response = await axios.post(`${API_BASE}/player/sleep-timer`, { minutes });
+      setState(prev => ({ ...prev, sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null }));
+    } catch (error) {
+      console.error('Failed to set sleep timer:', error);
+    }
+  };
+
   return {
     state,
     addingBookmark,
@@ -249,6 +267,7 @@ export function usePlayerState() {
     handleCycleSpeed,
     handleCycleEqualizer,
     handleToggleNormalization,
+    handleCycleSleepTimer,
     SEEK_STEP_SECONDS
   };
 }

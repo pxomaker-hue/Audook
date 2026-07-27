@@ -17,11 +17,13 @@ const MiniPlayerView: React.FC = () => {
     handleNextClick,
     handleSeek,
     handleSeekStep,
+    handleVolumeChange,
     handleAddBookmark,
     handleCycleSpeed,
     equalizerPresets,
     handleCycleEqualizer,
     handleToggleNormalization,
+    handleCycleSleepTimer,
     SEEK_STEP_SECONDS
   } = usePlayerState();
 
@@ -90,7 +92,7 @@ const MiniPlayerView: React.FC = () => {
               <Rewind size={14} />
             </button>
             <button
-              className="player-button main"
+              className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
               onClick={handlePlayPause}
               title={state.isPlaying ? 'Pause' : 'Lecture'}
             >
@@ -110,6 +112,10 @@ const MiniPlayerView: React.FC = () => {
               onCycleEqualizer={handleCycleEqualizer}
               normalizationEnabled={state.normalizationEnabled}
               onToggleNormalization={handleToggleNormalization}
+              volume={state.volume}
+              onVolumeChange={handleVolumeChange}
+              sleepTimerRemainingSeconds={state.sleepTimerRemainingSeconds}
+              onCycleSleepTimer={handleCycleSleepTimer}
               buttonSize={14}
             />
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreHorizontal, Gauge, Waves, SlidersHorizontal } from 'lucide-react';
+import { MoreHorizontal, Gauge, Waves, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon } from 'lucide-react';
 import { EqualizerPreset } from '../hooks/usePlayerState';
 
 interface PlayerMoreMenuProps {
@@ -10,8 +10,18 @@ interface PlayerMoreMenuProps {
   onCycleEqualizer: () => void;
   normalizationEnabled: boolean;
   onToggleNormalization: () => void;
+  volume: number;
+  onVolumeChange: (volume: number) => void;
+  sleepTimerRemainingSeconds: number | null;
+  onCycleSleepTimer: () => void;
   buttonSize?: number;
 }
+
+const VolumeIcon = ({ volume }: { volume: number }) => {
+  if (volume === 0) return <VolumeX size={16} />;
+  if (volume < 50) return <Volume1 size={16} />;
+  return <Volume2 size={16} />;
+};
 
 // Replaces the old standalone speed-pill button: a single "..." button that
 // unfolds a small popover (upward, so it clears the player controls near the
@@ -27,6 +37,10 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
   onCycleEqualizer,
   normalizationEnabled,
   onToggleNormalization,
+  volume,
+  onVolumeChange,
+  sleepTimerRemainingSeconds,
+  onCycleSleepTimer,
   buttonSize = 16
 }) => {
   const [open, setOpen] = useState(false);
@@ -45,6 +59,14 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
   const equalizerName = equalizerPresetId
     ? equalizerPresets.find(p => p.id === equalizerPresetId)?.name || '...'
     : 'Off';
+
+  const sleepTimerLabel = (() => {
+    if (sleepTimerRemainingSeconds === null) return 'Off';
+    const totalSeconds = Math.round(sleepTimerRemainingSeconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  })();
 
   return (
     <div className="more-menu-wrapper" ref={wrapperRef}>
@@ -76,6 +98,32 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
             </span>
             <button className="player-button more-menu-icon" onClick={onCycleEqualizer} title="Changer de préréglage d'égaliseur">
               <SlidersHorizontal size={16} />
+            </button>
+          </div>
+          <div className="more-menu-row">
+            <div className="more-menu-volume-slider">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(e) => onVolumeChange(parseInt(e.target.value))}
+              />
+            </div>
+            <button className="player-button more-menu-icon" title="Volume">
+              <VolumeIcon volume={volume} />
+            </button>
+          </div>
+          <div className="more-menu-row">
+            <span className="more-menu-label">
+              Minuteur de veille <b>{sleepTimerLabel}</b>
+            </span>
+            <button
+              className={`player-button more-menu-icon ${sleepTimerRemainingSeconds !== null ? 'confirmed' : ''}`}
+              onClick={onCycleSleepTimer}
+              title="Minuteur de veille"
+            >
+              <Moon size={16} />
             </button>
           </div>
         </div>

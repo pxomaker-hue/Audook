@@ -2,6 +2,8 @@
 Player service - manages playback and progress
 """
 
+import threading
+import time
 from typing import Optional, Callable
 from app.player import player, progress_manager
 from app.models import Audiobook
@@ -12,6 +14,10 @@ from app.database import get_session, AppSettingsRepository, EqualizerPresetRepo
 # Consider the current chapter "fully listened" (for auto mark-as-finished)
 # once we're this close to the end of the last chapter.
 AUTO_FINISH_THRESHOLD_SECONDS = 2.0
+
+# How long the sleep timer's volume fade-out takes, at the very end of the
+# countdown, before actually pausing playback.
+SLEEP_TIMER_FADE_SECONDS = 20
 
 
 class PlayerService:
@@ -24,6 +30,8 @@ class PlayerService:
         self._auto_finished: bool = False
         self.equalizer_preset_id: Optional[str] = None
         self.normalization_enabled: bool = False
+        self._sleep_timer_end_time: Optional[float] = None
+        self._sleep_timer_generation: int = 0
 
     def start_playbook(
         self,
@@ -147,6 +155,7 @@ class PlayerService:
             player.stop()
             self.current_audiobook = None
             self.current_chapter_index = 0
+            self.cancel_sleep_timer()
             logger.info("Playback stopped")
             return True
         except Exception as e:
@@ -197,6 +206,72 @@ class PlayerService:
         except Exception as e:
             logger.error(f"Failed to go to previous chapter: {e}")
         return False
+
+    def set_sleep_timer(self, minutes: Optional[float]) -> bool:
+        """Start (or restart) a sleep timer: fades the volume out over the
+        last SLEEP_TIMER_FADE_SECONDS then pauses. Passing None/0 cancels
+        any running timer without touching playback."""
+        self._sleep_timer_generation += 1
+        generation = self._sleep_timer_generation
+
+        if not minutes or minutes <= 0:
+            self._sleep_timer_end_time = None
+            return True
+
+        self._sleep_timer_end_time = time.time() + minutes * 60
+        thread = threading.Thread(target=self._sleep_timer_loop, args=(generation,), daemon=True)
+        thread.start()
+        return True
+
+    def cancel_sleep_timer(self):
+        self.set_sleep_timer(None)
+
+    def get_sleep_timer_remaining_seconds(self) -> Optional[float]:
+        if self._sleep_timer_end_time is None:
+            return None
+        return max(0.0, self._sleep_timer_end_time - time.time())
+
+    def _sleep_timer_loop(self, generation: int):
+        try:
+            while generation == self._sleep_timer_generation:
+                remaining = self.get_sleep_timer_remaining_seconds()
+                if remaining is None:
+                    return
+                if remaining <= SLEEP_TIMER_FADE_SECONDS:
+                    break
+                time.sleep(1)
+
+            if generation != self._sleep_timer_generation:
+                return
+
+            self._fade_out_and_pause(generation)
+        except Exception as e:
+            logger.error(f"Sleep timer error: {e}")
+        finally:
+            if generation == self._sleep_timer_generation:
+                self._sleep_timer_end_time = None
+
+    def _fade_out_and_pause(self, generation: int):
+        """Ramp the volume down to 0 over SLEEP_TIMER_FADE_SECONDS, pause,
+        then restore the original volume so the next resume isn't silent.
+        Aborts (without touching volume) if the timer was cancelled/reset
+        mid-fade, i.e. a newer generation has since started."""
+        original_volume = self.get_volume()
+        steps = 20
+        step_duration = SLEEP_TIMER_FADE_SECONDS / steps
+
+        for i in range(steps, -1, -1):
+            if generation != self._sleep_timer_generation:
+                return
+            self.set_volume(original_volume * i / steps)
+            time.sleep(step_duration)
+
+        if generation != self._sleep_timer_generation:
+            return
+
+        self.pause()
+        self.set_volume(original_volume)
+        logger.info("Sleep timer elapsed - playback paused")
 
     def set_volume(self, volume: float) -> bool:
         """Set playback volume (0-100)"""

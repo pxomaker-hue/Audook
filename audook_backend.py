@@ -726,6 +726,23 @@ def set_player_normalization():
         logger.error(f"Failed to set normalization: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/player/sleep-timer', methods=['POST'])
+def set_player_sleep_timer():
+    """Set (or cancel, with minutes null/0) the sleep timer. Fades the
+    volume out and pauses playback once it elapses - see
+    PlayerService.set_sleep_timer."""
+    try:
+        data = request.json or {}
+        minutes = data.get('minutes')
+        player_service.set_sleep_timer(minutes)
+        return jsonify({
+            'status': 'ok',
+            'sleep_timer_remaining_seconds': player_service.get_sleep_timer_remaining_seconds()
+        })
+    except Exception as e:
+        logger.error(f"Failed to set sleep timer: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # Equalizer preset management (fine-tuning lives in Settings)
 @app.route('/api/equalizer/presets', methods=['GET'])
 def get_equalizer_presets():
@@ -841,6 +858,7 @@ def get_player_state():
             'speed': player_service.get_speed(),
             'equalizer_preset_id': player_service.equalizer_preset_id,
             'normalization_enabled': player_service.normalization_enabled,
+            'sleep_timer_remaining_seconds': player_service.get_sleep_timer_remaining_seconds(),
             'currentChapterIndex': chapter_index,
             'currentChapterTitle': chapter_title,
             'currentBook': {
