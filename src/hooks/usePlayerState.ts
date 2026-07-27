@@ -26,6 +26,14 @@ export interface PlayerState {
   loudnessNormalizationEnabled: boolean;
   compressionPreset: string | null;
   sleepTimerRemainingSeconds: number | null;
+  isCasting: boolean;
+  castDeviceName: string | null;
+}
+
+export interface CastDevice {
+  name: string;
+  model: string;
+  uuid: string;
 }
 
 export interface EqualizerPreset {
@@ -59,12 +67,17 @@ export function usePlayerState() {
     equalizerPresetId: null,
     loudnessNormalizationEnabled: false,
     compressionPreset: null,
-    sleepTimerRemainingSeconds: null
+    sleepTimerRemainingSeconds: null,
+    isCasting: false,
+    castDeviceName: null
   });
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
   const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
   const [sleepTimerStepIndex, setSleepTimerStepIndex] = useState(0);
+  const [castDevices, setCastDevices] = useState<CastDevice[]>([]);
+  const [castScanning, setCastScanning] = useState(false);
+  const [castConnecting, setCastConnecting] = useState<string | null>(null);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchState = async () => {
@@ -79,7 +92,9 @@ export function usePlayerState() {
         equalizerPresetId: response.data.equalizer_preset_id ?? null,
         loudnessNormalizationEnabled: response.data.loudness_normalization_enabled ?? false,
         compressionPreset: response.data.compression_preset ?? null,
-        sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null
+        sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null,
+        isCasting: response.data.is_casting ?? false,
+        castDeviceName: response.data.cast_device_name ?? null
       }));
     } catch (error) {
       console.error('Failed to get player state:', error);
@@ -263,6 +278,39 @@ export function usePlayerState() {
     }
   };
 
+  const handleScanCastDevices = async () => {
+    try {
+      setCastScanning(true);
+      const response = await axios.get(`${API_BASE}/cast/devices`);
+      setCastDevices(response.data);
+    } catch (error) {
+      console.error('Failed to scan for cast devices:', error);
+    } finally {
+      setCastScanning(false);
+    }
+  };
+
+  const handleConnectCastDevice = async (deviceName: string) => {
+    try {
+      setCastConnecting(deviceName);
+      await axios.post(`${API_BASE}/cast/connect`, { device_name: deviceName });
+      await fetchState();
+    } catch (error) {
+      console.error('Failed to connect to cast device:', error);
+    } finally {
+      setCastConnecting(null);
+    }
+  };
+
+  const handleDisconnectCastDevice = async () => {
+    try {
+      await axios.post(`${API_BASE}/cast/disconnect`);
+      await fetchState();
+    } catch (error) {
+      console.error('Failed to disconnect cast device:', error);
+    }
+  };
+
   return {
     state,
     addingBookmark,
@@ -280,6 +328,12 @@ export function usePlayerState() {
     handleToggleLoudnessNormalization,
     handleCycleCompression,
     handleCycleSleepTimer,
+    castDevices,
+    castScanning,
+    castConnecting,
+    handleScanCastDevices,
+    handleConnectCastDevice,
+    handleDisconnectCastDevice,
     SEEK_STEP_SECONDS
   };
 }

@@ -4,8 +4,9 @@ Player service - manages playback and progress
 
 import threading
 import time
-from typing import Optional, Callable
-from app.player import player, progress_manager
+from typing import Optional, Callable, List, Dict
+from app.player import active_output as player, progress_manager
+from app.cast.cast_player import cast_player, discover_devices as discover_cast_devices
 from app.models import Audiobook
 from app.utils import logger
 from app.sync import progress_sync
@@ -577,6 +578,54 @@ class PlayerService:
             self.next_chapter()
         except Exception as e:
             logger.error(f"Failed to auto-advance after chapter end: {e}")
+
+    # --- Casting (Chromecast/Google Home) ---
+
+    def list_cast_devices(self) -> List[Dict[str, str]]:
+        """Scan the local network for Chromecast/Google Home devices."""
+        return discover_cast_devices()
+
+    def is_casting(self) -> bool:
+        return player.is_casting()
+
+    def get_cast_device_name(self) -> Optional[str]:
+        return cast_player.device_name if player.is_casting() else None
+
+    def _switch_output(self, mode: str) -> bool:
+        """Shared by connect/disconnect: carries over whatever's currently
+        loaded/playing to the newly active output, so switching mid-book
+        continues from the same spot instead of restarting from zero."""
+        was_playing = player.is_playing()
+        position = player.get_position()
+        audiobook = self.current_audiobook
+        chapter_index = self.current_chapter_index
+
+        player.set_active(mode)
+
+        if audiobook and audiobook.chapters and 0 <= chapter_index < len(audiobook.chapters):
+            chapter = audiobook.chapters[chapter_index]
+            cleaned_path = self._get_cleaned_chapter_path(audiobook.id, chapter_index)
+            if cleaned_path:
+                chapter = {**chapter, "audio_file": cleaned_path}
+            if player.play(audiobook, chapter, position) and not was_playing:
+                player.pause()
+        return True
+
+    def connect_cast_device(self, device_name: str) -> bool:
+        """Connect to a Chromecast/Google Home device and switch output to
+        it, carrying over the current book/position if one is loaded."""
+        if not cast_player.connect(device_name):
+            return False
+        return self._switch_output("cast")
+
+    def disconnect_cast_device(self) -> bool:
+        """Stop casting and switch back to local playback, carrying over
+        the current book/position if one is loaded."""
+        if not player.is_casting():
+            return False
+        result = self._switch_output("local")
+        cast_player.disconnect()
+        return result
 
 
 # Global instance

@@ -1175,6 +1175,8 @@ def get_player_state():
             'loudness_normalization_enabled': player_service.loudness_normalization_enabled,
             'compression_preset': player_service.compression_preset,
             'sleep_timer_remaining_seconds': player_service.get_sleep_timer_remaining_seconds(),
+            'is_casting': player_service.is_casting(),
+            'cast_device_name': player_service.get_cast_device_name(),
             'currentChapterIndex': chapter_index,
             'currentChapterTitle': chapter_title,
             'currentBook': {
@@ -1189,6 +1191,62 @@ def get_player_state():
         return jsonify(state)
     except Exception as e:
         logger.error(f"Failed to get player state: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cast/devices', methods=['GET'])
+def get_cast_devices():
+    """Scan the local network for Chromecast/Google Home devices. Blocking
+    for a few seconds - meant to be called from an explicit "scan" action."""
+    try:
+        devices = player_service.list_cast_devices()
+        return jsonify(devices)
+    except Exception as e:
+        logger.error(f"Failed to discover cast devices: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cast/connect', methods=['POST'])
+def connect_cast_device():
+    try:
+        data = request.json or {}
+        device_name = data.get('device_name')
+        if not device_name:
+            return jsonify({'error': 'device_name requis'}), 400
+
+        if not player_service.connect_cast_device(device_name):
+            return jsonify({'error': 'Connexion au Chromecast échouée'}), 500
+
+        return jsonify({'status': 'connected', 'device_name': device_name})
+    except Exception as e:
+        logger.error(f"Failed to connect cast device: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cast/disconnect', methods=['POST'])
+def disconnect_cast_device():
+    try:
+        player_service.disconnect_cast_device()
+        return jsonify({'status': 'disconnected'})
+    except Exception as e:
+        logger.error(f"Failed to disconnect cast device: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cast/local-audio', methods=['GET'])
+def stream_local_audio_for_cast():
+    """Streams a local audio file over HTTP (with Range support) so a
+    Chromecast - a separate device on the LAN with no notion of a Windows
+    filesystem path - can fetch it. Only used internally by CastPlayer, which
+    always resolves this URL itself from a chapter's real audio_file; the
+    existence + extension check below still guards against being pointed at
+    something outside the audio library."""
+    try:
+        path = request.args.get('path', '')
+        AUDIO_EXTENSIONS = {'.mp3', '.m4b', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
+        file_path = Path(path)
+        if not path or file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
+            return jsonify({'error': 'Fichier audio introuvable'}), 404
+
+        return send_file(str(file_path), conditional=True)
+    except Exception as e:
+        logger.error(f"Failed to stream local audio for cast: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Sync endpoints

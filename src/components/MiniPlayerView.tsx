@@ -25,6 +25,12 @@ const MiniPlayerView: React.FC = () => {
     handleToggleLoudnessNormalization,
     handleCycleCompression,
     handleCycleSleepTimer,
+    castDevices,
+    castScanning,
+    castConnecting,
+    handleScanCastDevices,
+    handleConnectCastDevice,
+    handleDisconnectCastDevice,
     SEEK_STEP_SECONDS
   } = usePlayerState();
 
@@ -119,6 +125,14 @@ const MiniPlayerView: React.FC = () => {
               onVolumeChange={handleVolumeChange}
               sleepTimerRemainingSeconds={state.sleepTimerRemainingSeconds}
               onCycleSleepTimer={handleCycleSleepTimer}
+              isCasting={state.isCasting}
+              castDeviceName={state.castDeviceName}
+              castDevices={castDevices}
+              castScanning={castScanning}
+              castConnecting={castConnecting}
+              onScanCast={handleScanCastDevices}
+              onConnectCast={handleConnectCastDevice}
+              onDisconnectCast={handleDisconnectCastDevice}
               buttonSize={14}
             />
           </div>

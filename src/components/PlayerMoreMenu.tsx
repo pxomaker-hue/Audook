@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreHorizontal, Gauge, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon, AudioLines, Activity } from 'lucide-react';
-import { EqualizerPreset } from '../hooks/usePlayerState';
+import { MoreHorizontal, Gauge, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon, AudioLines, Activity, Cast, RefreshCw, Loader2, X } from 'lucide-react';
+import { EqualizerPreset, CastDevice } from '../hooks/usePlayerState';
 
 interface PlayerMoreMenuProps {
   speed: number;
@@ -14,8 +14,22 @@ interface PlayerMoreMenuProps {
   onCycleCompression: () => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  // The classic/compact Player already has a standalone volume button next
+  // to this menu, so its volume row here would be a redundant duplicate -
+  // the mini-player has no such standalone button, so it needs this row.
+  // Defaults to shown (mini-player's case) so existing callers don't need
+  // updating.
+  showVolume?: boolean;
   sleepTimerRemainingSeconds: number | null;
   onCycleSleepTimer: () => void;
+  isCasting: boolean;
+  castDeviceName: string | null;
+  castDevices: CastDevice[];
+  castScanning: boolean;
+  castConnecting: string | null;
+  onScanCast: () => void;
+  onConnectCast: (deviceName: string) => void;
+  onDisconnectCast: () => void;
   buttonSize?: number;
 }
 
@@ -43,8 +57,17 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
   onCycleCompression,
   volume,
   onVolumeChange,
+  showVolume = true,
   sleepTimerRemainingSeconds,
   onCycleSleepTimer,
+  isCasting,
+  castDeviceName,
+  castDevices,
+  castScanning,
+  castConnecting,
+  onScanCast,
+  onConnectCast,
+  onDisconnectCast,
   buttonSize = 16
 }) => {
   const [open, setOpen] = useState(false);
@@ -121,20 +144,22 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
               <SlidersHorizontal size={16} />
             </button>
           </div>
-          <div className="more-menu-row">
-            <div className="more-menu-volume-slider">
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => onVolumeChange(parseInt(e.target.value))}
-              />
+          {showVolume && (
+            <div className="more-menu-row">
+              <div className="more-menu-volume-slider">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => onVolumeChange(parseInt(e.target.value))}
+                />
+              </div>
+              <button className="player-button more-menu-icon" title="Volume">
+                <VolumeIcon volume={volume} />
+              </button>
             </div>
-            <button className="player-button more-menu-icon" title="Volume">
-              <VolumeIcon volume={volume} />
-            </button>
-          </div>
+          )}
           <div className="more-menu-row">
             <span className="more-menu-label">
               Minuteur de veille <b>{sleepTimerLabel}</b>
@@ -147,6 +172,47 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
               <Moon size={16} />
             </button>
           </div>
+          {isCasting ? (
+            <div className="more-menu-row">
+              <span className="more-menu-label">
+                Diffusion sur <b>{castDeviceName}</b>
+              </span>
+              <button
+                className="player-button more-menu-icon"
+                onClick={onDisconnectCast}
+                title="Arrêter la diffusion (revenir à la lecture locale)"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="more-menu-row">
+                <span className="more-menu-label">Google Home / Chromecast</span>
+                <button
+                  className="player-button more-menu-icon"
+                  onClick={onScanCast}
+                  disabled={castScanning}
+                  title="Rechercher les appareils sur le réseau"
+                >
+                  {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                </button>
+              </div>
+              {castDevices.map(device => (
+                <div className="more-menu-row" key={device.uuid}>
+                  <span className="more-menu-label">{device.name}</span>
+                  <button
+                    className="player-button more-menu-icon"
+                    onClick={() => onConnectCast(device.name)}
+                    disabled={castConnecting === device.name}
+                    title={`Diffuser sur ${device.name}`}
+                  >
+                    {castConnecting === device.name ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
       <button className="player-button" onClick={() => setOpen(!open)} title="Plus d'options audio">

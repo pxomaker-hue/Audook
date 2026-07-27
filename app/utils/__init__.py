@@ -5,6 +5,7 @@ Utility functions for Audook
 import json
 import hashlib
 import os
+import socket
 from pathlib import Path
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
@@ -26,6 +27,23 @@ def get_ffmpeg_path() -> str:
     Falls back to plain 'ffmpeg' (PATH lookup) when running the backend
     standalone (e.g. `python audook_backend.py` outside Electron)."""
     return os.environ.get('AUDOOK_FFMPEG_PATH') or 'ffmpeg'
+
+
+def get_lan_ip() -> str:
+    """This machine's IP on the local network, e.g. "192.168.1.42" - needed
+    to build media URLs a Chromecast (a separate device on the LAN) can
+    actually reach; "127.0.0.1"/"localhost" only resolve to this same
+    machine. Opens no real connection - UDP "connect" just asks the OS
+    which local interface would be used to reach that address, which is
+    enough to read off the outbound IP without any packets being sent."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        sock.close()
 
 
 def format_duration(seconds: float) -> str:
