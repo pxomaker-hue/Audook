@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2, Bookmark, Loader2, Check } from 'lucide-react';
 import { usePlayerState, formatTime } from '../hooks/usePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
+import { resolveCoverUrl } from '../config';
 
 // Rendered in the detached mini-player Electron window (see electron/main.js
 // createMiniWindow, loaded at the '#/mini' hash route). Deliberately shows
@@ -55,7 +56,7 @@ const MiniPlayerView: React.FC = () => {
           <div className="mini-player-body">
             <div className="mini-player-cover-wrap">
               {state.currentBook.cover_url ? (
-                <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+                <img src={resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)} alt={state.currentBook.title} />
               ) : (
                 <span>📚</span>
               )}

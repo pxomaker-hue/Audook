@@ -8,7 +8,8 @@ import sys
 import re
 from pathlib import Path
 import asyncio
-from flask import Flask, jsonify, request, send_file
+import requests
+from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
 
 # Add project root to path
@@ -1316,6 +1317,29 @@ def sync_status():
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/api/books/<book_id>/cover-proxy', methods=['GET'])
+def get_cover_proxy(book_id):
+    """Streams a Plex/Audiobookshelf cover through this backend instead of
+    the client loading book.cover_url (a direct http:// URL with an
+    embedded auth token) itself - the mobile WebView blocks that as mixed
+    content even with allowMixedContent set, and this also avoids leaking
+    the source server's token to the client."""
+    try:
+        session = get_session()
+        book = BookRepository(session).get_by_id(book_id)
+        if not book or not book.cover_url:
+            return jsonify({'error': 'Cover not found'}), 404
+        upstream = requests.get(book.cover_url, timeout=10, stream=True)
+        if upstream.status_code != 200:
+            return jsonify({'error': 'Cover not found'}), 404
+        return Response(
+            upstream.content,
+            content_type=upstream.headers.get('Content-Type', 'image/jpeg')
+        )
+    except Exception as e:
+        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/local-cover/<book_id>', methods=['GET'])
 def get_local_cover(book_id):

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
-import { getApiBase } from '../config';
+import { getApiBase, resolveCoverUrl } from '../config';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
@@ -267,7 +267,7 @@ const AuthorPage: React.FC = () => {
             <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
               <div className="book-card-cover">
                 {book.cover_url ? (
-                  <img src={book.cover_url} alt={book.title} />
+                  <img src={resolveCoverUrl(book.id, book.cover_url)} alt={book.title} />
                 ) : (
                   <span>📚</span>
                 )}

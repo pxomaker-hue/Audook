@@ -7,6 +7,7 @@ import PlayerMoreMenu from './PlayerMoreMenu';
 import VolumeControl from './VolumeControl';
 
 import { isCapacitorPlatform } from '../native/platform';
+import { resolveCoverUrl } from '../config';
 
 // Mirrors the window.electron?.miniPlayer capability-check pattern used
 // elsewhere in this file.
@@ -139,12 +140,12 @@ const Player: React.FC = () => {
           {state.currentBook.cover_url && (
             <div
               className="player-cover-glow"
-              style={{ backgroundImage: `url(${state.currentBook.cover_url})` }}
+              style={{ backgroundImage: `url(${resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)})` }}
             />
           )}
           <div className="player-cover">
             {state.currentBook.cover_url ? (
-              <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+              <img src={resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)} alt={state.currentBook.title} />
             ) : (
               <span>📚</span>
             )}
@@ -215,7 +216,7 @@ const Player: React.FC = () => {
       <div className="player-compact-view">
         <div className="player-cover-wrap">
           {state.currentBook.cover_url ? (
-            <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+            <img src={resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)} alt={state.currentBook.title} />
           ) : (
             <span>📚</span>
           )}

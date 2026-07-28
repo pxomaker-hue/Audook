@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, ArrowLeft, Search, Pencil, Lock, Unlock, Bookmark, Trash2, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import axios from 'axios';
-import { getApiBase } from '../config';
+import { getApiBase, resolveCoverUrl } from '../config';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
@@ -461,7 +461,7 @@ const BookDetailPage: React.FC = () => {
         >
           {book.cover_url ? (
             <img
-              src={book.cover_url}
+              src={resolveCoverUrl(book.id, book.cover_url)}
               alt={book.title}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
