@@ -15,7 +15,7 @@ from flask_cors import CORS
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository, CollectionRepository
+from app.database import init_database, get_session, remove_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository, CollectionRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.sync import progress_sync
@@ -37,6 +37,14 @@ sync_service = None
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok'}), 200
+
+@app.teardown_appcontext
+def cleanup_db_session(exception=None):
+    # Almost none of the routes below call session.close() themselves - this
+    # returns the connection to the pool at the end of every request instead
+    # of leaking it, which otherwise exhausts SQLAlchemy's default pool
+    # (size 5 + 10 overflow) within seconds under mobile's frequent polling.
+    remove_session()
 
 @app.before_request
 def init_services():
@@ -1344,12 +1352,20 @@ def get_cover_proxy(book_id):
     embedded auth token) itself - the mobile WebView blocks that as mixed
     content even with allowMixedContent set, and this also avoids leaking
     the source server's token to the client."""
+    session = get_session()
     try:
-        session = get_session()
         book = BookRepository(session).get_by_id(book_id)
         if not book or not book.cover_url:
             return jsonify({'error': 'Cover not found'}), 404
-        upstream = requests.get(book.cover_url, timeout=10, stream=True)
+        cover_url = book.cover_url
+    except Exception as e:
+        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+    try:
+        upstream = requests.get(cover_url, timeout=10, stream=True)
         if upstream.status_code != 200:
             return jsonify({'error': 'Cover not found'}), 404
         return Response(

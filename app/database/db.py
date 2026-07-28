@@ -4,7 +4,7 @@ Database connection and session management
 
 from pathlib import Path
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from contextlib import contextmanager
 import logging
 
@@ -40,7 +40,16 @@ class Database:
             echo=False  # Set to True for SQL debugging
         )
 
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        # scoped_session so every get_session() call within the same request
+        # thread returns the same Session instead of leaking a fresh
+        # connection each time - most callers throughout this codebase never
+        # call .close(), which otherwise exhausts the pool (default size 5 +
+        # 10 overflow) within a few dozen requests under mobile's frequent
+        # polling. remove_session() below returns it to the pool at request
+        # teardown (see audook_backend.py's teardown_appcontext).
+        self.SessionLocal = scoped_session(
+            sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        )
 
     def init_db(self):
         """Create all tables"""
@@ -126,3 +135,10 @@ def get_db() -> Database:
 def get_session() -> Session:
     """Get a new database session from global instance"""
     return get_db().get_session()
+
+
+def remove_session():
+    """Return the current thread's scoped session to the pool. Call this in
+    a Flask teardown_appcontext handler - see audook_backend.py."""
+    if _db is not None:
+        _db.SessionLocal.remove()
