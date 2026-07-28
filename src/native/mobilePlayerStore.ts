@@ -85,10 +85,17 @@ async function playChapter(book: any, chapterIndex: number, positionSeconds = 0)
   const url = `${getApiBase()}/cast/local-audio?path=${encodeURIComponent(chapter.audio_file)}`;
   setState({ currentBook: book, currentChapterIndex: chapterIndex, position: positionSeconds, duration: chapter.duration || 0 });
 
-  await AudookPlayer.play({ url, title: chapter.title || book.title, cover: book.cover_url || undefined });
-  if (positionSeconds > 0) {
-    await AudookPlayer.seek({ ms: positionSeconds * 1000 });
-  }
+  // The resume position goes straight into play() (native side passes it to
+  // ExoPlayer's setMediaItem) rather than a separate seek() call right
+  // after - a seek issued that early could arrive before the player
+  // finished loading the item and get silently dropped once it became
+  // ready, which is why resuming a book on mobile always restarted from 0.
+  await AudookPlayer.play({
+    url,
+    title: chapter.title || book.title,
+    cover: book.cover_url || undefined,
+    positionMs: positionSeconds > 0 ? positionSeconds * 1000 : undefined
+  });
   startProgressPushLoop();
 }
 

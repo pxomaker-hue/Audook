@@ -1,7 +1,7 @@
 import { registerPlugin } from '@capacitor/core';
 
 export interface AudookPlayerPlugin {
-  play(options: { url: string; title: string; cover?: string }): Promise<void>;
+  play(options: { url: string; title: string; cover?: string; positionMs?: number }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   seek(options: { ms: number }): Promise<void>;

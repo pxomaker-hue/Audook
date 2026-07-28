@@ -87,6 +87,7 @@ class AudookPlayerPlugin : Plugin() {
         val url = call.getString("url")
         val title = call.getString("title") ?: ""
         val cover = call.getString("cover")
+        val startPositionMs = call.getLong("positionMs") ?: 0L
 
         if (url == null) {
             call.reject("url is required")
@@ -113,8 +114,14 @@ class AudookPlayerPlugin : Plugin() {
         // (the main thread here, via positionHandler) - Capacitor plugin
         // methods run on their own "CapacitorPlugins" handler thread, which
         // crashed the app with IllegalStateException before this dispatch.
+        //
+        // The resume position is passed to setMediaItem() itself rather than
+        // a separate seekTo() call afterward - a seek issued right after
+        // prepare() can arrive before the player has finished loading the
+        // item and get silently dropped/reset once it becomes ready, which
+        // is why resuming a book on mobile always restarted from 0.
         positionHandler.post {
-            c.setMediaItem(mediaItem)
+            c.setMediaItem(mediaItem, startPositionMs)
             c.prepare()
             c.play()
         }
