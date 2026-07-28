@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, X, Pencil, Trash2, Loader2, FolderOpen } from 'lucide-react';
 import axios from 'axios';
-import { getApiBase, resolveCoverUrl } from '../config';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
 
 interface Book {
   id: string;
@@ -370,7 +371,7 @@ const CollectionsPage: React.FC = () => {
               {selectedBooks.map(book => (
                 <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
                   <div className="book-card-cover">
-                    {book.cover_url ? <img src={resolveCoverUrl(book.id, book.cover_url)} alt={book.title} /> : <span>📚</span>}
+                    {book.cover_url ? <CoverImage bookId={book.id} coverUrl={book.cover_url} alt={book.title} /> : <span>📚</span>}
                     <span className="book-card-badge">{formatDuration(book.duration)}</span>
                     <button
                       onClick={(e) => handleRemoveBook(e, book.id)}

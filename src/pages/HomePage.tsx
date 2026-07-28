@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { getApiBase, resolveCoverUrl } from '../config';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
@@ -363,7 +364,7 @@ const HomePage: React.FC = () => {
     <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
       <div className="book-card-cover">
         {book.cover_url ? (
-          <img src={resolveCoverUrl(book.id, book.cover_url)} alt={book.title} />
+          <CoverImage bookId={book.id} coverUrl={book.cover_url} alt={book.title} />
         ) : (
           <span>📚</span>
         )}

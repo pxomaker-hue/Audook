@@ -1279,17 +1279,36 @@ def disconnect_cast_device():
 
 @app.route('/api/cast/local-audio', methods=['GET'])
 def stream_local_audio_for_cast():
-    """Streams a local audio file over HTTP (with Range support) so a
-    Chromecast - a separate device on the LAN with no notion of a Windows
-    filesystem path - can fetch it. Only used internally by CastPlayer, which
-    always resolves this URL itself from a chapter's real audio_file; the
-    existence + extension check below still guards against being pointed at
-    something outside the audio library."""
+    """Streams an audio chapter over HTTP (with Range support) so a
+    Chromecast, or the mobile app's native ExoPlayer, can fetch it without
+    needing filesystem access or a source server's own auth token. Used
+    internally by both CastPlayer (desktop) and mobilePlayerStore.ts
+    (mobile), which always resolve this URL themselves from a chapter's
+    real audio_file - that's a local filesystem path for local-folder
+    books, or a remote Plex/Audiobookshelf streaming URL otherwise."""
     try:
         path = request.args.get('path', '')
+        if not path:
+            return jsonify({'error': 'Fichier audio introuvable'}), 404
+
+        if path.startswith('http://') or path.startswith('https://'):
+            headers = {}
+            if 'Range' in request.headers:
+                headers['Range'] = request.headers['Range']
+            upstream = requests.get(path, headers=headers, stream=True, timeout=15)
+            excluded = {'content-encoding', 'transfer-encoding', 'connection'}
+            response_headers = [
+                (k, v) for k, v in upstream.headers.items() if k.lower() not in excluded
+            ]
+            return Response(
+                upstream.iter_content(chunk_size=8192),
+                status=upstream.status_code,
+                headers=response_headers
+            )
+
         AUDIO_EXTENSIONS = {'.mp3', '.m4b', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
         file_path = Path(path)
-        if not path or file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
+        if file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
             return jsonify({'error': 'Fichier audio introuvable'}), 404
 
         return send_file(str(file_path), conditional=True)

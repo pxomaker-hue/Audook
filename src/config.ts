@@ -1,7 +1,5 @@
 // Configuration centralisée pour l'application
 
-import { isCapacitorPlatform } from './native/platform';
-
 const STORAGE_KEY = 'audook_api_base';
 const DEFAULT_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
 
@@ -29,21 +27,6 @@ export function setApiBase(url: string): void {
   } catch {
     // ignorer si localStorage indisponible
   }
-}
-
-// On mobile, the WebView blocks <img src="http://..."> to the user's
-// Plex/Audiobookshelf server as mixed content (confirmed on-device: it
-// still happens even with Capacitor's android.allowMixedContent enabled,
-// unlike plain fetch()/XHR calls to our own backend). Route those through
-// our backend's /cover-proxy instead - already-local URLs (our own
-// /api/local-cover/...) are left alone since they don't need it.
-export function resolveCoverUrl(bookId: string, coverUrl: string | null | undefined): string | undefined {
-  if (!coverUrl || !isCapacitorPlatform) return coverUrl ?? undefined;
-  const ownOrigin = getApiBase().replace(/\/api\/?$/, '');
-  if (coverUrl.startsWith('http://') && !coverUrl.startsWith(ownOrigin)) {
-    return `${getApiBase()}/books/${bookId}/cover-proxy`;
-  }
-  return coverUrl;
 }
 
 export function resetApiBase(): void {

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import axios from 'axios';
-import { getApiBase, resolveCoverUrl } from '../config';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
 
 interface HistoryEntry {
   session_id: number;
@@ -156,7 +157,7 @@ const HistoryPage: React.FC = () => {
                 }}
               >
                 {entry.cover_url ? (
-                  <img src={resolveCoverUrl(entry.book_id, entry.cover_url)} alt={entry.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <CoverImage bookId={entry.book_id} coverUrl={entry.cover_url} alt={entry.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   '📚'
                 )}

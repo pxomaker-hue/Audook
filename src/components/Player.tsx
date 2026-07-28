@@ -7,7 +7,7 @@ import PlayerMoreMenu from './PlayerMoreMenu';
 import VolumeControl from './VolumeControl';
 
 import { isCapacitorPlatform } from '../native/platform';
-import { resolveCoverUrl } from '../config';
+import { useCoverBlobUrl } from '../hooks/useCoverBlobUrl';
 
 // Mirrors the window.electron?.miniPlayer capability-check pattern used
 // elsewhere in this file.
@@ -46,6 +46,8 @@ const Player: React.FC = () => {
     handleDisconnectCastDevice,
     SEEK_STEP_SECONDS
   } = usePlayerState();
+
+  const coverSrc = useCoverBlobUrl(state.currentBook?.id ?? '', state.currentBook?.cover_url);
 
   if (!state.currentBook) {
     return (
@@ -137,15 +139,15 @@ const Player: React.FC = () => {
         <div className="player-title-bar">{state.currentBook.title}</div>
 
         <div className="player-cover-wrap">
-          {state.currentBook.cover_url && (
+          {coverSrc && (
             <div
               className="player-cover-glow"
-              style={{ backgroundImage: `url(${resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)})` }}
+              style={{ backgroundImage: `url(${coverSrc})` }}
             />
           )}
           <div className="player-cover">
-            {state.currentBook.cover_url ? (
-              <img src={resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)} alt={state.currentBook.title} />
+            {coverSrc ? (
+              <img src={coverSrc} alt={state.currentBook.title} />
             ) : (
               <span>📚</span>
             )}
@@ -215,8 +217,8 @@ const Player: React.FC = () => {
       {/* Compact horizontal bar - visible below the compact breakpoint. */}
       <div className="player-compact-view">
         <div className="player-cover-wrap">
-          {state.currentBook.cover_url ? (
-            <img src={resolveCoverUrl(state.currentBook.id, state.currentBook.cover_url)} alt={state.currentBook.title} />
+          {coverSrc ? (
+            <img src={coverSrc} alt={state.currentBook.title} />
           ) : (
             <span>📚</span>
           )}
