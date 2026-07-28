@@ -3,6 +3,7 @@
 Audook Backend - Exposes services via HTTP API for Electron frontend
 """
 
+import os
 import sys
 import re
 from pathlib import Path
@@ -1352,4 +1353,5 @@ if __name__ == '__main__':
     EqualizerPresetRepository(seed_session).ensure_builtins()
     seed_session.close()
 
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    host = '0.0.0.0' if os.environ.get('AUDOOK_HEADLESS') == '1' else '127.0.0.1'
+    app.run(host=host, port=5000, debug=False)
