@@ -448,8 +448,9 @@ const BookDetailPage: React.FC = () => {
         <ArrowLeft size={20} /> Retour
       </button>
 
-      <div style={{ display: 'flex', gap: '30px', marginBottom: '30px' }}>
+      <div className="book-hero" style={{ display: 'flex', gap: '30px', marginBottom: '30px', flexWrap: 'wrap' }}>
         <div
+          className="book-hero-cover"
           style={{
             width: '200px',
             height: '300px',
@@ -474,7 +475,7 @@ const BookDetailPage: React.FC = () => {
           )}
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: '260px' }}>
           <h1 className="page-title" style={{ marginBottom: '10px' }}>
             {book.title}
           </h1>

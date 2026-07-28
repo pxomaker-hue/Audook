@@ -202,14 +202,14 @@ const CollectionsPage: React.FC = () => {
         <p className="page-subtitle">Créez et organisez vos propres regroupements de livres</p>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
         <input
           type="text"
           value={newCollectionName}
           onChange={(e) => setNewCollectionName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleCreateCollection()}
           placeholder="Nom de la nouvelle collection..."
-          style={{ ...inputStyle, width: '320px' }}
+          style={{ ...inputStyle, width: '320px', maxWidth: '100%', flex: '1 1 220px' }}
         />
         <button
           style={{ ...smallButtonStyle, opacity: creating || !newCollectionName.trim() ? 0.6 : 1 }}
