@@ -198,8 +198,14 @@ class ServerScanner:
         new client (and re-logs in) per call - fired once per book, that
         hammered Audiobookshelf's /login endpoint hard enough to get rate
         limited (HTTP 429) partway through a ~60-book library."""
+        # get_or_create() (called e.g. every time the book detail page is
+        # opened, via GET /api/books/<id>) silently creates a blank
+        # ReadingProgress row with everything at zero - that's not the same
+        # thing as "the user has real local progress" and must not block
+        # seeding, or the real remote progress could never be pulled in for
+        # any book that had merely been viewed once.
         existing = session.query(ReadingProgress).filter_by(book_id=book_id).first()
-        if existing:
+        if existing and (existing.progress_percent > 0 or existing.position_seconds > 0 or existing.is_finished):
             return
         book = BookRepository(session).get_by_id(book_id)
         if not book:
