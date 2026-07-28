@@ -380,6 +380,51 @@ def set_book_finished(book_id):
         logger.error(f"Failed to set finished status: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/books/<book_id>/progress', methods=['POST'])
+def update_book_progress(book_id):
+    """Stateless progress update for clients that play audio outside the
+    PlayerService singleton (mobile). Persists locally and best-effort
+    pushes to the book's source server (Plex/Audiobookshelf), same as the
+    desktop player does via PlayerService."""
+    try:
+        data = request.json or {}
+        if 'chapter_index' not in data or 'position_seconds' not in data:
+            return jsonify({'error': 'chapter_index and position_seconds are required'}), 400
+
+        chapter_index = int(data['chapter_index'])
+        position_seconds = float(data['position_seconds'])
+
+        session = get_session()
+        book = BookRepository(session).get_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        cumulative = 0.0
+        for i, chapter in enumerate(book.chapters or []):
+            if i < chapter_index:
+                cumulative += chapter.get('duration', 0) or 0
+            elif i == chapter_index:
+                cumulative += position_seconds
+                break
+        percent = (cumulative / book.duration * 100) if book.duration else 0.0
+        percent = max(0.0, min(100.0, percent))
+        finished = percent >= 99.0
+
+        progress_repo = ReadingProgressRepository(session)
+        progress_repo.update_progress(book_id, chapter_index, position_seconds, percent)
+        if finished:
+            progress_repo.set_finished(book_id, True)
+
+        try:
+            progress_sync.push_progress(book_id, chapter_index, position_seconds, finished)
+        except Exception as e:
+            logger.warning(f"Failed to push progress to remote server: {e}")
+
+        return jsonify({'status': 'ok', 'percentage': percent, 'is_finished': finished})
+    except Exception as e:
+        logger.error(f"Failed to update book progress: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/books/<book_id>/clean-audio', methods=['POST'])
 def clean_book_audio(book_id):
     """Kick off a one-time, opt-in noise-reduction pass over this book's
