@@ -115,9 +115,13 @@ const HomePage: React.FC = () => {
         axios.get(`${getApiBase()}/servers`),
         axios.get(`${getApiBase()}/collections`)
       ]);
-      setBooks(booksRes.data);
-      setServers(serversRes.data);
-      setCollections(collectionsRes.data);
+      // The NAS backend has been observed returning its JSON body as a
+      // plain string instead of a parsed array in some WebView/network
+      // configurations - guard against that instead of crashing every
+      // .map()/.filter() downstream.
+      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
+      setServers(Array.isArray(serversRes.data) ? serversRes.data : []);
+      setCollections(Array.isArray(collectionsRes.data) ? collectionsRes.data : []);
     } catch (error) {
       console.error('Failed to fetch library:', error);
     }
@@ -129,7 +133,7 @@ const HomePage: React.FC = () => {
   const refreshBooksQuietly = async () => {
     try {
       const booksRes = await axios.get(`${getApiBase()}/books`);
-      setBooks(booksRes.data);
+      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
     } catch (error) {
       console.error('Failed to refresh library:', error);
     }

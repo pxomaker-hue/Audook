@@ -8,9 +8,15 @@ const config: CapacitorConfig = {
   // cert for a local LAN IP). Capacitor serves the app itself from a
   // virtual https://localhost origin, so without this the WebView blocks
   // those requests as mixed content regardless of the manifest's
-  // usesCleartextTraffic flag.
+  // usesCleartextTraffic flag. `server.cleartext` (tried first) is a
+  // different setting entirely - this is the one that actually flips
+  // WebSettings.setMixedContentMode to MIXED_CONTENT_ALWAYS_ALLOW
+  // (see @capacitor/android's Bridge.java / CapConfig.java).
   server: {
     cleartext: true
+  },
+  android: {
+    allowMixedContent: true
   }
 };
 
