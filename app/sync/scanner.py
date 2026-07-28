@@ -204,6 +204,8 @@ class ServerScanner:
         book = BookRepository(session).get_by_id(book_id)
         if not book:
             return
+        if (book.extra_metadata or {}).get("progress_dismissed"):
+            return
         try:
             if server.type == "plex":
                 remote = client.pull_progress(book_id, book.chapters or [])

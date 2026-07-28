@@ -907,6 +907,20 @@ def delete_book_progress(book_id):
         deleted = ReadingProgressRepository(session).delete(book_id)
         if not deleted:
             return jsonify({'error': 'Aucune progression pour ce livre'}), 404
+
+        # A future scan would otherwise re-import this book's still-present
+        # progress from its source server (Plex/Audiobookshelf) and put it
+        # right back under "Reprendre l'écoute" - flag it as dismissed so
+        # the scanner leaves it alone (see scanner.py's
+        # _seed_remote_progress_if_new). Real playback progress made after
+        # this doesn't go through the scanner, so it's unaffected.
+        book = BookRepository(session).get_by_id(book_id)
+        if book:
+            extra = dict(book.extra_metadata or {})
+            extra["progress_dismissed"] = True
+            book.extra_metadata = extra
+            session.commit()
+
         return jsonify({'status': 'reset'})
     except Exception as e:
         logger.error(f"Failed to reset book progress: {e}")
