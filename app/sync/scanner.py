@@ -107,7 +107,7 @@ class ServerScanner:
                             extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Plex audiobook: {audiobook['title']}")
-                        self._seed_remote_progress_if_new(session, audiobook["id"])
+                        self._seed_remote_progress_if_new(session, server, client, audiobook["id"])
                     except Exception as e:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
@@ -167,7 +167,7 @@ class ServerScanner:
                             extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Audiobookshelf audiobook: {audiobook['title']}")
-                        self._seed_remote_progress_if_new(session, audiobook["id"])
+                        self._seed_remote_progress_if_new(session, server, client, audiobook["id"])
                     except Exception as e:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
@@ -184,26 +184,47 @@ class ServerScanner:
             logger.error(f"Audiobookshelf scan failed: {e}")
             return False
 
-    def _seed_remote_progress_if_new(self, session, book_id: str):
+    def _seed_remote_progress_if_new(self, session, server: Server, client, book_id: str):
         """A book that already has partial listening progress recorded on
         its source server (e.g. played via the Audiobookshelf app/web player
         before ever being opened in Audook) previously only had that
         progress pulled in on first playback - meaning it never showed up
         under "Reprendre l'écoute" until then. Seed it right away on scan
         instead, but only if there's no local progress yet, so a re-scan
-        never clobbers what the user has done locally since."""
+        never clobbers what the user has done locally since.
+
+        Reuses the scan's own already-authenticated `client` instead of
+        going through progress_sync.pull_progress(), which builds a brand
+        new client (and re-logs in) per call - fired once per book, that
+        hammered Audiobookshelf's /login endpoint hard enough to get rate
+        limited (HTTP 429) partway through a ~60-book library."""
         existing = session.query(ReadingProgress).filter_by(book_id=book_id).first()
         if existing:
             return
+        book = BookRepository(session).get_by_id(book_id)
+        if not book:
+            return
         try:
-            remote = progress_sync.pull_progress(book_id)
+            if server.type == "plex":
+                remote = client.pull_progress(book_id, book.chapters or [])
+            elif server.type == "audiobookshelf":
+                item_id = book_id.replace("abs_", "", 1)
+                raw = client.get_user_progress(item_id)
+                if not raw:
+                    remote = None
+                else:
+                    chapter_index, position = progress_sync._split_cumulative(
+                        book.chapters or [], raw.get("position_seconds", 0.0)
+                    )
+                    remote = {"chapter_index": chapter_index, "position_seconds": position, "finished": raw.get("finished", False)}
+            else:
+                remote = None
         except Exception as e:
             logger.warning(f"Failed to pull remote progress for {book_id}: {e}")
             return
         if not remote:
             return
 
-        book = BookRepository(session).get_by_id(book_id)
         duration = (book.duration if book else 0) or 0
         if duration <= 0:
             return
