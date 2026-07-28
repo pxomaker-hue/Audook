@@ -42,11 +42,11 @@ const App: React.FC = () => {
     let cancelled = false;
 
     const checkBackend = async () => {
+      const apiBase = getApiBase();
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
 
-        const apiBase = getApiBase();
         const response = await fetch(apiBase.replace('/api', '/health'), {
           signal: controller.signal
         });

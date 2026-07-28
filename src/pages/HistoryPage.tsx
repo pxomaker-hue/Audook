@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
 
 interface HistoryEntry {
   session_id: number;
@@ -33,7 +32,7 @@ const HistoryPage: React.FC = () => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/history`);
+      const response = await axios.get(`${getApiBase()}/history`);
       setHistory(response.data);
     } catch (error) {
       console.error('Failed to fetch history:', error);
@@ -50,7 +49,7 @@ const HistoryPage: React.FC = () => {
     e.stopPropagation();
     setHistory(prev => prev.filter(h => h.session_id !== sessionId));
     try {
-      await axios.delete(`${API_BASE}/history/${sessionId}`);
+      await axios.delete(`${getApiBase()}/history/${sessionId}`);
     } catch (error) {
       console.error('Failed to delete history entry:', error);
       fetchHistory();
@@ -61,7 +60,7 @@ const HistoryPage: React.FC = () => {
     if (!window.confirm("Effacer tout l'historique d'écoute ?")) return;
     try {
       setClearing(true);
-      await axios.delete(`${API_BASE}/history`);
+      await axios.delete(`${getApiBase()}/history`);
       setHistory([]);
     } catch (error) {
       console.error('Failed to clear history:', error);

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { getApiBase } from '../config';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 const SORT_STORAGE_KEY = 'audook_library_sort';
 
 interface Book {
@@ -109,9 +109,9 @@ const HomePage: React.FC = () => {
   const fetchAll = async () => {
     try {
       const [booksRes, serversRes, collectionsRes] = await Promise.all([
-        axios.get(`${API_BASE}/books`),
-        axios.get(`${API_BASE}/servers`),
-        axios.get(`${API_BASE}/collections`)
+        axios.get(`${getApiBase()}/books`),
+        axios.get(`${getApiBase()}/servers`),
+        axios.get(`${getApiBase()}/collections`)
       ]);
       setBooks(booksRes.data);
       setServers(serversRes.data);
@@ -126,7 +126,7 @@ const HomePage: React.FC = () => {
   // needing to leave and come back to this page.
   const refreshBooksQuietly = async () => {
     try {
-      const booksRes = await axios.get(`${API_BASE}/books`);
+      const booksRes = await axios.get(`${getApiBase()}/books`);
       setBooks(booksRes.data);
     } catch (error) {
       console.error('Failed to refresh library:', error);
@@ -178,7 +178,7 @@ const HomePage: React.FC = () => {
   const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
     e.stopPropagation();
     try {
-      await axios.post(`${API_BASE}/player/play`, { book_id: bookId });
+      await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
     } catch (error) {
       console.error('Failed to play book:', error);
     }
@@ -198,11 +198,11 @@ const HomePage: React.FC = () => {
       // If this book is the one currently loaded in the player, stop
       // playback too - keeping it playing after removing its progress
       // would just recreate the progress a few seconds later via autosave.
-      const stateRes = await axios.get(`${API_BASE}/player/state`);
+      const stateRes = await axios.get(`${getApiBase()}/player/state`);
       if (stateRes.data.currentBook?.id === bookId) {
-        await axios.post(`${API_BASE}/player/stop`);
+        await axios.post(`${getApiBase()}/player/stop`);
       }
-      await axios.delete(`${API_BASE}/books/${bookId}/progress`);
+      await axios.delete(`${getApiBase()}/books/${bookId}/progress`);
     } catch (error) {
       console.error('Failed to reset book progress:', error);
       fetchAll();
@@ -214,13 +214,13 @@ const HomePage: React.FC = () => {
     try {
       setSyncing(true);
       setSyncMessage('Synchronisation...');
-      await axios.post(`${API_BASE}/sync`);
+      await axios.post(`${getApiBase()}/sync`);
 
       // The sync runs in a background thread on the backend; poll its status
       // until it's done, then refresh the library so new/updated books show up.
       const pollInterval = setInterval(async () => {
         try {
-          const statusRes = await axios.get(`${API_BASE}/sync/status`);
+          const statusRes = await axios.get(`${getApiBase()}/sync/status`);
           if (statusRes.data.message) {
             setSyncMessage(statusRes.data.message);
           }

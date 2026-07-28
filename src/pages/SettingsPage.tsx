@@ -3,8 +3,7 @@ import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
 import EqualizerSettings from '../components/EqualizerSettings';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase, setApiBase, resetApiBase } from '../config';
 
 type ServerType = 'plex' | 'audiobookshelf' | 'local';
 
@@ -109,11 +108,13 @@ const SettingsPage: React.FC = () => {
   const [remoteUrlDrafts, setRemoteUrlDrafts] = useState<Record<string, string>>({});
   const [savingRemoteId, setSavingRemoteId] = useState<string | null>(null);
   const [togglingHiddenId, setTogglingHiddenId] = useState<string | null>(null);
+  const [serverUrlDraft, setServerUrlDraft] = useState(getApiBase());
+  const [serverUrlSaved, setServerUrlSaved] = useState(false);
 
   const loadServers = useCallback(async () => {
     try {
       setLoadingServers(true);
-      const response = await axios.get(`${API_BASE}/servers`);
+      const response = await axios.get(`${getApiBase()}/servers`);
       setServers(response.data);
     } catch (error) {
       console.error('Failed to load servers:', error);
@@ -187,7 +188,7 @@ const SettingsPage: React.FC = () => {
 
     try {
       setSubmitting(true);
-      await axios.post(`${API_BASE}/servers`, payload);
+      await axios.post(`${getApiBase()}/servers`, payload);
       resetForm();
       setShowAddForm(false);
       await loadServers();
@@ -202,7 +203,7 @@ const SettingsPage: React.FC = () => {
     if (!window.confirm(`Supprimer le serveur "${name}" ?`)) return;
     try {
       setBusyServerId(id);
-      await axios.delete(`${API_BASE}/servers/${id}`);
+      await axios.delete(`${getApiBase()}/servers/${id}`);
       await loadServers();
     } catch (error) {
       console.error('Failed to delete server:', error);
@@ -214,7 +215,7 @@ const SettingsPage: React.FC = () => {
   const handleScanServer = async (id: string) => {
     try {
       setBusyServerId(id);
-      await axios.post(`${API_BASE}/servers/${id}/scan`);
+      await axios.post(`${getApiBase()}/servers/${id}/scan`);
       await loadServers();
     } catch (error) {
       console.error('Failed to scan server:', error);
@@ -227,7 +228,7 @@ const SettingsPage: React.FC = () => {
     const remoteUrl = (remoteUrlDrafts[id] ?? '').trim();
     try {
       setSavingRemoteId(id);
-      await axios.post(`${API_BASE}/servers/${id}/remote-access`, { remote_url: remoteUrl || null });
+      await axios.post(`${getApiBase()}/servers/${id}/remote-access`, { remote_url: remoteUrl || null });
       await loadServers();
     } catch (error) {
       console.error('Failed to save remote URL:', error);
@@ -239,7 +240,7 @@ const SettingsPage: React.FC = () => {
   const handleToggleRemote = async (server: ServerEntry) => {
     try {
       setSavingRemoteId(server.id);
-      await axios.post(`${API_BASE}/servers/${server.id}/remote-access`, { use_remote: !server.use_remote });
+      await axios.post(`${getApiBase()}/servers/${server.id}/remote-access`, { use_remote: !server.use_remote });
       await loadServers();
     } catch (error) {
       console.error('Failed to toggle remote access:', error);
@@ -251,7 +252,7 @@ const SettingsPage: React.FC = () => {
   const handleToggleHidden = async (server: ServerEntry) => {
     try {
       setTogglingHiddenId(server.id);
-      await axios.post(`${API_BASE}/servers/${server.id}/hidden`, { hidden: !server.hidden });
+      await axios.post(`${getApiBase()}/servers/${server.id}/hidden`, { hidden: !server.hidden });
       await loadServers();
     } catch (error) {
       console.error('Failed to toggle server visibility:', error);
@@ -264,11 +265,11 @@ const SettingsPage: React.FC = () => {
     if (syncingAll) return;
     try {
       setSyncingAll(true);
-      await axios.post(`${API_BASE}/sync`);
+      await axios.post(`${getApiBase()}/sync`);
 
       const pollInterval = setInterval(async () => {
         try {
-          const statusRes = await axios.get(`${API_BASE}/sync/status`);
+          const statusRes = await axios.get(`${getApiBase()}/sync/status`);
           if (!statusRes.data.syncing) {
             clearInterval(pollInterval);
             setSyncingAll(false);
@@ -286,11 +287,27 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleSaveServerUrl = () => {
+    const trimmed = serverUrlDraft.trim();
+    if (!trimmed) return;
+    setApiBase(trimmed);
+    setServerUrlDraft(getApiBase());
+    setServerUrlSaved(true);
+    setTimeout(() => setServerUrlSaved(false), 2000);
+  };
+
+  const handleResetServerUrl = () => {
+    resetApiBase();
+    setServerUrlDraft(getApiBase());
+    setServerUrlSaved(true);
+    setTimeout(() => setServerUrlSaved(false), 2000);
+  };
+
   const handleResetAllProgress = async () => {
     if (!window.confirm("Réinitialiser toute la progression de lecture ? Tous les livres seront retirés de \"Reprendre l'écoute\".")) return;
     try {
       setResettingProgress(true);
-      await axios.delete(`${API_BASE}/progress`);
+      await axios.delete(`${getApiBase()}/progress`);
     } catch (error) {
       console.error('Failed to reset progress:', error);
     } finally {
@@ -370,6 +387,32 @@ const SettingsPage: React.FC = () => {
           </select>
         </div>
       )}
+
+      <div style={cardStyle}>
+        <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Connexion au backend</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '15px' }}>
+          Adresse du serveur Audook auquel se connecter. Utile pour pointer cette instance vers un backend hébergé sur votre NAS (ex: <code>http://192.168.1.50:5000/api</code>).
+        </p>
+        <label style={labelStyle}>Serveur</label>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            value={serverUrlDraft}
+            onChange={(e) => setServerUrlDraft(e.target.value)}
+            placeholder="http://localhost:5000/api"
+            style={{ ...inputStyle, flex: 1, minWidth: '260px' }}
+          />
+          <button type="button" className="cta-button" onClick={handleSaveServerUrl} style={buttonStyle}>
+            Enregistrer
+          </button>
+          <button type="button" className="cta-button" onClick={handleResetServerUrl} style={secondaryButtonStyle}>
+            Réinitialiser
+          </button>
+        </div>
+        {serverUrlSaved && (
+          <p style={{ color: 'var(--primary)', fontSize: '12px', marginTop: '10px' }}>Adresse enregistrée.</p>
+        )}
+      </div>
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>

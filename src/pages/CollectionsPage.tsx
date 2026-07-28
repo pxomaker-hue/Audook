@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, X, Pencil, Trash2, Loader2, FolderOpen } from 'lucide-react';
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
 
 interface Book {
   id: string;
@@ -79,8 +78,8 @@ const CollectionsPage: React.FC = () => {
   const fetchAll = async () => {
     try {
       const [collectionsRes, booksRes] = await Promise.all([
-        axios.get(`${API_BASE}/collections`),
-        axios.get(`${API_BASE}/books`)
+        axios.get(`${getApiBase()}/collections`),
+        axios.get(`${getApiBase()}/books`)
       ]);
       setCollections(collectionsRes.data);
       setBooks(booksRes.data);
@@ -127,7 +126,7 @@ const CollectionsPage: React.FC = () => {
     if (!name) return;
     try {
       setCreating(true);
-      const response = await axios.post(`${API_BASE}/collections`, { name });
+      const response = await axios.post(`${getApiBase()}/collections`, { name });
       setCollections(prev => [...prev, response.data]);
       setNewCollectionName('');
       setSelectedId(response.data.id);
@@ -149,7 +148,7 @@ const CollectionsPage: React.FC = () => {
     setRenamingId(null);
     if (!name) return;
     try {
-      await axios.patch(`${API_BASE}/collections/${collectionId}`, { name });
+      await axios.patch(`${getApiBase()}/collections/${collectionId}`, { name });
       setCollections(prev => prev.map(c => (c.id === collectionId ? { ...c, name } : c)));
     } catch (error) {
       console.error('Failed to rename collection:', error);
@@ -160,7 +159,7 @@ const CollectionsPage: React.FC = () => {
     e.stopPropagation();
     try {
       setDeletingId(collectionId);
-      await axios.delete(`${API_BASE}/collections/${collectionId}`);
+      await axios.delete(`${getApiBase()}/collections/${collectionId}`);
       setCollections(prev => prev.filter(c => c.id !== collectionId));
       if (selectedId === collectionId) setSelectedId(null);
     } catch (error) {
@@ -173,7 +172,7 @@ const CollectionsPage: React.FC = () => {
   const handleAddBook = async (bookId: string) => {
     if (!selectedCollection) return;
     try {
-      const response = await axios.post(`${API_BASE}/collections/${selectedCollection.id}/books`, { book_id: bookId });
+      const response = await axios.post(`${getApiBase()}/collections/${selectedCollection.id}/books`, { book_id: bookId });
       setCollections(prev =>
         prev.map(c => (c.id === selectedCollection.id ? { ...c, book_ids: response.data.book_ids } : c))
       );
@@ -186,7 +185,7 @@ const CollectionsPage: React.FC = () => {
     e.stopPropagation();
     if (!selectedCollection) return;
     try {
-      const response = await axios.delete(`${API_BASE}/collections/${selectedCollection.id}/books/${bookId}`);
+      const response = await axios.delete(`${getApiBase()}/collections/${selectedCollection.id}/books/${bookId}`);
       setCollections(prev =>
         prev.map(c => (c.id === selectedCollection.id ? { ...c, book_ids: response.data.book_ids } : c))
       );

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, ArrowLeft, Search, Pencil, Lock, Unlock, Bookmark, Trash2, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import axios from 'axios';
+import { getApiBase } from '../config';
 
 interface BookmarkEntry {
   id: number;
@@ -89,7 +90,7 @@ const BookDetailPage: React.FC = () => {
   const [book, setBook] = useState<BookDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
-  const apiBase = 'http://localhost:5000/api';
+  const apiBase = getApiBase();
 
   // "Associer" (match) panel
   const [showMatchPanel, setShowMatchPanel] = useState(false);
@@ -152,6 +153,7 @@ const BookDetailPage: React.FC = () => {
     fetchPlayerState();
     const interval = setInterval(fetchPlayerState, 2000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // While a noise-reduction pass is running in the background, poll for it
