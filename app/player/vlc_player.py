@@ -3,6 +3,7 @@ VLC-based audio player for Audook
 Supports streaming from Plex, Audiobookshelf, and local files
 """
 
+import os
 import vlc
 from typing import Optional, Callable, Dict, Any
 from pathlib import Path
@@ -47,7 +48,10 @@ class VLCPlayer:
 
     def __init__(self):
         """Initialize VLC player"""
-        self.instance = vlc.Instance()
+        # In headless/Docker deployments (NAS backend) there is no audio
+        # output device; dummy vout/aout avoid libvlc failing to init.
+        vlc_args = ['--vout=dummy', '--aout=dummy'] if os.environ.get('AUDOOK_HEADLESS') else []
+        self.instance = vlc.Instance(vlc_args)
         self.player = self.instance.media_list_player_new()
         self.media_list = self.instance.media_list_new()
 
