@@ -198,6 +198,25 @@ En plus de l'application Windows, une instance backend séparée peut tourner su
 - Le port `5000` est exposé via un réseau bridge (pas de `network_mode: host`) ; adaptez le mapping de port si `5000` est déjà utilisé sur le NAS
 - La progression de lecture sur des livres provenant d'un dossier local **propre au NAS** ne se synchronise pas vers le PC (limitation connue, acceptée) — seuls les livres Plex/Audiobookshelf se synchronisent entre les deux instances
 
+## Application mobile Android (Capacitor)
+
+Une app Android (APK) installable existe dans `android/`, générée via [Capacitor](https://capacitorjs.com/). Elle réutilise l'interface React existante (bibliothèque, collections, découvrir, historique, paramètres) et se connecte au backend NAS ci-dessus via l'adresse configurée dans **Paramètres > Connexion au backend**.
+
+La lecture audio en arrière-plan (contrôles à l'écran de verrouillage, lecture continue app fermée/écran éteint) passe par un plugin natif Kotlin (`android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt` + `AudookPlaybackService.kt`) basé sur ExoPlayer + MediaSession — un `<audio>` de WebView ne survit pas de façon fiable à la mise en veille de l'écran sur Android.
+
+### Générer l'APK
+
+Cet environnement de développement n'a pas de SDK Android/Gradle/JDK installés — le code natif (plugin Kotlin, projet Gradle sous `android/`) et le code JS (hook `useMobilePlayerState`, wrapper de plugin) sont prêts et committés, mais la compilation de l'APK doit se faire manuellement :
+
+1. Installez [Android Studio](https://developer.android.com/studio) (gratuit) — il installe le SDK Android et Gradle nécessaires
+2. `npm run react-build` puis `npm run android-sync` (build web React + `cap sync android`)
+3. `npm run android-open` (ou ouvrez directement le dossier `android/` dans Android Studio)
+4. Dans Android Studio : **Build > Build Bundle(s) / APK(s) > Build APK(s)**
+5. L'APK signé (debug) se trouve dans `android/app/build/outputs/apk/debug/`
+6. Installez-le sur le téléphone (`adb install ...` ou transfert manuel + activation des sources inconnues), puis réglez l'adresse du serveur dans Paramètres vers l'IP LAN du NAS (ex: `http://192.168.1.50:5000/api`)
+
+Pour une release signée (Play Store ou distribution directe), suivez le flux standard **Build > Generate Signed Bundle / APK** d'Android Studio (nécessite de créer un keystore).
+
 ## Références API
 
 - [Documentation API Audiobookshelf](https://github.com/advplyr/audiobookshelf/wiki/API-Documentation)

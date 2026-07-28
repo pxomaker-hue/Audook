@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import { getApiBase } from '../config';
+import { isCapacitorPlatform } from '../native/platform';
+import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
 interface Book {
   id: string;
@@ -90,7 +92,11 @@ const AuthorPage: React.FC = () => {
   const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
     e.stopPropagation();
     try {
-      await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
+      if (isCapacitorPlatform) {
+        await mobilePlayerStore.playById(bookId);
+      } else {
+        await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
+      }
     } catch (error) {
       console.error('Failed to play book:', error);
     }

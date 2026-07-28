@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Play, ArrowLeft, Search, Pencil, Lock, Unlock, Bookmark, Trash2, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { getApiBase } from '../config';
+import { isCapacitorPlatform } from '../native/platform';
+import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
 interface BookmarkEntry {
   id: number;
@@ -28,12 +30,14 @@ interface BookDetail {
     title: string;
     index: number;
     duration: number;
+    audio_file: string;
   }>;
   bookmarks: BookmarkEntry[];
   manual_overrides: string[];
   progress: {
     position: number;
     percentage: number;
+    chapter_index: number;
   };
   is_finished: boolean;
   noise_reduction_status: 'idle' | 'processing' | 'done' | 'error';
@@ -168,7 +172,11 @@ const BookDetailPage: React.FC = () => {
   const handlePlayBook = async () => {
     if (book) {
       try {
-        await axios.post(`${apiBase}/player/play`, { book_id: book.id });
+        if (isCapacitorPlatform) {
+          await mobilePlayerStore.play(book, book.progress.chapter_index, book.progress.position);
+        } else {
+          await axios.post(`${apiBase}/player/play`, { book_id: book.id });
+        }
       } catch (error) {
         console.error('Failed to play book:', error);
       }
@@ -178,7 +186,11 @@ const BookDetailPage: React.FC = () => {
   const handlePlayChapter = async (chapterIndex: number) => {
     if (book) {
       try {
-        await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+        if (isCapacitorPlatform) {
+          await mobilePlayerStore.play(book, chapterIndex, 0);
+        } else {
+          await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+        }
       } catch (error) {
         console.error('Failed to play chapter:', error);
       }

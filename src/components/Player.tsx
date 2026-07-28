@@ -1,9 +1,16 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
-import { usePlayerState, formatTime } from '../hooks/usePlayerState';
+import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
+import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
 import VolumeControl from './VolumeControl';
+
+import { isCapacitorPlatform } from '../native/platform';
+
+// Mirrors the window.electron?.miniPlayer capability-check pattern used
+// elsewhere in this file.
+const usePlayerState = isCapacitorPlatform ? useMobilePlayerState : useDesktopPlayerState;
 
 // Stable pseudo-random bar heights for the waveform decoration
 const WAVE_BARS = Array.from({ length: 32 }, (_, i) => {

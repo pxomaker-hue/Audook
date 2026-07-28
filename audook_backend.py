@@ -339,7 +339,8 @@ def get_book_details(book_id):
             'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,
-                'percentage': progress.progress_percent
+                'percentage': progress.progress_percent,
+                'chapter_index': progress.current_chapter_index
             },
             'is_finished': progress.is_finished,
             'noise_reduction_status': BookRepository(session).get_noise_reduction_status(book_id),

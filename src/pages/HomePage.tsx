@@ -4,6 +4,8 @@ import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, CheckCircle2 }
 import axios from 'axios';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getApiBase } from '../config';
+import { isCapacitorPlatform } from '../native/platform';
+import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
 const SORT_STORAGE_KEY = 'audook_library_sort';
 
@@ -178,7 +180,11 @@ const HomePage: React.FC = () => {
   const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
     e.stopPropagation();
     try {
-      await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
+      if (isCapacitorPlatform) {
+        await mobilePlayerStore.playById(bookId);
+      } else {
+        await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
+      }
     } catch (error) {
       console.error('Failed to play book:', error);
     }
