@@ -109,21 +109,27 @@ class AudookPlayerPlugin : Plugin() {
             .setMediaMetadata(metadataBuilder.build())
             .build()
 
-        c.setMediaItem(mediaItem)
-        c.prepare()
-        c.play()
+        // MediaController must only be touched from the thread that built it
+        // (the main thread here, via positionHandler) - Capacitor plugin
+        // methods run on their own "CapacitorPlugins" handler thread, which
+        // crashed the app with IllegalStateException before this dispatch.
+        positionHandler.post {
+            c.setMediaItem(mediaItem)
+            c.prepare()
+            c.play()
+        }
         call.resolve()
     }
 
     @PluginMethod
     fun pause(call: PluginCall) {
-        controller?.pause()
+        positionHandler.post { controller?.pause() }
         call.resolve()
     }
 
     @PluginMethod
     fun resume(call: PluginCall) {
-        controller?.play()
+        positionHandler.post { controller?.play() }
         call.resolve()
     }
 
@@ -134,13 +140,13 @@ class AudookPlayerPlugin : Plugin() {
             call.reject("ms is required")
             return
         }
-        controller?.seekTo(ms)
+        positionHandler.post { controller?.seekTo(ms) }
         call.resolve()
     }
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        controller?.stop()
+        positionHandler.post { controller?.stop() }
         stopPositionUpdates()
         call.resolve()
     }
