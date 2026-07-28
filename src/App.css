@@ -1647,6 +1647,41 @@ input[type="checkbox"] {
     width: 100% !important;
     height: 100% !important;
   }
+
+  /* Compact mini-bar player: cover + title/author + 5 playback buttons +
+     bookmark/chapters/more-options/volume/detached-mini-window all crammed
+     into one row overflowed badly on a phone (measured ~530px of content
+     in a ~350px bar). Drop the secondary action row entirely - the
+     detached mini-player window doesn't apply on Android anyway, and
+     bookmark/chapters/volume/equalizer stay reachable from the full-screen
+     player. */
+  .player-compact-view {
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  .player-extra-row.compact {
+    display: none !important;
+  }
+
+  .player-compact-view .player-cover-wrap {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .player-compact-view .player-controls {
+    gap: 2px !important;
+  }
+
+  .player-compact-view .player-button {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .player-compact-view .player-button.main {
+    width: 38px !important;
+    height: 38px !important;
+  }
 }
 
 /* Detached mini-player window (electron/main.js createMiniWindow, rendered by
