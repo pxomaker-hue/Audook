@@ -31,7 +31,7 @@ const ExplorePage: React.FC = () => {
       try {
         setLoading(true);
         const response = await axios.get(`${getApiBase()}/books`);
-        setBooks(response.data);
+        setBooks(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error('Failed to fetch books:', error);
       } finally {

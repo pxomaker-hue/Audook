@@ -68,7 +68,8 @@ const AuthorPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await axios.get(`${getApiBase()}/books`);
-      setBooks(response.data.filter((b: Book) => b.author === authorName));
+      const data = Array.isArray(response.data) ? response.data : [];
+      setBooks(data.filter((b: Book) => b.author === authorName));
     } catch (error) {
       console.error('Failed to fetch author books:', error);
     } finally {

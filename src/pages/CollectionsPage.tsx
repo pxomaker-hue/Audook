@@ -81,8 +81,8 @@ const CollectionsPage: React.FC = () => {
         axios.get(`${getApiBase()}/collections`),
         axios.get(`${getApiBase()}/books`)
       ]);
-      setCollections(collectionsRes.data);
-      setBooks(booksRes.data);
+      setCollections(Array.isArray(collectionsRes.data) ? collectionsRes.data : []);
+      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
     } catch (error) {
       console.error('Failed to fetch collections:', error);
     }

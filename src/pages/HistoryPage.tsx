@@ -33,7 +33,7 @@ const HistoryPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await axios.get(`${getApiBase()}/history`);
-      setHistory(response.data);
+      setHistory(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Failed to fetch history:', error);
     } finally {

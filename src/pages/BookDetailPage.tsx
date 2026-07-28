@@ -910,7 +910,7 @@ const BookDetailPage: React.FC = () => {
               overflow: 'hidden'
             }}
           >
-            {book.chapters.map((chapter, index) => {
+            {(book.chapters || []).map((chapter, index) => {
               const isActive = activeChapterIndex === index;
               return (
                 <div
