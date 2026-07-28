@@ -7,7 +7,8 @@ import MiniPlayerView from './components/MiniPlayerView';
 import CloseAppDialog from './components/CloseAppDialog';
 import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
-import { getApiBase } from './config';
+import { getApiBase, setApiBase } from './config';
+import { isCapacitorPlatform } from './native/platform';
 import './App.css';
 
 // The detached mini-player (electron/main.js createMiniWindow) loads this
@@ -15,10 +16,62 @@ import './App.css';
 // skipping the title bar / sidebar / routed pages entirely.
 const isMiniWindow = window.location.hash.startsWith('#/mini');
 
+// On desktop, Electron starts the backend locally so it's reachable within
+// a second or two - the loading/error screens below are purely transitional.
+// On mobile there is no local backend: the default API base (localhost)
+// can never succeed until the user enters their NAS's LAN address, so we
+// need an escape hatch to configure it before a connection ever succeeds.
+const ServerConfigForm: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
+  const [value, setValue] = useState(getApiBase());
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    if (!value.trim()) return;
+    setApiBase(value);
+    setSaved(true);
+    onSaved();
+  };
+
+  return (
+    <div style={{ marginTop: '20px', width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <label style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Adresse du serveur (ex: http://192.168.1.200:5000/api)</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+        placeholder="http://192.168.1.200:5000/api"
+        style={{
+          padding: '10px',
+          borderRadius: '6px',
+          border: '1px solid var(--border, #444)',
+          backgroundColor: 'var(--surface, #222)',
+          color: 'var(--text-primary)'
+        }}
+      />
+      <button
+        onClick={handleSave}
+        style={{
+          padding: '10px',
+          borderRadius: '6px',
+          border: 'none',
+          backgroundColor: 'var(--primary)',
+          color: '#fff',
+          cursor: 'pointer'
+        }}
+      >
+        Enregistrer et réessayer
+      </button>
+      {saved && <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Nouvelle tentative de connexion...</p>}
+    </div>
+  );
+};
+
 // How long the backend can stay unreachable before we show an actual error
 // screen. Below this, checks happen silently behind a plain loading screen -
-// the backend is expected to take a moment to start up.
-const ERROR_THRESHOLD_MS = 60000;
+// the backend is expected to take a moment to start up. On mobile there's
+// no local backend to wait for, so surface the config form immediately
+// instead of making the user stare at a spinner for a minute first.
+const ERROR_THRESHOLD_MS = isCapacitorPlatform ? 0 : 60000;
 const CHECK_INTERVAL_MS = 1500;
 
 const App: React.FC = () => {
@@ -103,12 +156,21 @@ const App: React.FC = () => {
             <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔴</div>
             <h1>Serveur non disponible</h1>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
-            <ul style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'left' }}>
-              <li>Le serveur Python est en cours d'exécution</li>
-              <li>Aucun autre processus n'utilise le port 5000</li>
-              <li>L'application réessayera la connexion automatiquement...</li>
-            </ul>
+            {isCapacitorPlatform ? (
+              <ServerConfigForm onSaved={() => {
+                firstFailureRef.current = null;
+                setShowError(false);
+              }} />
+            ) : (
+              <>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
+                <ul style={{ fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                  <li>Le serveur Python est en cours d'exécution</li>
+                  <li>Aucun autre processus n'utilise le port 5000</li>
+                  <li>L'application réessayera la connexion automatiquement...</li>
+                </ul>
+              </>
+            )}
           </div>
         );
       }
