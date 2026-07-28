@@ -9,10 +9,11 @@ import threading
 import time
 import asyncio
 
-from app.database import get_session, ServerRepository, BookRepository, BookmarkRepository
-from app.database.models import Server, Library, Book
+from app.database import get_session, ServerRepository, BookRepository, BookmarkRepository, ReadingProgressRepository
+from app.database.models import Server, Library, Book, ReadingProgress
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
+from app.sync import progress_sync
 from app.utils import logger, online_metadata
 
 
@@ -106,6 +107,7 @@ class ServerScanner:
                             extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Plex audiobook: {audiobook['title']}")
+                        self._seed_remote_progress_if_new(session, audiobook["id"])
                     except Exception as e:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
@@ -165,6 +167,7 @@ class ServerScanner:
                             extra_metadata=extra_metadata
                         )
                         logger.info(f"Added Audiobookshelf audiobook: {audiobook['title']}")
+                        self._seed_remote_progress_if_new(session, audiobook["id"])
                     except Exception as e:
                         logger.warning(f"Failed to add audiobook {audiobook.get('title')}: {e}")
 
@@ -180,6 +183,47 @@ class ServerScanner:
         except Exception as e:
             logger.error(f"Audiobookshelf scan failed: {e}")
             return False
+
+    def _seed_remote_progress_if_new(self, session, book_id: str):
+        """A book that already has partial listening progress recorded on
+        its source server (e.g. played via the Audiobookshelf app/web player
+        before ever being opened in Audook) previously only had that
+        progress pulled in on first playback - meaning it never showed up
+        under "Reprendre l'écoute" until then. Seed it right away on scan
+        instead, but only if there's no local progress yet, so a re-scan
+        never clobbers what the user has done locally since."""
+        existing = session.query(ReadingProgress).filter_by(book_id=book_id).first()
+        if existing:
+            return
+        try:
+            remote = progress_sync.pull_progress(book_id)
+        except Exception as e:
+            logger.warning(f"Failed to pull remote progress for {book_id}: {e}")
+            return
+        if not remote:
+            return
+
+        book = BookRepository(session).get_by_id(book_id)
+        duration = (book.duration if book else 0) or 0
+        if duration <= 0:
+            return
+        cumulative = 0.0
+        for i, chapter in enumerate(book.chapters or []):
+            if i < remote["chapter_index"]:
+                cumulative += chapter.get("duration", 0) or 0
+            elif i == remote["chapter_index"]:
+                cumulative += remote["position_seconds"]
+                break
+        percent = 100.0 if remote.get("finished") else min(100.0, (cumulative / duration) * 100)
+        if percent <= 0:
+            return
+
+        ReadingProgressRepository(session).update_progress(
+            book_id, remote["chapter_index"], remote["position_seconds"], percent
+        )
+        if remote.get("finished"):
+            ReadingProgressRepository(session).set_finished(book_id, True)
+        logger.info(f"Seeded remote progress for {book_id}: {percent:.1f}%")
 
     def _delete_local_book_if_safe(self, session, book_id: str) -> bool:
         """Delete a local book row unless it has reading progress or
