@@ -7,14 +7,13 @@ import MiniPlayerView from './components/MiniPlayerView';
 import CloseAppDialog from './components/CloseAppDialog';
 import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
+import { getApiBase } from './config';
 import './App.css';
 
 // The detached mini-player (electron/main.js createMiniWindow) loads this
 // same app at the '#/mini' hash route - render just the player for it,
 // skipping the title bar / sidebar / routed pages entirely.
 const isMiniWindow = window.location.hash.startsWith('#/mini');
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
 // How long the backend can stay unreachable before we show an actual error
 // screen. Below this, checks happen silently behind a plain loading screen -
@@ -47,7 +46,8 @@ const App: React.FC = () => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(API_BASE.replace('/api', '/health'), {
+        const apiBase = getApiBase();
+        const response = await fetch(apiBase.replace('/api', '/health'), {
           signal: controller.signal
         });
         clearTimeout(timeout);
@@ -71,7 +71,7 @@ const App: React.FC = () => {
 
         setBackendOnline(false);
         if (Date.now() - firstFailureRef.current >= ERROR_THRESHOLD_MS) {
-          setError(`Impossible de se connecter au serveur (${API_BASE.split('/').slice(-3).join('/')})`);
+          setError(`Impossible de se connecter au serveur (${apiBase.split('/').slice(-3).join('/')})`);
           setShowError(true);
         }
       }
