@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
 import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
@@ -8,6 +8,7 @@ import VolumeControl from './VolumeControl';
 
 import { isCapacitorPlatform } from '../native/platform';
 import { useCoverBlobUrl } from '../hooks/useCoverBlobUrl';
+import { expandedPlayerStore, useExpandedPlayer } from '../native/expandedPlayerStore';
 
 // Mirrors the window.electron?.miniPlayer capability-check pattern used
 // elsewhere in this file.
@@ -66,6 +67,23 @@ const Player: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCompactMenu]);
+
+  // Mobile-only full-screen player - separate "..." menu instance from the
+  // compact bar's (both are mounted at once, CSS just picks which shows).
+  const isExpanded = useExpandedPlayer();
+  const [showExpandedMenu, setShowExpandedMenu] = useState(false);
+  const expandedMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExpandedMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (expandedMenuRef.current && !expandedMenuRef.current.contains(e.target as Node)) {
+        setShowExpandedMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showExpandedMenu]);
 
   if (!state.currentBook) {
     return (
@@ -148,13 +166,24 @@ const Player: React.FC = () => {
     );
 
   return (
-    <div className="player">
+    <div className={`player ${isCapacitorPlatform && isExpanded ? 'player-mobile-expanded' : ''}`}>
       {/* Full docked layout - visible above the compact breakpoint (see
           App.css). Rendering both variants and letting CSS pick which one
           shows (instead of a JS matchMedia state) avoids the two ever
           getting out of sync with the real viewport width. */}
       <div className="player-full">
-        <div className="player-title-bar">{state.currentBook.title}</div>
+        <div className="player-title-bar">
+          {isCapacitorPlatform && (
+            <button
+              className="player-button player-back-button"
+              onClick={() => expandedPlayerStore.setExpanded(false)}
+              title="Retour"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <span className="player-title-bar-text">{state.currentBook.title}</span>
+        </div>
 
         <div className="player-cover-wrap">
           {coverSrc && (
@@ -197,39 +226,95 @@ const Player: React.FC = () => {
           </div>
         </div>
 
-        <div className="player-controls">
-          <button
-            className="player-button"
-            onClick={handlePreviousClick}
-            title="Chapitre précédent (2 clics) / Redémarrer le chapitre (1 clic)"
-          >
-            <SkipBack size={16} />
-          </button>
-          <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
-            <Rewind size={16} />
-          </button>
-          <button
-            className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
-            onClick={handlePlayPause}
-            title={state.isPlaying ? 'Pause' : 'Lecture'}
-          >
-            {state.isPlaying ? <Pause size={22} /> : <Play size={22} />}
-          </button>
-          <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
-            <FastForward size={16} />
-          </button>
-          <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
-            <SkipForward size={16} />
-          </button>
-        </div>
+        {isCapacitorPlatform ? (
+          // Mobile full-screen layout: chapters, prev, -30s, play/pause,
+          // +30s, next, then a single "..." for the rest (just bookmark -
+          // speed/eq/loudness/compression/volume/cast are still no-ops on
+          // mobile's native player, see useMobilePlayerState.ts).
+          <div className="player-controls player-controls-mobile-full">
+            {chaptersButton(16)}
+            <button
+              className="player-button"
+              onClick={handlePreviousClick}
+              title="Chapitre précédent (2 clics) / Redémarrer le chapitre (1 clic)"
+            >
+              <SkipBack size={16} />
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+              <Rewind size={16} />
+            </button>
+            <button
+              className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
+              onClick={handlePlayPause}
+              title={state.isPlaying ? 'Pause' : 'Lecture'}
+            >
+              {state.isPlaying ? <Pause size={22} /> : <Play size={22} />}
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+              <FastForward size={16} />
+            </button>
+            <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+              <SkipForward size={16} />
+            </button>
 
-        <div className="player-extra-row">
-          {bookmarkButton(16)}
-          {chaptersButton(16)}
-          {moreMenu()}
-          {volumeControl(16)}
-          {miniPlayerButton(16)}
-        </div>
+            <div className="more-menu-wrapper" ref={expandedMenuRef}>
+              {showExpandedMenu && (
+                <div className="more-menu-popover">
+                  <div className="more-menu-row">
+                    <span className="more-menu-label">Marque-page</span>
+                    <button
+                      className={`player-button more-menu-icon ${bookmarkAdded ? 'confirmed' : ''}`}
+                      onClick={handleAddBookmark}
+                      disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+                      title="Marquer la position actuelle"
+                    >
+                      {addingBookmark ? <Loader2 size={16} className="spin" /> : bookmarkAdded ? <Check size={16} /> : <Bookmark size={16} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <button className="player-button" onClick={() => setShowExpandedMenu((v) => !v)} title="Plus d'options">
+                <MoreHorizontal size={16} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="player-controls">
+              <button
+                className="player-button"
+                onClick={handlePreviousClick}
+                title="Chapitre précédent (2 clics) / Redémarrer le chapitre (1 clic)"
+              >
+                <SkipBack size={16} />
+              </button>
+              <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+                <Rewind size={16} />
+              </button>
+              <button
+                className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
+                onClick={handlePlayPause}
+                title={state.isPlaying ? 'Pause' : 'Lecture'}
+              >
+                {state.isPlaying ? <Pause size={22} /> : <Play size={22} />}
+              </button>
+              <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+                <FastForward size={16} />
+              </button>
+              <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+                <SkipForward size={16} />
+              </button>
+            </div>
+
+            <div className="player-extra-row">
+              {bookmarkButton(16)}
+              {chaptersButton(16)}
+              {moreMenu()}
+              {volumeControl(16)}
+              {miniPlayerButton(16)}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Compact horizontal bar - visible below the compact breakpoint.
@@ -239,7 +324,11 @@ const Player: React.FC = () => {
           line and overflowed ~530px of content into a ~350px bar. */}
       <div className="player-compact-view">
         <div className="player-compact-row1">
-          <div className="player-cover-wrap">
+          <div
+            className="player-cover-wrap player-cover-wrap-tappable"
+            onClick={() => expandedPlayerStore.setExpanded(true)}
+            title="Agrandir le lecteur"
+          >
             {coverSrc ? (
               <img src={coverSrc} alt={state.currentBook.title} />
             ) : (

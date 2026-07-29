@@ -9,6 +9,7 @@ import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
 import { getApiBase, setApiBase } from './config';
 import { isCapacitorPlatform } from './native/platform';
+import { useExpandedPlayer } from './native/expandedPlayerStore';
 import './App.css';
 
 // The detached mini-player (electron/main.js createMiniWindow) loads this
@@ -80,6 +81,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const firstFailureRef = useRef<number | null>(null);
+  const expandedPlayer = useExpandedPlayer();
 
   useEffect(() => {
     if (isMiniWindow) return;
@@ -199,7 +201,7 @@ const App: React.FC = () => {
 
     return (
       <HashRouter>
-        <div className="app">
+        <div className={`app ${isCapacitorPlatform && expandedPlayer ? 'mobile-player-expanded' : ''}`}>
           <Sidebar />
           <main className="main-content">
             <AnimatedRoutes />

@@ -1,14 +1,28 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, Compass, History, Settings, Headphones, Library } from 'lucide-react';
+import { expandedPlayerStore, useExpandedPlayer } from '../native/expandedPlayerStore';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
+  const expanded = useExpandedPlayer();
+  const firstRender = useRef(true);
 
   const isActive = (path: string) => location.pathname === path;
 
+  // A nav tap always means "leave the full-screen player" - collapse it back
+  // to the normal library view. Skip the very first mount so this doesn't
+  // fire on initial load.
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    expandedPlayerStore.setExpanded(false);
+  }, [location.pathname]);
+
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${expanded ? 'sidebar-bottom' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-logo">
           <Headphones size={18} />

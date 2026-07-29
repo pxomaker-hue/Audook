@@ -220,6 +220,28 @@ input[type="checkbox"] {
   gap: 8px;
 }
 
+/* Compact bottom tab bar shown while the mobile full-screen player is open
+   (see expandedPlayerStore.ts) - icons only, no logo, laid out horizontally. */
+.sidebar.sidebar-bottom {
+  width: 100%;
+  flex-direction: row;
+  padding: 8px 12px;
+}
+
+.sidebar.sidebar-bottom .sidebar-header {
+  display: none;
+}
+
+.sidebar.sidebar-bottom .sidebar-nav {
+  flex-direction: row;
+  width: 100%;
+  justify-content: space-around;
+}
+
+.sidebar.sidebar-bottom .sidebar-spacer {
+  display: none;
+}
+
 .sidebar-spacer {
   flex: 1;
 }
@@ -841,9 +863,20 @@ input[type="checkbox"] {
   color: var(--text-primary);
   margin-bottom: 20px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-title-bar-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.player-back-button {
+  flex-shrink: 0;
 }
 
 .player-cover-wrap {
@@ -1510,6 +1543,31 @@ input[type="checkbox"] {
     gap: 8px;
     padding: 10px 18px;
   }
+
+  /* Mobile full-screen player mode: the player takes over the whole content
+     area (where .main-content normally sits) and the sidebar drops to a
+     slim icon-only bar underneath it, instead of its usual left column. */
+  .app.mobile-player-expanded {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .app.mobile-player-expanded .main-content {
+    display: none;
+  }
+
+  .app.mobile-player-expanded .player {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .app.mobile-player-expanded .sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
 }
 
 /* Row 1: round cover thumbnail + progress bar with timecodes. */
@@ -1565,6 +1623,44 @@ input[type="checkbox"] {
 .player-compact-view .player-controls {
   margin-top: 0;
   flex-shrink: 0;
+}
+
+.player-cover-wrap-tappable {
+  cursor: pointer;
+}
+
+/* Mobile full-screen player - tapping the compact bar's cover thumbnail
+   opens .player-full instead of the usual 1100px-width breakpoint deciding
+   it. See expandedPlayerStore.ts / .app.mobile-player-expanded below for
+   the matching sidebar-collapse-to-bottom-bar half of this. */
+.player.player-mobile-expanded .player-full {
+  display: flex !important;
+}
+
+.player.player-mobile-expanded .player-compact-view {
+  display: none !important;
+}
+
+/* 7 buttons (chapters, prev, -30s, play/pause, +30s, next, "...") need to be
+   tighter than the desktop 5-button row to fit a phone's width. */
+.player-controls-mobile-full {
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.player-controls-mobile-full .player-button {
+  width: 34px;
+  height: 34px;
+}
+
+.player-controls-mobile-full .player-button.main {
+  width: 48px;
+  height: 48px;
+}
+
+.player-controls-mobile-full .more-menu-wrapper .player-button {
+  width: 34px;
+  height: 34px;
 }
 
 @media (max-width: 768px) {
