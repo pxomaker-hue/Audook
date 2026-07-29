@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Pencil, Trash2, Check, ChevronDown } from 'lucide-react';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
 
 // VLC's equalizer has a fixed 10-band layout, one octave apart - this order
 // matches the `bands` array index for every preset (see EqualizerPreset in
@@ -76,8 +75,8 @@ const EqualizerSettings: React.FC = () => {
     try {
       setLoading(true);
       const [presetsRes, stateRes] = await Promise.all([
-        axios.get(`${API_BASE}/equalizer/presets`),
-        axios.get(`${API_BASE}/player/state`)
+        axios.get(`${getApiBase()}/equalizer/presets`),
+        axios.get(`${getApiBase()}/player/state`)
       ]);
       setPresets(presetsRes.data);
       setActivePresetId(stateRes.data.equalizer_preset_id ?? null);
@@ -95,7 +94,7 @@ const EqualizerSettings: React.FC = () => {
   const handleApply = async (presetId: string | null) => {
     setActivePresetId(presetId);
     try {
-      await axios.post(`${API_BASE}/player/equalizer`, { preset_id: presetId });
+      await axios.post(`${getApiBase()}/player/equalizer`, { preset_id: presetId });
     } catch (err) {
       console.error('Failed to apply equalizer preset:', err);
     }
@@ -135,9 +134,9 @@ const EqualizerSettings: React.FC = () => {
       setSaving(true);
       setError(null);
       if (editingId === 'new') {
-        await axios.post(`${API_BASE}/equalizer/presets`, form);
+        await axios.post(`${getApiBase()}/equalizer/presets`, form);
       } else {
-        await axios.put(`${API_BASE}/equalizer/presets/${editingId}`, form);
+        await axios.put(`${getApiBase()}/equalizer/presets/${editingId}`, form);
       }
       setEditingId(null);
       await load();
@@ -151,7 +150,7 @@ const EqualizerSettings: React.FC = () => {
   const handleDelete = async (preset: Preset) => {
     if (!window.confirm(`Supprimer le préréglage "${preset.name}" ?`)) return;
     try {
-      await axios.delete(`${API_BASE}/equalizer/presets/${preset.id}`);
+      await axios.delete(`${getApiBase()}/equalizer/presets/${preset.id}`);
       await load();
     } catch (err) {
       console.error('Failed to delete equalizer preset:', err);

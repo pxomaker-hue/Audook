@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
+import { isCapacitorPlatform } from '../native/platform';
+import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
 interface Book {
   id: string;
@@ -66,8 +68,9 @@ const AuthorPage: React.FC = () => {
   const fetchBooks = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/books`);
-      setBooks(response.data.filter((b: Book) => b.author === authorName));
+      const response = await axios.get(`${getApiBase()}/books`);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setBooks(data.filter((b: Book) => b.author === authorName));
     } catch (error) {
       console.error('Failed to fetch author books:', error);
     } finally {
@@ -91,7 +94,11 @@ const AuthorPage: React.FC = () => {
   const handlePlayBook = async (e: React.MouseEvent, bookId: string) => {
     e.stopPropagation();
     try {
-      await axios.post(`${API_BASE}/player/play`, { book_id: bookId });
+      if (isCapacitorPlatform) {
+        await mobilePlayerStore.playById(bookId);
+      } else {
+        await axios.post(`${getApiBase()}/player/play`, { book_id: bookId });
+      }
     } catch (error) {
       console.error('Failed to play book:', error);
     }
@@ -106,7 +113,7 @@ const AuthorPage: React.FC = () => {
   const handleSaveEdit = async () => {
     try {
       setSavingEdit(true);
-      await axios.patch(`${API_BASE}/authors/${encodeURIComponent(authorName)}`, {
+      await axios.patch(`${getApiBase()}/authors/${encodeURIComponent(authorName)}`, {
         bio: editBio.trim() || null,
         photo: editPhoto.trim() || null
       });
@@ -123,7 +130,7 @@ const AuthorPage: React.FC = () => {
     try {
       setRefreshing(true);
       setRefreshMessage(null);
-      const response = await axios.post(`${API_BASE}/authors/${encodeURIComponent(authorName)}/refresh`);
+      const response = await axios.post(`${getApiBase()}/authors/${encodeURIComponent(authorName)}/refresh`);
       if (response.data.status === 'not_found') {
         setRefreshMessage("Rien trouvé en ligne pour cet auteur");
       } else {
@@ -261,7 +268,7 @@ const AuthorPage: React.FC = () => {
             <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
               <div className="book-card-cover">
                 {book.cover_url ? (
-                  <img src={book.cover_url} alt={book.title} />
+                  <CoverImage bookId={book.id} coverUrl={book.cover_url} alt={book.title} />
                 ) : (
                   <span>📚</span>
                 )}

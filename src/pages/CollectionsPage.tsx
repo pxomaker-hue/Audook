@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, X, Pencil, Trash2, Loader2, FolderOpen } from 'lucide-react';
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
 
 interface Book {
   id: string;
@@ -79,11 +79,11 @@ const CollectionsPage: React.FC = () => {
   const fetchAll = async () => {
     try {
       const [collectionsRes, booksRes] = await Promise.all([
-        axios.get(`${API_BASE}/collections`),
-        axios.get(`${API_BASE}/books`)
+        axios.get(`${getApiBase()}/collections`),
+        axios.get(`${getApiBase()}/books`)
       ]);
-      setCollections(collectionsRes.data);
-      setBooks(booksRes.data);
+      setCollections(Array.isArray(collectionsRes.data) ? collectionsRes.data : []);
+      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
     } catch (error) {
       console.error('Failed to fetch collections:', error);
     }
@@ -127,7 +127,7 @@ const CollectionsPage: React.FC = () => {
     if (!name) return;
     try {
       setCreating(true);
-      const response = await axios.post(`${API_BASE}/collections`, { name });
+      const response = await axios.post(`${getApiBase()}/collections`, { name });
       setCollections(prev => [...prev, response.data]);
       setNewCollectionName('');
       setSelectedId(response.data.id);
@@ -149,7 +149,7 @@ const CollectionsPage: React.FC = () => {
     setRenamingId(null);
     if (!name) return;
     try {
-      await axios.patch(`${API_BASE}/collections/${collectionId}`, { name });
+      await axios.patch(`${getApiBase()}/collections/${collectionId}`, { name });
       setCollections(prev => prev.map(c => (c.id === collectionId ? { ...c, name } : c)));
     } catch (error) {
       console.error('Failed to rename collection:', error);
@@ -160,7 +160,7 @@ const CollectionsPage: React.FC = () => {
     e.stopPropagation();
     try {
       setDeletingId(collectionId);
-      await axios.delete(`${API_BASE}/collections/${collectionId}`);
+      await axios.delete(`${getApiBase()}/collections/${collectionId}`);
       setCollections(prev => prev.filter(c => c.id !== collectionId));
       if (selectedId === collectionId) setSelectedId(null);
     } catch (error) {
@@ -173,7 +173,7 @@ const CollectionsPage: React.FC = () => {
   const handleAddBook = async (bookId: string) => {
     if (!selectedCollection) return;
     try {
-      const response = await axios.post(`${API_BASE}/collections/${selectedCollection.id}/books`, { book_id: bookId });
+      const response = await axios.post(`${getApiBase()}/collections/${selectedCollection.id}/books`, { book_id: bookId });
       setCollections(prev =>
         prev.map(c => (c.id === selectedCollection.id ? { ...c, book_ids: response.data.book_ids } : c))
       );
@@ -186,7 +186,7 @@ const CollectionsPage: React.FC = () => {
     e.stopPropagation();
     if (!selectedCollection) return;
     try {
-      const response = await axios.delete(`${API_BASE}/collections/${selectedCollection.id}/books/${bookId}`);
+      const response = await axios.delete(`${getApiBase()}/collections/${selectedCollection.id}/books/${bookId}`);
       setCollections(prev =>
         prev.map(c => (c.id === selectedCollection.id ? { ...c, book_ids: response.data.book_ids } : c))
       );
@@ -202,14 +202,14 @@ const CollectionsPage: React.FC = () => {
         <p className="page-subtitle">Créez et organisez vos propres regroupements de livres</p>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
         <input
           type="text"
           value={newCollectionName}
           onChange={(e) => setNewCollectionName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleCreateCollection()}
           placeholder="Nom de la nouvelle collection..."
-          style={{ ...inputStyle, width: '320px' }}
+          style={{ ...inputStyle, width: '320px', maxWidth: '100%', flex: '1 1 220px' }}
         />
         <button
           style={{ ...smallButtonStyle, opacity: creating || !newCollectionName.trim() ? 0.6 : 1 }}
@@ -371,7 +371,7 @@ const CollectionsPage: React.FC = () => {
               {selectedBooks.map(book => (
                 <div key={book.id} className="book-card" onClick={() => navigate(`/book/${book.id}`)}>
                   <div className="book-card-cover">
-                    {book.cover_url ? <img src={book.cover_url} alt={book.title} /> : <span>📚</span>}
+                    {book.cover_url ? <CoverImage bookId={book.id} coverUrl={book.cover_url} alt={book.title} /> : <span>📚</span>}
                     <span className="book-card-badge">{formatDuration(book.duration)}</span>
                     <button
                       onClick={(e) => handleRemoveBook(e, book.id)}

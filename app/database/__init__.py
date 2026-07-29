@@ -8,6 +8,7 @@ from app.database.db import (
     init_database,
     get_db,
     get_session,
+    remove_session,
 )
 
 from app.database.models import (
@@ -42,6 +43,7 @@ __all__ = [
     "init_database",
     "get_db",
     "get_session",
+    "remove_session",
     "Base",
     "Server",
     "Library",

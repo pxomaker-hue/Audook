@@ -42,6 +42,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--background);
   color: var(--text-primary);
+  overflow-x: hidden;
 }
 
 input[type="range"] {
@@ -217,6 +218,28 @@ input[type="checkbox"] {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* Compact bottom tab bar shown while the mobile full-screen player is open
+   (see expandedPlayerStore.ts) - icons only, no logo, laid out horizontally. */
+.sidebar.sidebar-bottom {
+  width: 100%;
+  flex-direction: row;
+  padding: 8px 12px;
+}
+
+.sidebar.sidebar-bottom .sidebar-header {
+  display: none;
+}
+
+.sidebar.sidebar-bottom .sidebar-nav {
+  flex-direction: row;
+  width: 100%;
+  justify-content: space-around;
+}
+
+.sidebar.sidebar-bottom .sidebar-spacer {
+  display: none;
 }
 
 .sidebar-spacer {
@@ -840,9 +863,20 @@ input[type="checkbox"] {
   color: var(--text-primary);
   margin-bottom: 20px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-title-bar-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.player-back-button {
+  flex-shrink: 0;
 }
 
 .player-cover-wrap {
@@ -1612,6 +1646,12 @@ input[type="checkbox"] {
     display: none;
   }
 
+  /* Desktop default: a single row (cover | title+subtitle+progress |
+     controls) - the window is only ever narrowed occasionally, so there's
+     always some width to work with. Mobile (.player-compact-view-mobile)
+     overrides this to a two-row layout below - a phone screen is
+     permanently this narrow, and a single row overflowed badly (see the
+     mobile-only rules further down). */
   .player-compact-view {
     display: flex;
     flex-direction: row;
@@ -1620,8 +1660,40 @@ input[type="checkbox"] {
     gap: 16px;
     padding: 10px 18px;
   }
+
+  .player-compact-view.player-compact-view-mobile {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Mobile full-screen player mode: the player takes over the whole content
+     area (where .main-content normally sits) and the sidebar drops to a
+     slim icon-only bar underneath it, instead of its usual left column. */
+  .app.mobile-player-expanded {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .app.mobile-player-expanded .main-content {
+    display: none;
+  }
+
+  .app.mobile-player-expanded .player {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .app.mobile-player-expanded .sidebar {
+    grid-column: 1;
+    grid-row: 2;
+  }
 }
 
+/* Desktop compact view: cover | title+subtitle+progress | controls, all
+   in one row (see .player-compact-view above). */
 .player-compact-view .player-cover-wrap {
   width: 48px;
   height: 48px;
@@ -1673,6 +1745,116 @@ input[type="checkbox"] {
   flex-shrink: 0;
 }
 
+/* Mobile compact view: a round tappable cover thumbnail (opens the
+   full-screen player) instead of a square one that navigates away, laid
+   out as two rows instead of desktop's single row - see
+   .player-compact-view-mobile above. */
+.player-compact-view-mobile .player-cover-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.player-compact-row1 {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.player-compact-progress {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-time-row.compact {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Row 2: the 5 core playback buttons + a "..." menu (bookmark/chapters).
+   The controls take up all the width left over by the "..." button and
+   center themselves in it, growing with clamp() so they use the extra
+   room instead of staying pinned to their old fixed desktop size. */
+.player-compact-row2 {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.player-compact-view-mobile .player-controls {
+  margin-top: 0;
+  flex: 1;
+  justify-content: center;
+  gap: clamp(6px, 3vw, 18px);
+  min-width: 0;
+}
+
+.player-compact-view-mobile .more-menu-wrapper {
+  flex-shrink: 0;
+}
+
+.player-compact-view-mobile .player-controls .player-button {
+  width: clamp(34px, 9vw, 46px);
+  height: clamp(34px, 9vw, 46px);
+}
+
+.player-compact-view-mobile .player-controls .player-button.main {
+  width: clamp(44px, 12vw, 60px);
+  height: clamp(44px, 12vw, 60px);
+}
+
+.player-compact-view-mobile .player-controls .player-button svg {
+  width: 60%;
+  height: 60%;
+}
+
+.player-cover-wrap-tappable {
+  cursor: pointer;
+}
+
+/* Mobile full-screen player - tapping the compact bar's cover thumbnail
+   opens .player-full instead of the usual 1100px-width breakpoint deciding
+   it. See expandedPlayerStore.ts / .app.mobile-player-expanded below for
+   the matching sidebar-collapse-to-bottom-bar half of this. */
+.player.player-mobile-expanded .player-full {
+  display: flex !important;
+}
+
+.player.player-mobile-expanded .player-compact-view {
+  display: none !important;
+}
+
+/* 7 buttons (chapters, prev, -30s, play/pause, +30s, next, "...") need to be
+   tighter than the desktop 5-button row to fit a phone's width. */
+.player-controls-mobile-full {
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.player-controls-mobile-full .player-button {
+  width: 34px;
+  height: 34px;
+}
+
+.player-controls-mobile-full .player-button.main {
+  width: 48px;
+  height: 48px;
+}
+
+.player-controls-mobile-full .more-menu-wrapper .player-button {
+  width: 34px;
+  height: 34px;
+}
+
 @media (max-width: 768px) {
   .app {
     padding: 12px;
@@ -1685,6 +1867,103 @@ input[type="checkbox"] {
 
   .books-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+/* Phone portrait - the sidebar/player breakpoints above already cover the
+   overall app shell; this tightens the individual page layouts (mostly
+   built with inline styles sized for desktop) so nothing overflows
+   horizontally or gets cramped on a ~360-420px screen. */
+@media (max-width: 480px) {
+  .page-content {
+    padding: 4px 0;
+  }
+
+  .page-title {
+    font-size: 20px !important;
+  }
+
+  .top-bar {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .category-pills {
+    gap: 6px;
+  }
+
+  .category-pill {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  .top-bar-search {
+    min-width: 0;
+    flex-basis: 100%;
+    order: 3;
+    padding: 9px 14px;
+  }
+
+  .top-bar-icon-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .books-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px !important;
+  }
+
+  .book-card-info {
+    padding: 8px 2px 0 !important;
+  }
+
+  .book-card-title {
+    font-size: 12px !important;
+  }
+
+  .book-card-author {
+    font-size: 11px !important;
+  }
+
+  /* Book detail hero (cover + title/author/description column) - stacks
+     via flexWrap already set inline, this just shrinks the cover so it
+     doesn't dominate the screen on a narrow phone. */
+  .book-hero-cover {
+    width: 130px !important;
+    height: 195px !important;
+  }
+
+  .book-hero-cover img {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Compact mini-bar player: cover + title/author + 5 playback buttons +
+     bookmark/chapters/more-options/volume/detached-mini-window all crammed
+     into one row overflowed badly on a phone (measured ~530px of content
+     in a ~350px bar). Drop the secondary action row entirely - the
+     detached mini-player window doesn't apply on Android anyway, and
+     bookmark/chapters/volume/equalizer stay reachable from the full-screen
+     player. */
+  .player-compact-view-mobile {
+    gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  .player-compact-view-mobile .player-cover-wrap {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  /* Only the fixed-size "..." menu button gets a smaller floor here - the
+     playback buttons are already responsive via the clamp() sizing on
+     .player-compact-view-mobile .player-controls .player-button above,
+     which this used to override with a fixed 30px/38px regardless of
+     available width. */
+  .player-compact-view-mobile .more-menu-wrapper .player-button {
+    width: 30px !important;
+    height: 30px !important;
   }
 }
 

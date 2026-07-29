@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { getApiBase } from '../config';
 
 // Click window (ms) to detect a double-click on the "previous chapter" button
 const PREVIOUS_DOUBLE_CLICK_WINDOW = 300;
@@ -10,8 +11,6 @@ const SEEK_STEP_SECONDS = 30;
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 // Sleep timer cycle: null (off) then each duration in minutes, looping.
 const SLEEP_TIMER_STEPS: Array<number | null> = [null, 5, 10, 15, 20, 30, 60];
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
 
 export interface PlayerState {
   isPlaying: boolean;
@@ -82,7 +81,7 @@ export function usePlayerState() {
 
   const fetchState = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/player/state`);
+      const response = await axios.get(`${getApiBase()}/player/state`);
       // Backend uses snake_case (is_playing); explicitly map it instead of
       // relying on the spread, otherwise `isPlaying` never actually updates.
       setState(prev => ({
@@ -116,7 +115,7 @@ export function usePlayerState() {
       });
     }
 
-    axios.get(`${API_BASE}/equalizer/presets`)
+    axios.get(`${getApiBase()}/equalizer/presets`)
       .then(res => setEqualizerPresets(res.data))
       .catch(error => console.error('Failed to load equalizer presets:', error));
 
@@ -135,9 +134,9 @@ export function usePlayerState() {
   const handlePlayPause = async () => {
     try {
       if (state.isPlaying) {
-        await axios.post(`${API_BASE}/player/pause`);
+        await axios.post(`${getApiBase()}/player/pause`);
       } else {
-        await axios.post(`${API_BASE}/player/resume`);
+        await axios.post(`${getApiBase()}/player/resume`);
       }
     } catch (error) {
       console.error('Failed to toggle playback:', error);
@@ -152,7 +151,7 @@ export function usePlayerState() {
 
   const goToPreviousChapter = async () => {
     try {
-      await axios.post(`${API_BASE}/player/previous-chapter`);
+      await axios.post(`${getApiBase()}/player/previous-chapter`);
     } catch (error) {
       console.error('Failed to go to previous chapter:', error);
     }
@@ -161,7 +160,7 @@ export function usePlayerState() {
   const restartChapter = async () => {
     setState(prev => ({ ...prev, position: 0 }));
     try {
-      await axios.post(`${API_BASE}/player/seek`, { position: 0 });
+      await axios.post(`${getApiBase()}/player/seek`, { position: 0 });
     } catch (error) {
       console.error('Failed to restart chapter:', error);
     }
@@ -191,7 +190,7 @@ export function usePlayerState() {
 
   const handleNextClick = async () => {
     try {
-      await axios.post(`${API_BASE}/player/next-chapter`);
+      await axios.post(`${getApiBase()}/player/next-chapter`);
     } catch (error) {
       console.error('Failed to go to next chapter:', error);
     }
@@ -202,25 +201,25 @@ export function usePlayerState() {
     const percentage = (e.clientX - rect.left) / rect.width;
     const newPosition = percentage * state.duration;
     setState(prev => ({ ...prev, position: newPosition }));
-    axios.post(`${API_BASE}/player/seek`, { position: newPosition });
+    axios.post(`${getApiBase()}/player/seek`, { position: newPosition });
   };
 
   const handleSeekStep = (deltaSeconds: number) => {
     const newPosition = Math.max(0, Math.min(state.duration, state.position + deltaSeconds));
     setState(prev => ({ ...prev, position: newPosition }));
-    axios.post(`${API_BASE}/player/seek`, { position: newPosition });
+    axios.post(`${getApiBase()}/player/seek`, { position: newPosition });
   };
 
   const handleVolumeChange = (volume: number) => {
     setState(prev => ({ ...prev, volume }));
-    axios.post(`${API_BASE}/player/volume`, { volume });
+    axios.post(`${getApiBase()}/player/volume`, { volume });
   };
 
   const handleAddBookmark = async () => {
     if (!state.currentBook) return;
     try {
       setAddingBookmark(true);
-      await axios.post(`${API_BASE}/books/${state.currentBook.id}/bookmarks`, {});
+      await axios.post(`${getApiBase()}/books/${state.currentBook.id}/bookmarks`, {});
       setBookmarkAdded(true);
       setTimeout(() => setBookmarkAdded(false), 1800);
     } catch (error) {
@@ -234,12 +233,12 @@ export function usePlayerState() {
     const currentIndex = SPEEDS.indexOf(state.speed);
     const nextSpeed = SPEEDS[(currentIndex + 1) % SPEEDS.length] ?? 1;
     setState(prev => ({ ...prev, speed: nextSpeed }));
-    axios.post(`${API_BASE}/player/speed`, { speed: nextSpeed });
+    axios.post(`${getApiBase()}/player/speed`, { speed: nextSpeed });
   };
 
   const handleCycleEqualizer = async () => {
     try {
-      const response = await axios.post(`${API_BASE}/player/equalizer/cycle`);
+      const response = await axios.post(`${getApiBase()}/player/equalizer/cycle`);
       setState(prev => ({ ...prev, equalizerPresetId: response.data.preset_id ?? null }));
     } catch (error) {
       console.error('Failed to cycle equalizer:', error);
@@ -250,7 +249,7 @@ export function usePlayerState() {
     const next = !state.loudnessNormalizationEnabled;
     setState(prev => ({ ...prev, loudnessNormalizationEnabled: next }));
     try {
-      await axios.post(`${API_BASE}/player/loudness-normalization`, { enabled: next });
+      await axios.post(`${getApiBase()}/player/loudness-normalization`, { enabled: next });
     } catch (error) {
       console.error('Failed to toggle loudness normalization:', error);
       setState(prev => ({ ...prev, loudnessNormalizationEnabled: !next }));
@@ -259,7 +258,7 @@ export function usePlayerState() {
 
   const handleCycleCompression = async () => {
     try {
-      const response = await axios.post(`${API_BASE}/player/compression/cycle`);
+      const response = await axios.post(`${getApiBase()}/player/compression/cycle`);
       setState(prev => ({ ...prev, compressionPreset: response.data.preset ?? null }));
     } catch (error) {
       console.error('Failed to cycle compression:', error);
@@ -271,7 +270,7 @@ export function usePlayerState() {
     const minutes = SLEEP_TIMER_STEPS[nextIndex];
     setSleepTimerStepIndex(nextIndex);
     try {
-      const response = await axios.post(`${API_BASE}/player/sleep-timer`, { minutes });
+      const response = await axios.post(`${getApiBase()}/player/sleep-timer`, { minutes });
       setState(prev => ({ ...prev, sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null }));
     } catch (error) {
       console.error('Failed to set sleep timer:', error);
@@ -281,7 +280,7 @@ export function usePlayerState() {
   const handleScanCastDevices = async () => {
     try {
       setCastScanning(true);
-      const response = await axios.get(`${API_BASE}/cast/devices`);
+      const response = await axios.get(`${getApiBase()}/cast/devices`);
       setCastDevices(response.data);
     } catch (error) {
       console.error('Failed to scan for cast devices:', error);
@@ -293,7 +292,7 @@ export function usePlayerState() {
   const handleConnectCastDevice = async (deviceName: string) => {
     try {
       setCastConnecting(deviceName);
-      await axios.post(`${API_BASE}/cast/connect`, { device_name: deviceName });
+      await axios.post(`${getApiBase()}/cast/connect`, { device_name: deviceName });
       await fetchState();
     } catch (error) {
       console.error('Failed to connect to cast device:', error);
@@ -304,7 +303,7 @@ export function usePlayerState() {
 
   const handleDisconnectCastDevice = async () => {
     try {
-      await axios.post(`${API_BASE}/cast/disconnect`);
+      await axios.post(`${getApiBase()}/cast/disconnect`);
       await fetchState();
     } catch (error) {
       console.error('Failed to disconnect cast device:', error);

@@ -1,0 +1,21 @@
+services:
+  audook-nas:
+    build: .
+    image: audook-nas:latest
+    container_name: audook-nas
+    restart: unless-stopped
+    networks:
+      - audook-net
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persists the NAS instance's own SQLite DB + cache (separate from the
+      # desktop app's local DB). Point this at a real path on the OMV host.
+      - /path/to/omv/appdata/audook/data:/root/.audook
+      # Read-only mount of the real audiobook folder on the NAS, scanned the
+      # same way the desktop app scans local folders (app/local/scanner.py).
+      - /path/to/omv/shares/Audiobooks:/audiobooks:ro
+
+networks:
+  audook-net:
+    driver: bridge

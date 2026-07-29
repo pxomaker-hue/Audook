@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+import { getApiBase } from '../config';
 
 interface Book {
   id: string;
@@ -31,8 +30,8 @@ const ExplorePage: React.FC = () => {
     const fetchBooks = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE}/books`);
-        setBooks(response.data);
+        const response = await axios.get(`${getApiBase()}/books`);
+        setBooks(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error('Failed to fetch books:', error);
       } finally {

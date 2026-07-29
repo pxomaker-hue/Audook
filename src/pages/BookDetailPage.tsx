@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, ArrowLeft, Search, Pencil, Lock, Unlock, Bookmark, Trash2, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
 import axios from 'axios';
+import { getApiBase } from '../config';
+import CoverImage from '../components/CoverImage';
+import { isCapacitorPlatform } from '../native/platform';
+import { mobilePlayerStore } from '../native/mobilePlayerStore';
 
 interface BookmarkEntry {
   id: number;
@@ -27,6 +31,7 @@ interface BookDetail {
     title: string;
     index: number;
     duration: number;
+    audio_file: string;
   }>;
   bookmarks: BookmarkEntry[];
   manual_overrides: string[];
@@ -91,7 +96,7 @@ const BookDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
   const [activePosition, setActivePosition] = useState<number>(0);
-  const apiBase = 'http://localhost:5000/api';
+  const apiBase = getApiBase();
 
   // "Associer" (match) panel
   const [showMatchPanel, setShowMatchPanel] = useState(false);
@@ -170,7 +175,11 @@ const BookDetailPage: React.FC = () => {
   const handlePlayBook = async () => {
     if (book) {
       try {
-        await axios.post(`${apiBase}/player/play`, { book_id: book.id });
+        if (isCapacitorPlatform) {
+          await mobilePlayerStore.play(book, book.progress.chapter_index, book.progress.position);
+        } else {
+          await axios.post(`${apiBase}/player/play`, { book_id: book.id });
+        }
         // Don't wait for the next 2s poll to highlight the chapter that
         // just started - refresh right away so it's instant.
         fetchPlayerState();
@@ -183,7 +192,11 @@ const BookDetailPage: React.FC = () => {
   const handlePlayChapter = async (chapterIndex: number) => {
     if (book) {
       try {
-        await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+        if (isCapacitorPlatform) {
+          await mobilePlayerStore.play(book, chapterIndex, 0);
+        } else {
+          await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+        }
         fetchPlayerState();
       } catch (error) {
         console.error('Failed to play chapter:', error);
@@ -441,8 +454,9 @@ const BookDetailPage: React.FC = () => {
         <ArrowLeft size={20} /> Retour
       </button>
 
-      <div style={{ display: 'flex', gap: '30px', marginBottom: '30px' }}>
+      <div className="book-hero" style={{ display: 'flex', gap: '30px', marginBottom: '30px', flexWrap: 'wrap' }}>
         <div
+          className="book-hero-cover"
           style={{
             width: '200px',
             height: '300px',
@@ -454,8 +468,9 @@ const BookDetailPage: React.FC = () => {
           }}
         >
           {book.cover_url ? (
-            <img
-              src={book.cover_url}
+            <CoverImage
+              bookId={book.id}
+              coverUrl={book.cover_url}
               alt={book.title}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -466,7 +481,7 @@ const BookDetailPage: React.FC = () => {
           )}
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: '260px' }}>
           <h1 className="page-title" style={{ marginBottom: '10px' }}>
             {book.title}
           </h1>
@@ -912,7 +927,7 @@ const BookDetailPage: React.FC = () => {
               // later ones are untouched.
               const referenceChapterIndex = activeChapterIndex ?? book.progress.chapter_index;
               const referencePosition = activeChapterIndex !== null ? activePosition : book.progress.position;
-              return book.chapters.map((chapter, index) => {
+              return (book.chapters || []).map((chapter, index) => {
               const isActive = activeChapterIndex === index;
               const chapterProgress = index < referenceChapterIndex
                 ? 100

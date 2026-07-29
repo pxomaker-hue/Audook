@@ -15,9 +15,13 @@
     "preelectron-build": "node -e \"const fs=require('fs'); fs.cpSync('electron/main.js', 'build/electron.js'); fs.cpSync('electron/preload.js', 'build/preload.js')\"",
     "electron-build": "npm run react-build && npm run preelectron-build && electron-builder",
     "build": "npm run electron-build",
-    "start": "npm run electron-dev"
+    "start": "npm run electron-dev",
+    "android-sync": "npm run react-build && npx cap sync android",
+    "android-open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "axios": "^1.6.0",
     "electron-is-dev": "^2.0.0",
     "lucide-react": "^0.294.0",
@@ -26,6 +30,7 @@
     "react-router-dom": "^6.18.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
@@ -52,12 +57,16 @@
       {
         "from": "dist/audook_backend",
         "to": ".",
-        "filter": ["audook_backend.exe"]
+        "filter": [
+          "audook_backend.exe"
+        ]
       },
       {
         "from": "assets/bin",
         "to": ".",
-        "filter": ["ffmpeg.exe"]
+        "filter": [
+          "ffmpeg.exe"
+        ]
       }
     ],
     "win": {

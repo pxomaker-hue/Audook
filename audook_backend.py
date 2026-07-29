@@ -3,17 +3,19 @@
 Audook Backend - Exposes services via HTTP API for Electron frontend
 """
 
+import os
 import sys
 import re
 from pathlib import Path
 import asyncio
-from flask import Flask, jsonify, request, send_file
+import requests
+from flask import Flask, jsonify, request, send_file, Response
 from flask_cors import CORS
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app.database import init_database, get_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository, CollectionRepository
+from app.database import init_database, get_session, remove_session, BookRepository, ReadingProgressRepository, ReadingHistoryRepository, ServerRepository, BookmarkRepository, EqualizerPresetRepository, AppSettingsRepository, CollectionRepository
 from app.services import LibraryService, PlayerService, SyncService
 from app.sync.scanner import scanner
 from app.sync import progress_sync
@@ -45,6 +47,14 @@ def format_chapter_title(index, title):
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok'}), 200
+
+@app.teardown_appcontext
+def cleanup_db_session(exception=None):
+    # Almost none of the routes below call session.close() themselves - this
+    # returns the connection to the pool at the end of every request instead
+    # of leaking it, which otherwise exhausts SQLAlchemy's default pool
+    # (size 5 + 10 overflow) within seconds under mobile's frequent polling.
+    remove_session()
 
 @app.before_request
 def init_services():
@@ -389,6 +399,51 @@ def set_book_finished(book_id):
         return jsonify({'status': 'ok', 'is_finished': finished})
     except Exception as e:
         logger.error(f"Failed to set finished status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/progress', methods=['POST'])
+def update_book_progress(book_id):
+    """Stateless progress update for clients that play audio outside the
+    PlayerService singleton (mobile). Persists locally and best-effort
+    pushes to the book's source server (Plex/Audiobookshelf), same as the
+    desktop player does via PlayerService."""
+    try:
+        data = request.json or {}
+        if 'chapter_index' not in data or 'position_seconds' not in data:
+            return jsonify({'error': 'chapter_index and position_seconds are required'}), 400
+
+        chapter_index = int(data['chapter_index'])
+        position_seconds = float(data['position_seconds'])
+
+        session = get_session()
+        book = BookRepository(session).get_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        cumulative = 0.0
+        for i, chapter in enumerate(book.chapters or []):
+            if i < chapter_index:
+                cumulative += chapter.get('duration', 0) or 0
+            elif i == chapter_index:
+                cumulative += position_seconds
+                break
+        percent = (cumulative / book.duration * 100) if book.duration else 0.0
+        percent = max(0.0, min(100.0, percent))
+        finished = percent >= 99.0
+
+        progress_repo = ReadingProgressRepository(session)
+        progress_repo.update_progress(book_id, chapter_index, position_seconds, percent)
+        if finished:
+            progress_repo.set_finished(book_id, True)
+
+        try:
+            progress_sync.push_progress(book_id, chapter_index, position_seconds, finished)
+        except Exception as e:
+            logger.warning(f"Failed to push progress to remote server: {e}")
+
+        return jsonify({'status': 'ok', 'percentage': percent, 'is_finished': finished})
+    except Exception as e:
+        logger.error(f"Failed to update book progress: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/<book_id>/clean-audio', methods=['POST'])
@@ -879,6 +934,20 @@ def delete_book_progress(book_id):
         deleted = ReadingProgressRepository(session).delete(book_id)
         if not deleted:
             return jsonify({'error': 'Aucune progression pour ce livre'}), 404
+
+        # A future scan would otherwise re-import this book's still-present
+        # progress from its source server (Plex/Audiobookshelf) and put it
+        # right back under "Reprendre l'écoute" - flag it as dismissed so
+        # the scanner leaves it alone (see scanner.py's
+        # _seed_remote_progress_if_new). Real playback progress made after
+        # this doesn't go through the scanner, so it's unaffected.
+        book = BookRepository(session).get_by_id(book_id)
+        if book:
+            extra = dict(book.extra_metadata or {})
+            extra["progress_dismissed"] = True
+            book.extra_metadata = extra
+            session.commit()
+
         return jsonify({'status': 'reset'})
     except Exception as e:
         logger.error(f"Failed to reset book progress: {e}")
@@ -893,6 +962,30 @@ def clear_all_progress():
         return jsonify({'status': 'cleared', 'deleted': count})
     except Exception as e:
         logger.error(f"Failed to clear progress: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/progress/dismissed-flags', methods=['DELETE'])
+def clear_all_dismissed_flags():
+    """One-off maintenance: clears the 'progress_dismissed' flag (set by
+    DELETE /api/books/<id>/progress) from every book, so a future scan is
+    free to re-import remote progress for all of them again. Use alongside
+    DELETE /api/progress when redoing dismissals manually after a bad
+    import, rather than being stuck with old dismiss decisions forever."""
+    try:
+        session = get_session()
+        books = session.query(DbBook).all()
+        cleared = 0
+        for book in books:
+            extra = book.extra_metadata or {}
+            if extra.get('progress_dismissed'):
+                extra = dict(extra)
+                del extra['progress_dismissed']
+                book.extra_metadata = extra
+                cleared += 1
+        session.commit()
+        return jsonify({'status': 'cleared', 'books_affected': cleared})
+    except Exception as e:
+        logger.error(f"Failed to clear dismissed flags: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books/search', methods=['GET'])
@@ -1259,17 +1352,36 @@ def disconnect_cast_device():
 
 @app.route('/api/cast/local-audio', methods=['GET'])
 def stream_local_audio_for_cast():
-    """Streams a local audio file over HTTP (with Range support) so a
-    Chromecast - a separate device on the LAN with no notion of a Windows
-    filesystem path - can fetch it. Only used internally by CastPlayer, which
-    always resolves this URL itself from a chapter's real audio_file; the
-    existence + extension check below still guards against being pointed at
-    something outside the audio library."""
+    """Streams an audio chapter over HTTP (with Range support) so a
+    Chromecast, or the mobile app's native ExoPlayer, can fetch it without
+    needing filesystem access or a source server's own auth token. Used
+    internally by both CastPlayer (desktop) and mobilePlayerStore.ts
+    (mobile), which always resolve this URL themselves from a chapter's
+    real audio_file - that's a local filesystem path for local-folder
+    books, or a remote Plex/Audiobookshelf streaming URL otherwise."""
     try:
         path = request.args.get('path', '')
+        if not path:
+            return jsonify({'error': 'Fichier audio introuvable'}), 404
+
+        if path.startswith('http://') or path.startswith('https://'):
+            headers = {}
+            if 'Range' in request.headers:
+                headers['Range'] = request.headers['Range']
+            upstream = requests.get(path, headers=headers, stream=True, timeout=15)
+            excluded = {'content-encoding', 'transfer-encoding', 'connection'}
+            response_headers = [
+                (k, v) for k, v in upstream.headers.items() if k.lower() not in excluded
+            ]
+            return Response(
+                upstream.iter_content(chunk_size=8192),
+                status=upstream.status_code,
+                headers=response_headers
+            )
+
         AUDIO_EXTENSIONS = {'.mp3', '.m4b', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
         file_path = Path(path)
-        if not path or file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
+        if file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
             return jsonify({'error': 'Fichier audio introuvable'}), 404
 
         return send_file(str(file_path), conditional=True)
@@ -1297,6 +1409,37 @@ def sync_status():
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/api/books/<book_id>/cover-proxy', methods=['GET'])
+def get_cover_proxy(book_id):
+    """Streams a Plex/Audiobookshelf cover through this backend instead of
+    the client loading book.cover_url (a direct http:// URL with an
+    embedded auth token) itself - the mobile WebView blocks that as mixed
+    content even with allowMixedContent set, and this also avoids leaking
+    the source server's token to the client."""
+    session = get_session()
+    try:
+        book = BookRepository(session).get_by_id(book_id)
+        if not book or not book.cover_url:
+            return jsonify({'error': 'Cover not found'}), 404
+        cover_url = book.cover_url
+    except Exception as e:
+        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        session.close()
+
+    try:
+        upstream = requests.get(cover_url, timeout=10, stream=True)
+        if upstream.status_code != 200:
+            return jsonify({'error': 'Cover not found'}), 404
+        return Response(
+            upstream.content,
+            content_type=upstream.headers.get('Content-Type', 'image/jpeg')
+        )
+    except Exception as e:
+        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/local-cover/<book_id>', methods=['GET'])
 def get_local_cover(book_id):
@@ -1334,4 +1477,5 @@ if __name__ == '__main__':
     EqualizerPresetRepository(seed_session).ensure_builtins()
     seed_session.close()
 
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    host = '0.0.0.0' if os.environ.get('AUDOOK_HEADLESS') == '1' else '127.0.0.1'
+    app.run(host=host, port=5000, debug=False)

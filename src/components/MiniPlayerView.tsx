@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2, Bookmark, Loader2, Check } from 'lucide-react';
 import { usePlayerState, formatTime } from '../hooks/usePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
+import { useCoverBlobUrl } from '../hooks/useCoverBlobUrl';
 
 // Rendered in the detached mini-player Electron window (see electron/main.js
 // createMiniWindow, loaded at the '#/mini' hash route). Deliberately shows
@@ -35,6 +36,7 @@ const MiniPlayerView: React.FC = () => {
   } = usePlayerState();
 
   const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
+  const coverSrc = useCoverBlobUrl(state.currentBook?.id ?? '', state.currentBook?.cover_url);
 
   return (
     <div className="mini-player">
@@ -59,8 +61,8 @@ const MiniPlayerView: React.FC = () => {
               style={{ cursor: 'pointer' }}
               title="Voir la page du livre"
             >
-              {state.currentBook.cover_url ? (
-                <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
+              {coverSrc ? (
+                <img src={coverSrc} alt={state.currentBook.title} />
               ) : (
                 <span>📚</span>
               )}

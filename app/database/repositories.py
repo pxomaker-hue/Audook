@@ -150,6 +150,13 @@ class BookRepository(BaseRepository):
                 new_extra[field] = existing_extra[field]
         if overrides:
             new_extra["manual_overrides"] = list(overrides)
+        # Not a scanned metadata field, so it isn't part of the
+        # manual_overrides system above - always carry it forward so a
+        # rescan can't silently re-seed progress the user explicitly
+        # dismissed (see the /progress DELETE route and
+        # scanner.py's _seed_remote_progress_if_new).
+        if existing_extra.get("progress_dismissed"):
+            new_extra["progress_dismissed"] = True
         book.extra_metadata = new_extra
 
         self.session.commit()

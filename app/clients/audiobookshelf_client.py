@@ -3,6 +3,7 @@ Audiobookshelf API client for audiobook discovery and streaming
 """
 
 from typing import Optional, List, Dict, Any
+import re
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
@@ -161,6 +162,19 @@ class AudiobookshelfClient:
                     "audio_file": self._get_streaming_url(library_id, book_id, audio_file.get("ino"))
                 }
                 chapters.append(chapter)
+
+            # Some libraries tag every single track with the same (or a
+            # generic "Chapter N") title - ABS itself shows "Chapter 1" for
+            # all of them in that case. Prefix the real chapter number so
+            # the player can at least tell chapters apart, instead of e.g.
+            # 40 identical "Chapitre" entries.
+            titles = [c["title"] for c in chapters]
+            if len(set(titles)) < len(titles):
+                for idx, c in enumerate(chapters):
+                    if re.match(r'^chapitre\s*\d+$|^chapter\s*\d+$', c["title"].strip(), re.IGNORECASE):
+                        c["title"] = f"Chapitre {idx + 1}"
+                    else:
+                        c["title"] = f"Chapitre {idx + 1} - {c['title']}"
 
             # The full item endpoint (/api/items/{id}) returns authors/series as
             # arrays of {id, name} (first-class ABS entities), but narrators has

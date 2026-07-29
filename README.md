@@ -173,6 +173,50 @@ Toute la configuration est stockée dans :
 - Effacez le cache s'il prend trop de place
 - Utilisez un paramètre de qualité plus faible pour les téléchargements
 
+## Déploiement Docker sur NAS (OpenMediaVault)
+
+En plus de l'application Windows, une instance backend séparée peut tourner sur un NAS OMV pour être utilisée par l'app mobile Android (voir plus bas). Cette instance a sa **propre base de données SQLite** et sa **propre configuration de serveur** (Plex/Audiobookshelf/dossier local) — elle ne remplace ni ne synchronise l'installation Windows, à l'exception de la progression de lecture sur les livres Plex/Audiobookshelf, qui se synchronise automatiquement via les deux comptes serveur.
+
+### Prérequis
+- OMV avec le plugin **Docker Compose** ou **Portainer** installé
+- Un dossier sur le NAS pour la persistance des données (`~/.audook` du conteneur)
+- Le chemin de partage réseau contenant vos livres audio locaux (optionnel, pour le scan de dossier local)
+
+### Déploiement via le plugin Docker Compose d'OMV
+1. Copiez ce dépôt (ou au minimum `Dockerfile`, `docker-compose.yml`, `requirements.txt`, `audook_backend.py`, le dossier `app/`) sur le NAS
+2. Éditez `docker-compose.yml` : remplacez les deux chemins d'exemple sous `volumes:` par les chemins réels du NAS (dossier de données + dossier des livres audio)
+3. Dans OMV, ouvrez le plugin **Compose**, créez un nouveau fichier pointant vers ce `docker-compose.yml`, puis cliquez sur **Up**
+4. Vérifiez que le service tourne : `http://<ip-du-nas>:5000/api/health` (ou testez `/api/books`)
+5. Dans l'app mobile (ou tout client web), configurez l'URL du serveur sur `http://<ip-du-nas>:5000/api`
+
+### Déploiement via Portainer
+1. Créez une nouvelle **Stack**, collez le contenu de `docker-compose.yml` (adapté avec vos chemins réels)
+2. Déployez la stack ; le conteneur `audook-nas` écoute sur le port `5000`
+
+### Notes
+- Le conteneur tourne en mode headless (`AUDOOK_HEADLESS=1`) : VLC utilise une sortie audio factice, la lecture audio se fait côté client (VLC/Chromecast desktop, ExoPlayer mobile), pas dans le conteneur
+- Le port `5000` est exposé via un réseau bridge (pas de `network_mode: host`) ; adaptez le mapping de port si `5000` est déjà utilisé sur le NAS
+- La progression de lecture sur des livres provenant d'un dossier local **propre au NAS** ne se synchronise pas vers le PC (limitation connue, acceptée) — seuls les livres Plex/Audiobookshelf se synchronisent entre les deux instances
+
+## Application mobile Android (Capacitor)
+
+Une app Android (APK) installable existe dans `android/`, générée via [Capacitor](https://capacitorjs.com/). Elle réutilise l'interface React existante (bibliothèque, collections, découvrir, historique, paramètres) et se connecte au backend NAS ci-dessus via l'adresse configurée dans **Paramètres > Connexion au backend**.
+
+La lecture audio en arrière-plan (contrôles à l'écran de verrouillage, lecture continue app fermée/écran éteint) passe par un plugin natif Kotlin (`android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt` + `AudookPlaybackService.kt`) basé sur ExoPlayer + MediaSession — un `<audio>` de WebView ne survit pas de façon fiable à la mise en veille de l'écran sur Android.
+
+### Générer l'APK
+
+Cet environnement de développement n'a pas de SDK Android/Gradle/JDK installés — le code natif (plugin Kotlin, projet Gradle sous `android/`) et le code JS (hook `useMobilePlayerState`, wrapper de plugin) sont prêts et committés, mais la compilation de l'APK doit se faire manuellement :
+
+1. Installez [Android Studio](https://developer.android.com/studio) (gratuit) — il installe le SDK Android et Gradle nécessaires
+2. `npm run react-build` puis `npm run android-sync` (build web React + `cap sync android`)
+3. `npm run android-open` (ou ouvrez directement le dossier `android/` dans Android Studio)
+4. Dans Android Studio : **Build > Build Bundle(s) / APK(s) > Build APK(s)**
+5. L'APK signé (debug) se trouve dans `android/app/build/outputs/apk/debug/`
+6. Installez-le sur le téléphone (`adb install ...` ou transfert manuel + activation des sources inconnues), puis réglez l'adresse du serveur dans Paramètres vers l'IP LAN du NAS (ex: `http://192.168.1.50:5000/api`)
+
+Pour une release signée (Play Store ou distribution directe), suivez le flux standard **Build > Generate Signed Bundle / APK** d'Android Studio (nécessite de créer un keystore).
+
 ## Références API
 
 - [Documentation API Audiobookshelf](https://github.com/advplyr/audiobookshelf/wiki/API-Documentation)

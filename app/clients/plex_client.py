@@ -2,6 +2,7 @@
 Plex API client for audiobook discovery and streaming
 """
 
+import re
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -152,6 +153,18 @@ class PlexClient:
                     "duration": duration,
                     "audio_file": self._get_streaming_url(track)
                 })
+
+            # Same fix as the Audiobookshelf client: some libraries tag
+            # every track with the same (or a generic "Chapter N") title -
+            # prefix the real chapter number so the player can tell them
+            # apart instead of showing e.g. 40 identical entries.
+            titles = [c["title"] for c in chapters]
+            if len(set(titles)) < len(titles):
+                for idx, c in enumerate(chapters):
+                    if re.match(r'^chapitre\s*\d+$|^chapter\s*\d+$', c["title"].strip(), re.IGNORECASE):
+                        c["title"] = f"Chapitre {idx + 1}"
+                    else:
+                        c["title"] = f"Chapitre {idx + 1} - {c['title']}"
 
             # Plex has no native "book series" field for music-organized audiobooks,
             # but collections are commonly used for that purpose - best-effort.
