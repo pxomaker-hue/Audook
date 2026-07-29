@@ -937,6 +937,30 @@ def clear_all_progress():
         logger.error(f"Failed to clear progress: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/progress/dismissed-flags', methods=['DELETE'])
+def clear_all_dismissed_flags():
+    """One-off maintenance: clears the 'progress_dismissed' flag (set by
+    DELETE /api/books/<id>/progress) from every book, so a future scan is
+    free to re-import remote progress for all of them again. Use alongside
+    DELETE /api/progress when redoing dismissals manually after a bad
+    import, rather than being stuck with old dismiss decisions forever."""
+    try:
+        session = get_session()
+        books = session.query(DbBook).all()
+        cleared = 0
+        for book in books:
+            extra = book.extra_metadata or {}
+            if extra.get('progress_dismissed'):
+                extra = dict(extra)
+                del extra['progress_dismissed']
+                book.extra_metadata = extra
+                cleared += 1
+        session.commit()
+        return jsonify({'status': 'cleared', 'books_affected': cleared})
+    except Exception as e:
+        logger.error(f"Failed to clear dismissed flags: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/books/search', methods=['GET'])
 def search_books():
     try:
