@@ -39,6 +39,18 @@ def main():
         '--hidden-import=sqlalchemy.orm',
         '--hidden-import=vlc',
         '--hidden-import=requests',
+        '--hidden-import=pydantic',
+        '--hidden-import=pydantic_core',
+        # pychromecast (Chromecast/Google Home casting) and its zeroconf/
+        # casttube dependencies rely on a lot of dynamic/platform-specific
+        # imports that PyInstaller's static analysis doesn't catch on its
+        # own - --collect-submodules pulls in everything under each package
+        # instead of hand-picking individual hidden-imports that are easy to
+        # miss and would otherwise only surface as a crash in the packaged
+        # .exe, not during this build.
+        '--collect-submodules=pychromecast',
+        '--collect-submodules=zeroconf',
+        '--collect-submodules=casttube',
     ]
 
     try:

@@ -10,15 +10,21 @@ Exécution :
 """
 
 from PIL import Image
-import os
+from pathlib import Path
 
-SOURCE = "assets/icons/audook.png"
-ICO_PATH = "assets/icons/audook.ico"
+# Resolved relative to this script's own location, not the current working
+# directory - otherwise this only worked when run from the project root
+# (`python assets/icons/generate_icon.py`) and failed with a file-not-found
+# when run from inside assets/icons/ itself (`python generate_icon.py`).
+ICONS_DIR = Path(__file__).parent
+SOURCE = ICONS_DIR / "audook 2.png"
+ICO_PATH = ICONS_DIR / "audook.ico"
 # Fraction of the square canvas the artwork occupies - leaves a small margin
-# so the icon doesn't look cramped at small sizes (taskbar/tray).
-CONTENT_SCALE = 0.86
-
-os.makedirs("assets/icons", exist_ok=True)
+# so the icon doesn't look cramped at small sizes (taskbar/tray). The new
+# source is already a fully-composed icon (rounded square background, own
+# internal padding, no transparent border) rather than bare artwork on a
+# transparent canvas, so no extra shrink is needed here - 1.0 uses it as-is.
+CONTENT_SCALE = 1.0
 
 img = Image.open(SOURCE).convert("RGBA")
 
