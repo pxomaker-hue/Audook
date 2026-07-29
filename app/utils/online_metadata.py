@@ -346,7 +346,11 @@ def _get_audible_details(asin: str) -> Dict[str, Optional[str]]:
         )
         if response.status_code == 200:
             product = response.json().get("product", {})
-            result["description"] = _strip_html(product.get("merchandising_summary") or product.get("publisher_summary"))
+            # publisher_summary is the full synopsis (what Audible shows on
+            # the book's page); merchandising_summary is a short marketing
+            # tagline - preferring it here was why matched descriptions came
+            # back truncated to essentially one line.
+            result["description"] = _strip_html(product.get("publisher_summary") or product.get("merchandising_summary"))
 
             images = product.get("product_images") or {}
             result["cover_url"] = images.get("500") or images.get("1024") or images.get("2400")

@@ -28,6 +28,16 @@ class AudookPlayerPlugin : Plugin() {
     private val positionHandler = Handler(Looper.getMainLooper())
     private var positionRunnable: Runnable? = null
 
+    // On a cold app start, the MediaController/session/player pipeline is
+    // still spinning up when play() is first called - setMediaItem's own
+    // startPositionMs argument (see play() below) is supposed to be honored
+    // regardless of that, but has been observed to get silently dropped on
+    // this exact cold-start path, resuming from 0 despite the correct
+    // chapter being picked. This is a belt-and-suspenders correction: once
+    // the player actually reaches STATE_READY, re-assert the intended
+    // position if it hasn't drifted there on its own.
+    private var pendingResumeMs: Long? = null
+
     override fun load() {
         val sessionToken = SessionToken(
             context,
@@ -53,6 +63,18 @@ class AudookPlayerPlugin : Plugin() {
                 val data = JSObject()
                 data.put("ended", true)
                 notifyListeners("ended", data)
+            }
+            if (playbackState == Player.STATE_READY) {
+                pendingResumeMs?.let { target ->
+                    pendingResumeMs = null
+                    val c = controller
+                    // A few seconds of drift is normal playback progress
+                    // since setMediaItem was called - only correct an
+                    // actual reset-to-0, don't fight legitimate playback.
+                    if (c != null && target > 3000 && c.currentPosition < 1000) {
+                        c.seekTo(target)
+                    }
+                }
             }
         }
     }
@@ -124,6 +146,7 @@ class AudookPlayerPlugin : Plugin() {
         // prepare() can arrive before the player has finished loading the
         // item and get silently dropped/reset once it becomes ready, which
         // is why resuming a book on mobile always restarted from 0.
+        pendingResumeMs = if (startPositionMs > 0) startPositionMs else null
         positionHandler.post {
             c.setMediaItem(mediaItem, startPositionMs)
             c.prepare()
