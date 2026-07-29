@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal } from 'lucide-react';
 import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
 import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
@@ -48,6 +48,24 @@ const Player: React.FC = () => {
   } = usePlayerState();
 
   const coverSrc = useCoverBlobUrl(state.currentBook?.id ?? '', state.currentBook?.cover_url);
+
+  // Compact bar's own "..." menu (bookmark + chapters) - separate from
+  // PlayerMoreMenu (speed/equalizer/loudness/cast), which the compact bar
+  // never had room for and mobile doesn't implement yet anyway (see
+  // useMobilePlayerState.ts's no-op handlers).
+  const [showCompactMenu, setShowCompactMenu] = useState(false);
+  const compactMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showCompactMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (compactMenuRef.current && !compactMenuRef.current.contains(e.target as Node)) {
+        setShowCompactMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCompactMenu]);
 
   if (!state.currentBook) {
     return (
@@ -214,54 +232,85 @@ const Player: React.FC = () => {
         </div>
       </div>
 
-      {/* Compact horizontal bar - visible below the compact breakpoint. */}
+      {/* Compact horizontal bar - visible below the compact breakpoint.
+          Two rows: cover + progress/timecodes on top, playback controls +
+          a "..." menu (bookmark/chapters) below - the old single-row
+          layout crammed cover+title+5 controls+5 more buttons into one
+          line and overflowed ~530px of content into a ~350px bar. */}
       <div className="player-compact-view">
-        <div className="player-cover-wrap">
-          {coverSrc ? (
-            <img src={coverSrc} alt={state.currentBook.title} />
-          ) : (
-            <span>📚</span>
-          )}
-        </div>
-
-        <div className="player-compact-info">
-          <div className="player-compact-title">
-            {state.currentChapterTitle || state.currentBook.title}
+        <div className="player-compact-row1">
+          <div className="player-cover-wrap">
+            {coverSrc ? (
+              <img src={coverSrc} alt={state.currentBook.title} />
+            ) : (
+              <span>📚</span>
+            )}
           </div>
-          <div className="player-compact-subtitle">{state.currentBook.author}</div>
-          <div className="progress-bar" onClick={handleSeek}>
-            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+
+          <div className="player-compact-progress">
+            <div className="progress-bar" onClick={handleSeek}>
+              <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+            </div>
+            <div className="player-time-row compact">
+              <span className="player-time">{formatTime(state.position)}</span>
+              <span className="player-time">{formatTime(state.duration)}</span>
+            </div>
           </div>
         </div>
 
-        <div className="player-controls">
-          <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
-            <SkipBack size={14} />
-          </button>
-          <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
-            <Rewind size={14} />
-          </button>
-          <button
-            className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
-            onClick={handlePlayPause}
-            title={state.isPlaying ? 'Pause' : 'Lecture'}
-          >
-            {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
-          </button>
-          <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
-            <FastForward size={14} />
-          </button>
-          <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
-            <SkipForward size={14} />
-          </button>
-        </div>
+        <div className="player-compact-row2">
+          <div className="player-controls">
+            <button className="player-button" onClick={handlePreviousClick} title="Chapitre précédent / Redémarrer">
+              <SkipBack size={14} />
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(-SEEK_STEP_SECONDS)} title="Reculer de 30s">
+              <Rewind size={14} />
+            </button>
+            <button
+              className={`player-button main ${state.isPlaying ? 'playing' : ''}`}
+              onClick={handlePlayPause}
+              title={state.isPlaying ? 'Pause' : 'Lecture'}
+            >
+              {state.isPlaying ? <Pause size={18} /> : <Play size={18} />}
+            </button>
+            <button className="player-button" onClick={() => handleSeekStep(SEEK_STEP_SECONDS)} title="Avancer de 30s">
+              <FastForward size={14} />
+            </button>
+            <button className="player-button" onClick={handleNextClick} title="Chapitre suivant">
+              <SkipForward size={14} />
+            </button>
+          </div>
 
-        <div className="player-extra-row compact">
-          {bookmarkButton(14)}
-          {chaptersButton(14)}
-          {moreMenu(14)}
-          {volumeControl(14)}
-          {miniPlayerButton(14)}
+          <div className="more-menu-wrapper" ref={compactMenuRef}>
+            {showCompactMenu && (
+              <div className="more-menu-popover">
+                <div className="more-menu-row">
+                  <span className="more-menu-label">Marque-page</span>
+                  <button
+                    className={`player-button more-menu-icon ${bookmarkAdded ? 'confirmed' : ''}`}
+                    onClick={handleAddBookmark}
+                    disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
+                    title="Marquer la position actuelle"
+                  >
+                    {addingBookmark ? <Loader2 size={16} className="spin" /> : bookmarkAdded ? <Check size={16} /> : <Bookmark size={16} />}
+                  </button>
+                </div>
+                <div className="more-menu-row">
+                  <span className="more-menu-label">Chapitres</span>
+                  <button
+                    className="player-button more-menu-icon"
+                    onClick={() => navigate(`/book/${state.currentBook.id}`)}
+                    title="Voir les chapitres"
+                  >
+                    <ListMusic size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+            <button className="player-button" onClick={() => setShowCompactMenu(v => !v)} title="Plus d'options">
+              <MoreHorizontal size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -87,7 +87,11 @@ class AudookPlayerPlugin : Plugin() {
         val url = call.getString("url")
         val title = call.getString("title") ?: ""
         val cover = call.getString("cover")
-        val startPositionMs = call.getLong("positionMs") ?: 0L
+        // PluginCall.getLong() only returns a value if it's already boxed as
+        // a Java Long - a JS number arrives as Integer or Double instead, so
+        // this always silently returned null here. getDouble() handles both,
+        // and is why resuming a book always restarted from 0.
+        val startPositionMs = call.getDouble("positionMs")?.toLong() ?: 0L
 
         if (url == null) {
             call.reject("url is required")
@@ -142,7 +146,10 @@ class AudookPlayerPlugin : Plugin() {
 
     @PluginMethod
     fun seek(call: PluginCall) {
-        val ms = call.getLong("ms")
+        // Same getLong() pitfall as play()'s positionMs above - this was
+        // silently rejecting every seek call (the ±30s buttons never
+        // actually moved playback on mobile).
+        val ms = call.getDouble("ms")?.toLong()
         if (ms == null) {
             call.reject("ms is required")
             return
