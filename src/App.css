@@ -1291,6 +1291,116 @@ input[type="checkbox"] {
   align-items: flex-end;
   gap: 10px;
   z-index: 5;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* "pill" layout (mini-player): a rounded bar that unfolds sideways from the
+   "..." button, which stays fixed in place at the right edge - the
+   mini-player window is too short for anything to unfold above/below the
+   button, so this floats over the other controls instead of needing
+   vertical room.
+
+   The "..." button itself is left as a normal in-flow child of
+   .more-menu-wrapper (so the wrapper keeps its real size and position) -
+   only the icon row is absolutely positioned, anchored to sit immediately
+   left of the button via right: 100%. Making the *whole* pill (button
+   included) position:absolute used to leave the wrapper with no in-flow
+   content at all, so it collapsed to a 0x0 box and "right: 0" ended up
+   anchored to wherever that empty box happened to land in the row instead
+   of the button's actual position. */
+.more-menu-pill-icons {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+  padding: 4px 8px;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-pop);
+  border-radius: 999px;
+  z-index: 6;
+  transform-origin: right center;
+  animation: more-menu-pill-unfold 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+@keyframes more-menu-pill-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+/* Each cycle-style option (speed/EBU/compression/equalizer/sleep timer):
+   its current value shown as a small label sitting above the button at all
+   times while the pill is open, not just on hover. */
+.more-menu-pill-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.more-menu-pill-item-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: var(--surface-muted);
+  border-radius: 999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+/* Volume folds/unfolds upward (a vertical slider), rather than always
+   showing inline, since a slider needs continuous input rather than a
+   single cycle-on-click like the other options. */
+.more-menu-pill-volume-slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  width: 20px;
+  height: 70px;
+}
+
+.more-menu-pill-cast {
+  position: relative;
+  display: flex;
+}
+
+.more-menu-pill-cast-popover {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  padding: 10px;
+  z-index: 7;
+}
+
+.more-menu-pill-cast-popover .more-menu-row {
+  justify-content: space-between;
+}
+
+.more-menu-pill-cast-popover .more-menu-label {
+  max-width: none;
+  opacity: 1;
+  padding: 0;
+  margin-right: 0;
+  white-space: normal;
 }
 
 /* Each row unfolds upward with a "bouncy" overshoot, cascading top-to-bottom
@@ -1630,7 +1740,7 @@ input[type="checkbox"] {
   width: 60px;
   height: 60px;
   flex-shrink: 0;
-  border-radius: var(--radius-md);
+  border-radius: 50%;
   overflow: hidden;
   background-color: var(--surface-muted);
   display: flex;

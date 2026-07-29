@@ -570,7 +570,13 @@ ipcMain.handle('window:is-maximized', () => {
 // Detached mini-player window (see createMiniWindow/enterMiniMode above)
 ipcMain.on('mini-player:activate', () => enterMiniMode());
 ipcMain.on('mini-player:deactivate', () => exitMiniMode());
-
+ipcMain.on('mini-player:open-book', (event, bookId) => {
+  exitMiniMode();
+  // exitMiniMode() only shows/focuses the existing mainWindow (it's just
+  // hidden, never destroyed, while in mini mode) - safe to send straight
+  // away without waiting for a fresh load.
+  mainWindow?.webContents.send('navigate-to-book', bookId);
+});
 // Close-button behavior (see the mainWindow 'close' handler in createWindow)
 ipcMain.on('window:close-response', (event, { action, remember }) => {
   if (remember) {

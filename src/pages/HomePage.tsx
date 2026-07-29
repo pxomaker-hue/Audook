@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -360,7 +360,7 @@ const HomePage: React.FC = () => {
         <span className="book-card-badge">{formatDuration(book.duration)}</span>
         {book.is_finished && (
           <span className="book-card-finished" title="Livre terminé">
-            <CheckCircle2 size={12} fill="currentColor" />
+            <Check size={14} strokeWidth={3} />
           </span>
         )}
         {book.has_bookmark && (

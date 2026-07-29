@@ -128,7 +128,12 @@ const Player: React.FC = () => {
       <div className="player-full">
         <div className="player-title-bar">{state.currentBook.title}</div>
 
-        <div className="player-cover-wrap">
+        <div
+          className="player-cover-wrap"
+          onClick={() => navigate(`/book/${state.currentBook.id}`)}
+          style={{ cursor: 'pointer' }}
+          title="Voir la page du livre"
+        >
           {state.currentBook.cover_url && (
             <div
               className="player-cover-glow"
@@ -206,7 +211,12 @@ const Player: React.FC = () => {
 
       {/* Compact horizontal bar - visible below the compact breakpoint. */}
       <div className="player-compact-view">
-        <div className="player-cover-wrap">
+        <div
+          className="player-cover-wrap"
+          onClick={() => navigate(`/book/${state.currentBook.id}`)}
+          style={{ cursor: 'pointer' }}
+          title="Voir la page du livre"
+        >
           {state.currentBook.cover_url ? (
             <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
           ) : (

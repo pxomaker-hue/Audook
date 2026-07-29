@@ -52,7 +52,15 @@ contextBridge.exposeInMainWorld('electron', {
   // Detached mini-player window
   miniPlayer: {
     activate: () => ipcRenderer.send('mini-player:activate'),
-    deactivate: () => ipcRenderer.send('mini-player:deactivate')
+    deactivate: () => ipcRenderer.send('mini-player:deactivate'),
+    openBook: (bookId) => ipcRenderer.send('mini-player:open-book', bookId)
+  },
+
+  // Sent from the mini-player window to the main window, telling it to
+  // navigate to a book's detail page (used when opening a book's page from
+  // the mini-player, which has no router of its own to navigate with).
+  onNavigateToBook: (callback) => {
+    ipcRenderer.on('navigate-to-book', (event, bookId) => callback(bookId));
   },
 
   // Close-button behavior: quit, minimize to tray, or ask every time

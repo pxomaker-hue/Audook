@@ -33,6 +33,7 @@ interface BookDetail {
   progress: {
     position: number;
     percentage: number;
+    chapter_index: number;
   };
   is_finished: boolean;
   noise_reduction_status: 'idle' | 'processing' | 'done' | 'error';
@@ -89,6 +90,7 @@ const BookDetailPage: React.FC = () => {
   const [book, setBook] = useState<BookDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeChapterIndex, setActiveChapterIndex] = useState<number | null>(null);
+  const [activePosition, setActivePosition] = useState<number>(0);
   const apiBase = 'http://localhost:5000/api';
 
   // "Associer" (match) panel
@@ -135,23 +137,25 @@ const BookDetailPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  useEffect(() => {
-    const fetchPlayerState = async () => {
-      try {
-        const response = await axios.get(`${apiBase}/player/state`);
-        if (response.data.currentBook?.id === id) {
-          setActiveChapterIndex(response.data.currentChapterIndex ?? null);
-        } else {
-          setActiveChapterIndex(null);
-        }
-      } catch (error) {
-        console.error('Failed to get player state:', error);
+  const fetchPlayerState = async () => {
+    try {
+      const response = await axios.get(`${apiBase}/player/state`);
+      if (response.data.currentBook?.id === id) {
+        setActiveChapterIndex(response.data.currentChapterIndex ?? null);
+        setActivePosition(response.data.position ?? 0);
+      } else {
+        setActiveChapterIndex(null);
       }
-    };
+    } catch (error) {
+      console.error('Failed to get player state:', error);
+    }
+  };
 
+  useEffect(() => {
     fetchPlayerState();
     const interval = setInterval(fetchPlayerState, 2000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // While a noise-reduction pass is running in the background, poll for it
@@ -167,6 +171,9 @@ const BookDetailPage: React.FC = () => {
     if (book) {
       try {
         await axios.post(`${apiBase}/player/play`, { book_id: book.id });
+        // Don't wait for the next 2s poll to highlight the chapter that
+        // just started - refresh right away so it's instant.
+        fetchPlayerState();
       } catch (error) {
         console.error('Failed to play book:', error);
       }
@@ -177,6 +184,7 @@ const BookDetailPage: React.FC = () => {
     if (book) {
       try {
         await axios.post(`${apiBase}/player/play`, { book_id: book.id, chapter_index: chapterIndex });
+        fetchPlayerState();
       } catch (error) {
         console.error('Failed to play chapter:', error);
       }
@@ -896,13 +904,27 @@ const BookDetailPage: React.FC = () => {
               overflow: 'hidden'
             }}
           >
-            {book.chapters.map((chapter, index) => {
+            {(() => {
+              // While actively playing this book, use the live polled
+              // position; otherwise fall back to the last saved progress -
+              // either way, chapters before that point read as fully
+              // listened, the current one shows its own fraction, and
+              // later ones are untouched.
+              const referenceChapterIndex = activeChapterIndex ?? book.progress.chapter_index;
+              const referencePosition = activeChapterIndex !== null ? activePosition : book.progress.position;
+              return book.chapters.map((chapter, index) => {
               const isActive = activeChapterIndex === index;
+              const chapterProgress = index < referenceChapterIndex
+                ? 100
+                : index === referenceChapterIndex && chapter.duration > 0
+                ? Math.min(100, (referencePosition / chapter.duration) * 100)
+                : 0;
               return (
                 <div
                   key={chapter.id}
                   onClick={() => handlePlayChapter(index)}
                   style={{
+                    position: 'relative',
                     padding: '12px 15px',
                     borderBottom: index < book.chapters.length - 1 ? '1px solid var(--border)' : 'none',
                     display: 'flex',
@@ -913,6 +935,18 @@ const BookDetailPage: React.FC = () => {
                     backgroundColor: isActive ? 'var(--surface-muted)' : 'transparent'
                   }}
                 >
+                  {chapterProgress > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: 0,
+                        height: '2px',
+                        width: `${chapterProgress}%`,
+                        backgroundColor: 'var(--primary)'
+                      }}
+                    />
+                  )}
                   <span
                     style={{
                       color: isActive ? 'var(--primary)' : 'var(--text-primary)',
@@ -947,7 +981,8 @@ const BookDetailPage: React.FC = () => {
                   </span>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
       )}

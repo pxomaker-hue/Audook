@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter } from 'react-router-dom';
+import { HashRouter, useNavigate } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Player from './components/Player';
@@ -15,6 +15,19 @@ import './App.css';
 const isMiniWindow = window.location.hash.startsWith('#/mini');
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:5000/api';
+
+// Listens for the mini-player window asking the main window to open a
+// book's page (see electron/preload.js onNavigateToBook / electron/main.js
+// mini-player:open-book) - has to live inside <HashRouter> to get a router
+// to navigate with, which is why it's a separate component rather than
+// just an effect in App itself.
+const NavigateToBookListener: React.FC = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    window.electron?.onNavigateToBook((bookId: string) => navigate(`/book/${bookId}`));
+  }, [navigate]);
+  return null;
+};
 
 // How long the backend can stay unreachable before we show an actual error
 // screen. Below this, checks happen silently behind a plain loading screen -
@@ -137,6 +150,7 @@ const App: React.FC = () => {
 
     return (
       <HashRouter>
+        <NavigateToBookListener />
         <div className="app">
           <Sidebar />
           <main className="main-content">

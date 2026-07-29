@@ -53,7 +53,12 @@ const MiniPlayerView: React.FC = () => {
       ) : (
         <>
           <div className="mini-player-body">
-            <div className="mini-player-cover-wrap">
+            <div
+              className="mini-player-cover-wrap"
+              onClick={() => window.electron?.miniPlayer.openBook(state.currentBook.id)}
+              style={{ cursor: 'pointer' }}
+              title="Voir la page du livre"
+            >
               {state.currentBook.cover_url ? (
                 <img src={state.currentBook.cover_url} alt={state.currentBook.title} />
               ) : (
@@ -134,6 +139,7 @@ const MiniPlayerView: React.FC = () => {
               onConnectCast={handleConnectCastDevice}
               onDisconnectCast={handleDisconnectCastDevice}
               buttonSize={14}
+              layout="pill"
             />
           </div>
         </>

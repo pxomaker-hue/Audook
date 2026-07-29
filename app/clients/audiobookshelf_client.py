@@ -155,7 +155,7 @@ class AudiobookshelfClient:
 
                 chapter = {
                     "id": audio_file.get("ino", f"abs_file_{idx}"),
-                    "title": audio_file.get("metaTags", {}).get("tagTitle") or f"Chapter {idx + 1}",
+                    "title": audio_file.get("metaTags", {}).get("tagTitle") or f"Chapitre {idx + 1}",
                     "index": idx,
                     "duration": duration,
                     "audio_file": self._get_streaming_url(library_id, book_id, audio_file.get("ino"))

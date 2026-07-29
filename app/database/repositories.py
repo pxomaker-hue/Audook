@@ -183,6 +183,23 @@ class BookRepository(BaseRepository):
         self.session.commit()
         return book
 
+    def update_chapter_titles(self, book_id: str, titles: List[str]) -> Optional[Book]:
+        """Replace just the "title" of each chapter, keeping audio_file/
+        duration/index/id untouched - used to swap in real chapter names
+        (e.g. from Audible) over generic/duplicate ones from the original
+        source, without touching anything about how the chapters actually
+        play. Only applies if the title count matches the chapter count
+        exactly - a mismatch means the source's chapter boundaries don't
+        line up with ours, and titles would land on the wrong chapter."""
+        book = self.get_by_id(book_id)
+        if not book or not book.chapters or len(titles) != len(book.chapters):
+            return None
+
+        updated = [{**chapter, "title": title} for chapter, title in zip(book.chapters, titles)]
+        book.chapters = updated
+        self.session.commit()
+        return book
+
     def lock_fields(self, book_id: str, field_names: List[str]) -> Optional[Book]:
         """Lock fields against being overwritten by a future scan or online
         match/replace, without changing their current value - lets the user

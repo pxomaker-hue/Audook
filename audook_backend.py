@@ -31,6 +31,16 @@ library_service = None
 player_service = None
 sync_service = None
 
+
+def format_chapter_title(index, title):
+    """Prefix the chapter number before its title wherever the "currently
+    playing chapter" is shown - some sources (and our own fallback naming)
+    give every chapter the same/generic title, which is otherwise
+    impossible to tell apart on the player."""
+    if title is None:
+        return None
+    return f"{index + 1}. {title}"
+
 # Health check endpoint for Electron app (before services init)
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -284,7 +294,7 @@ def get_books():
             if progress and book.chapters:
                 chapter_index = progress.get('chapter_index') or 0
                 if 0 <= chapter_index < len(book.chapters):
-                    current_chapter_title = book.chapters[chapter_index].get('title')
+                    current_chapter_title = format_chapter_title(chapter_index, book.chapters[chapter_index].get('title'))
 
             result.append({
                 'id': book.id,
@@ -339,7 +349,8 @@ def get_book_details(book_id):
             'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,
-                'percentage': progress.progress_percent
+                'percentage': progress.progress_percent,
+                'chapter_index': progress.current_chapter_index
             },
             'is_finished': progress.is_finished,
             'noise_reduction_status': BookRepository(session).get_noise_reduction_status(book_id),
@@ -636,11 +647,28 @@ def apply_book_match(book_id):
         if should_apply('series_sequence', existing_metadata.get('series_sequence'), details.get('series_sequence')):
             fields['series_sequence'] = details['series_sequence']
 
-        if not fields:
+        applied = []
+        if fields:
+            book_repo.update_fields(book_id, fields, lock=True)
+            applied.extend(fields.keys())
+
+        # Real per-chapter titles - only from Audible (the only source with
+        # actual chapter data), and only applied when the chapter count
+        # matches exactly (see update_chapter_titles). Not part of the
+        # fill/replace/lock field system above since there's nothing to lock
+        # a chapter title against - a matching chapter count is itself the
+        # safety check.
+        if work_key.startswith('audible:'):
+            chapters = online_metadata.get_audible_chapters(work_key[len('audible:'):])
+            if chapters:
+                titles = [c['title'] for c in chapters if c.get('title')]
+                if len(titles) == len(book.chapters or []) and book_repo.update_chapter_titles(book_id, titles):
+                    applied.append('chapters')
+
+        if not applied:
             return jsonify({'status': 'no_change'})
 
-        book_repo.update_fields(book_id, fields, lock=True)
-        return jsonify({'status': 'matched', 'applied': list(fields.keys())})
+        return jsonify({'status': 'matched', 'applied': applied})
     except Exception as e:
         logger.error(f"Failed to apply match: {e}")
         return jsonify({'error': str(e)}), 500
@@ -1162,7 +1190,7 @@ def get_player_state():
         chapter_index = player_service.current_chapter_index
         chapter_title = None
         if book and book.chapters and 0 <= chapter_index < len(book.chapters):
-            chapter_title = book.chapters[chapter_index].get('title')
+            chapter_title = format_chapter_title(chapter_index, book.chapters[chapter_index].get('title'))
 
         state = {
             'is_playing': player_service.is_playing(),

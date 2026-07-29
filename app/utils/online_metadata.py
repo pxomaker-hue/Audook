@@ -340,13 +340,20 @@ def _get_audible_details(asin: str) -> Dict[str, Optional[str]]:
     try:
         response = requests.get(
             f"https://{AUDIBLE_HOST}/1.0/catalog/products/{asin}",
-            params={"response_groups": "product_desc,media,contributors,series,category_ladders"},
+            # product_extended_attrs is what actually carries publisher_summary
+            # (the full back-cover description) - without it, only the short
+            # merchandising_summary teaser comes back, cut off mid-sentence.
+            params={"response_groups": "product_desc,media,contributors,series,category_ladders,product_extended_attrs"},
             timeout=REQUEST_TIMEOUT,
             headers={"User-Agent": USER_AGENT}
         )
         if response.status_code == 200:
             product = response.json().get("product", {})
-            result["description"] = _strip_html(product.get("merchandising_summary") or product.get("publisher_summary"))
+            # publisher_summary is the full back-cover-style description;
+            # merchandising_summary is a short marketing teaser (often a
+            # single truncated sentence ending in "...") - prefer the real
+            # one, only falling back to the teaser if that's all there is.
+            result["description"] = _strip_html(product.get("publisher_summary") or product.get("merchandising_summary"))
 
             images = product.get("product_images") or {}
             result["cover_url"] = images.get("500") or images.get("1024") or images.get("2400")
@@ -371,6 +378,39 @@ def _get_audible_details(asin: str) -> Dict[str, Optional[str]]:
         logger.warning(f"Failed to fetch Audible details for '{asin}': {e}")
 
     return result
+
+
+def get_audible_chapters(asin: str) -> Optional[List[Dict[str, Any]]]:
+    """Fetch Audible's own chapter list (real titles, in the book's actual
+    language) for an ASIN - used to replace generic/duplicate per-file
+    chapter titles (e.g. every file just says "Chapter 1" because the
+    source files/server had no real per-chapter tag data). Returns None on
+    any failure so callers can skip cleanly."""
+    try:
+        response = requests.get(
+            f"https://{AUDIBLE_HOST}/1.0/content/{asin}/metadata",
+            params={"response_groups": "chapter_info"},
+            timeout=REQUEST_TIMEOUT,
+            headers={"User-Agent": USER_AGENT}
+        )
+        if response.status_code != 200:
+            return None
+
+        raw_chapters = (
+            response.json().get("content_metadata", {})
+            .get("chapter_info", {})
+            .get("chapters") or []
+        )
+        if not raw_chapters:
+            return None
+
+        return [
+            {"title": c.get("title"), "duration": (c.get("length_ms") or 0) / 1000.0}
+            for c in raw_chapters
+        ]
+    except requests.RequestException as e:
+        logger.warning(f"Failed to fetch Audible chapters for '{asin}': {e}")
+        return None
 
 
 def get_book_work_details(work_key: str) -> Dict[str, Optional[str]]:

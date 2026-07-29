@@ -22,7 +22,9 @@ export interface IElectronAPI {
   miniPlayer: {
     activate: () => void;
     deactivate: () => void;
+    openBook: (bookId: string) => void;
   };
+  onNavigateToBook: (callback: (bookId: string) => void) => void;
   onCloseRequested: (callback: () => void) => void;
   respondToClose: (action: CloseBehavior, remember: boolean) => void;
   getCloseBehavior: () => Promise<CloseBehavior>;

@@ -147,7 +147,7 @@ class PlexClient:
 
                 chapters.append({
                     "id": f"plex_track_{track.ratingKey}",
-                    "title": track.title or f"Chapter {idx + 1}",
+                    "title": track.title or f"Chapitre {idx + 1}",
                     "index": idx,
                     "duration": duration,
                     "audio_file": self._get_streaming_url(track)
