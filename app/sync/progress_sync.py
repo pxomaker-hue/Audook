@@ -11,6 +11,34 @@ from app.database import get_session, ServerRepository, BookRepository
 from app.clients import PlexClient, AudiobookshelfClient
 from app.utils import logger
 
+# A push whose new position is more than this far BEHIND the position
+# already recorded on the source server is treated as a stray/test session
+# rather than an intentional rewind, and is skipped - remote pushes are
+# otherwise unconditional, so a mobile test session (even a few seconds,
+# even paused right away) was silently overwriting real listening progress
+# that only lived on Audiobookshelf/Plex. A genuine large rewind (e.g.
+# dragging the progress bar far back) is rare enough that losing one remote
+# sync for it is an acceptable trade-off - the next push past that point
+# corrects it. Never applied when marking a book finished (always intentional).
+REGRESSION_GUARD_SECONDS = 150
+
+# One authenticated Audiobookshelf client per server, reused across pushes/
+# pulls instead of logging in fresh every call - progress pushes happen
+# every ~15-20s during playback, and repeated POST /login calls were enough
+# to trip Audiobookshelf's own rate limiter (see scanner.py's own client
+# reuse for the same reason), which made pushes fail silently - caught
+# below and merely logged as a warning - rather than actually reaching the
+# server.
+_abs_clients: Dict[str, AudiobookshelfClient] = {}
+
+
+def _get_abs_client(server, force_new: bool = False) -> AudiobookshelfClient:
+    if not force_new and server.id in _abs_clients:
+        return _abs_clients[server.id]
+    client = AudiobookshelfClient(ServerRepository.active_url(server), server.username, server.password)
+    _abs_clients[server.id] = client
+    return client
+
 
 def _cumulative_seconds(chapters: List[Dict[str, Any]], chapter_index: int, position_in_chapter: float) -> float:
     """Convert (chapter_index, position within that chapter) into a single
@@ -49,16 +77,48 @@ def push_progress(book_id: str, chapter_index: int, position_seconds: float, fin
         server = ServerRepository(session).get_by_id(book.server_id)
         if not server:
             return False
+        new_cumulative = _cumulative_seconds(book.chapters or [], chapter_index, position_seconds)
 
         if server.type == "plex":
             client = PlexClient(server.url, server.api_key)
+            if not finished:
+                remote = client.pull_progress(book_id, book.chapters or [])
+                if remote and not remote.get("finished"):
+                    remote_cumulative = _cumulative_seconds(
+                        book.chapters or [], remote["chapter_index"], remote["position_seconds"]
+                    )
+                    if remote_cumulative - new_cumulative > REGRESSION_GUARD_SECONDS:
+                        logger.warning(
+                            f"Skipping remote progress push for {book_id}: would regress Plex "
+                            f"progress by {remote_cumulative - new_cumulative:.0f}s"
+                        )
+                        return False
             return client.push_progress(book_id, book.chapters or [], chapter_index, position_seconds, finished)
 
         if server.type == "audiobookshelf":
-            client = AudiobookshelfClient(ServerRepository.active_url(server), server.username, server.password)
             item_id = book_id.replace("abs_", "", 1)
-            cumulative = _cumulative_seconds(book.chapters or [], chapter_index, position_seconds)
-            client.set_user_progress(item_id, cumulative, book.duration or 0.0, finished)
+
+            try:
+                client = _get_abs_client(server)
+                remote = None if finished else client.get_user_progress(item_id)
+            except Exception:
+                # Cached client's token may have gone stale - one retry with
+                # a fresh login before giving up on this push.
+                client = _get_abs_client(server, force_new=True)
+                remote = None if finished else client.get_user_progress(item_id)
+
+            if remote and not remote.get("finished"):
+                remote_cumulative = remote.get("position_seconds", 0.0)
+                if remote_cumulative - new_cumulative > REGRESSION_GUARD_SECONDS:
+                    logger.warning(
+                        f"Skipping remote progress push for {book_id}: would regress Audiobookshelf "
+                        f"progress by {remote_cumulative - new_cumulative:.0f}s (from "
+                        f"{remote_cumulative:.0f}s to {new_cumulative:.0f}s) - looks like a stray/test "
+                        f"session rather than an intentional rewind."
+                    )
+                    return False
+
+            client.set_user_progress(item_id, new_cumulative, book.duration or 0.0, finished)
             return True
 
         return False
@@ -87,7 +147,7 @@ def pull_progress(book_id: str) -> Optional[Dict[str, Any]]:
             return client.pull_progress(book_id, book.chapters or [])
 
         if server.type == "audiobookshelf":
-            client = AudiobookshelfClient(ServerRepository.active_url(server), server.username, server.password)
+            client = _get_abs_client(server)
             item_id = book_id.replace("abs_", "", 1)
             remote = client.get_user_progress(item_id)
             if not remote:
