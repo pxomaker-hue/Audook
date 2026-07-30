@@ -101,6 +101,7 @@ class AudookPlayerPlugin : Plugin() {
     // see AudookCastManager for why the local playlist stays loaded (paused,
     // silent) while casting instead of being torn down.
     private lateinit var castManager: AudookCastManager
+    private var lastKnownRemotePlaying: Boolean = false
 
     override fun load() {
         val sessionToken = SessionToken(
@@ -150,14 +151,30 @@ class AudookPlayerPlugin : Plugin() {
                 } else {
                     // Resume locally from wherever the cast device had
                     // reached, so switching back doesn't restart the chapter.
+                    // Read the position before stopDiscovery/detach can null
+                    // it out any further, and mirror whatever play/pause
+                    // state the cast device was last in - otherwise the local
+                    // player stays paused (from the pause() issued when the
+                    // cast session started) while the UI still thinks it's
+                    // playing, frozen at the stale 0:00 it never left.
                     val resumeMs = castManager.getPositionMs()
+                    val wasPlaying = this@AudookPlayerPlugin.lastKnownRemotePlaying
                     positionHandler.post {
-                        controller?.seekTo(resumeMs)
+                        val c = controller ?: return@post
+                        c.seekTo(resumeMs)
+                        if (wasPlaying) {
+                            c.play()
+                            startPositionUpdates()
+                        } else {
+                            stopPositionUpdates()
+                        }
+                        emitPosition()
                     }
                 }
             }
 
             override fun onRemotePlayingChanged(isPlaying: Boolean) {
+                lastKnownRemotePlaying = isPlaying
                 if (isPlaying) startPositionUpdates() else stopPositionUpdates()
                 val data = JSObject()
                 data.put("isPlaying", isPlaying)

@@ -80,10 +80,12 @@ class AudookCastManager(private val context: Context) {
     }
 
     private var lastKnownRemotePlaying: Boolean? = null
+    private var lastKnownPositionMs: Long = 0L
 
     private val remoteMediaClientCallback = object : RemoteMediaClient.Callback() {
         override fun onStatusUpdated() {
             val client = remoteMediaClient ?: return
+            lastKnownPositionMs = client.approximateStreamPosition
             val status = client.mediaStatus ?: return
             if (status.idleReason == MediaStatus.IDLE_REASON_FINISHED) {
                 listener?.onRemoteChapterEnded()
@@ -104,6 +106,11 @@ class AudookCastManager(private val context: Context) {
     }
 
     private fun detachSession() {
+        // Capture the last known position before tearing down the client -
+        // once remoteMediaClient is null, getPositionMs() can no longer read
+        // it, and the plugin needs this value right now to resume local
+        // playback where the cast device left off.
+        lastKnownPositionMs = remoteMediaClient?.approximateStreamPosition ?: lastKnownPositionMs
         remoteMediaClient?.unregisterCallback(remoteMediaClientCallback)
         currentSession = null
         remoteMediaClient = null
@@ -210,7 +217,7 @@ class AudookCastManager(private val context: Context) {
         remoteMediaClient?.play()
     }
 
-    fun getPositionMs(): Long = remoteMediaClient?.approximateStreamPosition ?: 0L
+    fun getPositionMs(): Long = remoteMediaClient?.approximateStreamPosition ?: lastKnownPositionMs
     fun getDurationMs(): Long = remoteMediaClient?.mediaInfo?.streamDuration ?: 0L
     fun isPlaying(): Boolean = remoteMediaClient?.isPlaying == true
 }
