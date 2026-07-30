@@ -69,6 +69,12 @@ def init_services():
             player_service = PlayerService()
             sync_service = SyncService()
             player_service.restore_audio_settings()
+            # Auto-sync once on startup so "Reprendre l'écoute" reflects
+            # progress made elsewhere (mobile, ABS/Plex web player) without
+            # needing to remember to hit "Synchroniser" first - runs in the
+            # background (same call the manual sync button uses), so it
+            # never delays the app becoming usable.
+            sync_service.sync_all_servers(background=True)
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
             # Continue anyway - services will be retried on next request
