@@ -111,6 +111,12 @@ class AudookPlayerPlugin : Plugin() {
         future.addListener({
             controller = future.get()
             controller?.addListener(playerListener)
+            // AudookPlaybackService generates and assigns this itself now
+            // (instead of leaving ExoPlayer to auto-generate one and report
+            // it via onAudioSessionIdChanged, which never actually fired in
+            // practice) - always available immediately, no need to wait for
+            // playback to start or for a callback that wasn't arriving.
+            ensureAudioEffects(AudookPlaybackService.audioSessionId)
         }, MoreExecutors.directExecutor())
 
         castManager = AudookCastManager(context)

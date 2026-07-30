@@ -177,32 +177,32 @@ const Player: React.FC = () => {
           </button>
         </div>
       ) : (
-        <>
-          <div className="more-menu-row">
-            <span className="more-menu-label">Google Home / Chromecast</span>
-            <button
-              className="player-button more-menu-icon"
-              onClick={handleScanCastDevices}
-              disabled={castScanning}
-              title="Rechercher un appareil"
-            >
-              {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-            </button>
+        <div className="more-menu-row mobile-cast-row">
+          <span className="more-menu-label">Google Home / Chromecast</span>
+          <div className="mobile-cast-devices">
+            {castDevices.map((device) => (
+              <div className="mobile-cast-device" key={device.uuid}>
+                <span className="mobile-cast-device-name">{device.name}</span>
+                <button
+                  className="player-button more-menu-icon"
+                  onClick={() => handleConnectCastDevice(device.uuid)}
+                  disabled={castConnecting === device.uuid}
+                  title={`Diffuser sur ${device.name}`}
+                >
+                  {castConnecting === device.uuid ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+                </button>
+              </div>
+            ))}
           </div>
-          {castDevices.map((device) => (
-            <div className="more-menu-row" key={device.uuid}>
-              <span className="more-menu-label">{device.name}</span>
-              <button
-                className="player-button more-menu-icon"
-                onClick={() => handleConnectCastDevice(device.uuid)}
-                disabled={castConnecting === device.uuid}
-                title={`Diffuser sur ${device.name}`}
-              >
-                {castConnecting === device.uuid ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
-              </button>
-            </div>
-          ))}
-        </>
+          <button
+            className="player-button more-menu-icon"
+            onClick={handleScanCastDevices}
+            disabled={castScanning}
+            title="Rechercher un appareil"
+          >
+            {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+          </button>
+        </div>
       )}
     </>
   );
@@ -348,7 +348,7 @@ const Player: React.FC = () => {
 
             <div className="more-menu-wrapper" ref={expandedMenuRef}>
               {showExpandedMenu && (
-                <div className="more-menu-popover">
+                <div className="more-menu-popover more-menu-popover-mobile">
                   <div className="more-menu-row">
                     <span className="more-menu-label">Marque-page</span>
                     <button
@@ -470,7 +470,7 @@ const Player: React.FC = () => {
 
               <div className="more-menu-wrapper" ref={compactMenuRef}>
                 {showCompactMenu && (
-                  <div className="more-menu-popover">
+                  <div className="more-menu-popover more-menu-popover-mobile">
                     <div className="more-menu-row">
                       <span className="more-menu-label">Marque-page</span>
                       <button
