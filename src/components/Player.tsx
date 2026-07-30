@@ -92,6 +92,18 @@ const Player: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showExpandedMenu]);
 
+  // Mobile's "..." row labels (Vitesse, Égaliseur, ...) have no :hover to
+  // reveal on like desktop's - instead, tapping a row's button briefly
+  // shows its own label (with the value that was just set) then hides it
+  // again, rather than leaving every label permanently visible/cluttered.
+  const [revealedLabel, setRevealedLabel] = useState<string | null>(null);
+  const revealLabelRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealLabel = (id: string) => {
+    setRevealedLabel(id);
+    if (revealLabelRef.current) clearTimeout(revealLabelRef.current);
+    revealLabelRef.current = setTimeout(() => setRevealedLabel((cur) => (cur === id ? null : cur)), 1800);
+  };
+
   if (!state.currentBook) {
     return (
       <div className="player">
@@ -138,34 +150,46 @@ const Player: React.FC = () => {
   const mobileMoreMenuExtras = () => (
     <>
       <div className="more-menu-row">
-        <span className="more-menu-label">Vitesse ({state.speed}x)</span>
-        <button className="player-button more-menu-icon" onClick={handleCycleSpeed} title="Vitesse de lecture">
+        <span className={`more-menu-label ${revealedLabel === 'speed' ? 'more-menu-label-visible' : ''}`}>Vitesse ({state.speed}x)</span>
+        <button
+          className="player-button more-menu-icon"
+          onClick={() => { handleCycleSpeed(); revealLabel('speed'); }}
+          title="Vitesse de lecture"
+        >
           <Gauge size={16} />
         </button>
       </div>
       <div className="more-menu-row">
-        <span className="more-menu-label">
+        <span className={`more-menu-label ${revealedLabel === 'equalizer' ? 'more-menu-label-visible' : ''}`}>
           Égaliseur{state.equalizerPresetId ? ` (${equalizerPresets.find((p) => p.id === state.equalizerPresetId)?.name ?? ''})` : ' (désactivé)'}
         </span>
-        <button className="player-button more-menu-icon" onClick={handleCycleEqualizer} title="Égaliseur">
+        <button
+          className="player-button more-menu-icon"
+          onClick={() => { handleCycleEqualizer(); revealLabel('equalizer'); }}
+          title="Égaliseur"
+        >
           <SlidersHorizontal size={16} />
         </button>
       </div>
       <div className="more-menu-row">
-        <span className="more-menu-label">Normalisation du volume</span>
+        <span className={`more-menu-label ${revealedLabel === 'loudness' ? 'more-menu-label-visible' : ''}`}>Normalisation du volume</span>
         <button
           className={`player-button more-menu-icon ${state.loudnessNormalizationEnabled ? 'confirmed' : ''}`}
-          onClick={handleToggleLoudnessNormalization}
+          onClick={() => { handleToggleLoudnessNormalization(); revealLabel('loudness'); }}
           title="Normalisation du volume (par livre)"
         >
           <AudioLines size={16} />
         </button>
       </div>
       <div className="more-menu-row">
-        <span className="more-menu-label">
+        <span className={`more-menu-label ${revealedLabel === 'compression' ? 'more-menu-label-visible' : ''}`}>
           Compression ({COMPRESSION_LABELS[state.compressionPreset ?? ''] ?? 'désactivée'})
         </span>
-        <button className="player-button more-menu-icon" onClick={handleCycleCompression} title="Compression dynamique">
+        <button
+          className="player-button more-menu-icon"
+          onClick={() => { handleCycleCompression(); revealLabel('compression'); }}
+          title="Compression dynamique"
+        >
           <Activity size={16} />
         </button>
       </div>
@@ -178,7 +202,7 @@ const Player: React.FC = () => {
         </div>
       ) : (
         <div className="more-menu-row mobile-cast-row">
-          <span className="more-menu-label">Google Home / Chromecast</span>
+          <span className={`more-menu-label ${revealedLabel === 'cast' ? 'more-menu-label-visible' : ''}`}>Google Home / Chromecast</span>
           <div className="mobile-cast-devices">
             {castDevices.map((device) => (
               <div className="mobile-cast-device" key={device.uuid}>
@@ -196,7 +220,7 @@ const Player: React.FC = () => {
           </div>
           <button
             className="player-button more-menu-icon"
-            onClick={handleScanCastDevices}
+            onClick={() => { handleScanCastDevices(); revealLabel('cast'); }}
             disabled={castScanning}
             title="Rechercher un appareil"
           >
@@ -350,10 +374,10 @@ const Player: React.FC = () => {
               {showExpandedMenu && (
                 <div className="more-menu-popover more-menu-popover-mobile">
                   <div className="more-menu-row">
-                    <span className="more-menu-label">Marque-page</span>
+                    <span className={`more-menu-label ${revealedLabel === 'bookmark' ? 'more-menu-label-visible' : ''}`}>Marque-page</span>
                     <button
                       className={`player-button more-menu-icon ${bookmarkAdded ? 'confirmed' : ''}`}
-                      onClick={handleAddBookmark}
+                      onClick={() => { handleAddBookmark(); revealLabel('bookmark'); }}
                       disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
                       title="Marquer la position actuelle"
                     >
@@ -472,10 +496,10 @@ const Player: React.FC = () => {
                 {showCompactMenu && (
                   <div className="more-menu-popover more-menu-popover-mobile">
                     <div className="more-menu-row">
-                      <span className="more-menu-label">Marque-page</span>
+                      <span className={`more-menu-label ${revealedLabel === 'bookmark' ? 'more-menu-label-visible' : ''}`}>Marque-page</span>
                       <button
                         className={`player-button more-menu-icon ${bookmarkAdded ? 'confirmed' : ''}`}
-                        onClick={handleAddBookmark}
+                        onClick={() => { handleAddBookmark(); revealLabel('bookmark'); }}
                         disabled={addingBookmark || bookmarkAdded || state.currentChapterIndex === null}
                         title="Marquer la position actuelle"
                       >

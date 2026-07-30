@@ -2,6 +2,7 @@ package com.audook.app
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.mediarouter.media.MediaRouteSelector
 import androidx.mediarouter.media.MediaRouter
 import com.google.android.gms.cast.CastMediaControlIntent
@@ -29,6 +30,8 @@ import com.google.android.gms.common.images.WebImage
  * and just tells this class to mirror whichever chapter is now current to
  * the cast device instead of sounding it locally.
  */
+private const val TAG = "AudookCast"
+
 class AudookCastManager(private val context: Context) {
 
     interface Listener {
@@ -112,9 +115,11 @@ class AudookCastManager(private val context: Context) {
             try {
                 castContext = CastContext.getSharedInstance(context)
                 castContext?.sessionManager?.addSessionManagerListener(sessionManagerListener, CastSession::class.java)
+                Log.d(TAG, "CastContext initialized")
             } catch (e: Exception) {
                 // Google Play Services unavailable/outdated on this device -
                 // casting just silently stays unavailable rather than crash.
+                Log.w(TAG, "Failed to initialize CastContext", e)
                 castContext = null
             }
         }
@@ -122,10 +127,17 @@ class AudookCastManager(private val context: Context) {
     }
 
     fun startDiscovery() {
-        if (discovering) return
-        ensureCastContext() ?: return
+        if (discovering) {
+            Log.d(TAG, "startDiscovery: already discovering")
+            return
+        }
+        if (ensureCastContext() == null) {
+            Log.w(TAG, "startDiscovery: no CastContext, aborting")
+            return
+        }
         discovering = true
         mediaRouter.addCallback(routeSelector, routerCallback, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY)
+        Log.d(TAG, "startDiscovery: callback registered, all current routes: ${mediaRouter.routes.map { "${it.id}=${it.name}" }}")
         notifyDevices()
     }
 
@@ -136,9 +148,12 @@ class AudookCastManager(private val context: Context) {
     }
 
     private fun notifyDevices() {
-        val devices = mediaRouter.routes
+        val allRoutes = mediaRouter.routes
+        Log.d(TAG, "notifyDevices: ${allRoutes.size} total routes: ${allRoutes.map { "id=${it.id} name='${it.name}' matches=${it.matchesSelector(routeSelector)} defaultOrBt=${it.isDefaultOrBluetooth}" }}")
+        val devices = allRoutes
             .filter { it.matchesSelector(routeSelector) && !it.isDefaultOrBluetooth }
             .map { CastDeviceInfo(it.id, it.name.toString()) }
+        Log.d(TAG, "notifyDevices: filtered to ${devices.size} cast devices: $devices")
         listener?.onDevicesChanged(devices)
     }
 

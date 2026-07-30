@@ -1567,9 +1567,12 @@ input[type="checkbox"] {
 /* Every row label in the mobile "..." menus was built on the same
    reveal-on-hover pattern as desktop's, invisible (max-width:0, opacity:0)
    until :hover - which touch has no equivalent for, so every single label
-   (Vitesse, Égaliseur, cast device names, ...) was permanently invisible on
-   mobile, not just cosmetic. Forced always-expanded here instead. */
-.more-menu-popover-mobile .more-menu-label {
+   (Vitesse, Égaliseur, ...) was permanently invisible on mobile. Rather than
+   force them always-visible (cluttered, and desktop's brief hover-reveal
+   confirmation is nicer), Player.tsx now toggles this class on tap instead,
+   showing the label (with the new value) briefly right after a setting is
+   changed, then hiding it again - see revealMobileLabel(). */
+.more-menu-label.more-menu-label-visible {
   max-width: 180px;
   margin-right: 8px;
   padding: 8px 14px;
