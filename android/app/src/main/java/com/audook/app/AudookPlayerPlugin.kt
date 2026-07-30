@@ -102,6 +102,13 @@ class AudookPlayerPlugin : Plugin() {
     // silent) while casting instead of being torn down.
     private lateinit var castManager: AudookCastManager
     private var lastKnownRemotePlaying: Boolean = false
+    // Mirrors whatever emitPosition() last saw from the cast device, polled
+    // once a second - kept independently of AudookCastManager's own idea of
+    // "last position" because by the time a session actually ends, the
+    // receiver has often already quit and is reporting a stale/zeroed
+    // position, which would otherwise overwrite the real one right before
+    // we need it to resume local playback.
+    private var lastSeenCastPositionMs: Long = 0L
 
     override fun load() {
         val sessionToken = SessionToken(
@@ -146,6 +153,7 @@ class AudookPlayerPlugin : Plugin() {
                     positionHandler.post {
                         val c = controller ?: return@post
                         c.pause()
+                        lastSeenCastPositionMs = c.currentPosition
                         loadCurrentChapterOnCast(c.currentPosition)
                     }
                 } else {
@@ -157,7 +165,8 @@ class AudookPlayerPlugin : Plugin() {
                     // player stays paused (from the pause() issued when the
                     // cast session started) while the UI still thinks it's
                     // playing, frozen at the stale 0:00 it never left.
-                    val resumeMs = castManager.getPositionMs()
+                    val freshMs = castManager.getPositionMs()
+                    val resumeMs = if (freshMs > 0) freshMs else lastSeenCastPositionMs
                     val wasPlaying = this@AudookPlayerPlugin.lastKnownRemotePlaying
                     positionHandler.post {
                         val c = controller ?: return@post
@@ -456,7 +465,9 @@ class AudookPlayerPlugin : Plugin() {
     private fun emitPosition() {
         val data = JSObject()
         if (castManager.isCasting()) {
-            data.put("positionMs", castManager.getPositionMs())
+            val posMs = castManager.getPositionMs()
+            if (posMs > 0) lastSeenCastPositionMs = posMs
+            data.put("positionMs", posMs)
             data.put("durationMs", castManager.getDurationMs())
         } else {
             val c = controller ?: return
