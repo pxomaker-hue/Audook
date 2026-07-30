@@ -153,6 +153,11 @@ class AudookCastManager(private val context: Context) {
         val devices = allRoutes
             .filter { it.matchesSelector(routeSelector) && !it.isDefaultOrBluetooth }
             .map { CastDeviceInfo(it.id, it.name.toString()) }
+            // Some devices are announced twice by Play Services - once via the
+            // legacy MediaRouteProviderService and once via the newer
+            // MediaRoute2ProviderService. Same physical device, same name -
+            // keep only the first entry per name to avoid a confusing duplicate.
+            .distinctBy { it.name }
         Log.d(TAG, "notifyDevices: filtered to ${devices.size} cast devices: $devices")
         listener?.onDevicesChanged(devices)
     }
