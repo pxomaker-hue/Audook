@@ -1,8 +1,10 @@
 package com.audook.app
 
 import android.content.ComponentName
+import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -29,6 +31,31 @@ import kotlin.math.pow
 // Android band's own center frequency is closest - an approximation, not an
 // exact match, since the two don't line up 1:1.
 private val DESKTOP_EQ_FREQUENCIES = listOf(31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
+
+// Same three intensities as COMPRESSOR_PRESETS in app/player/vlc_player.py -
+// approximate, not identical: Android's DynamicsProcessing multi-band
+// compressor (API 28+) is a different algorithm than VLC's own "compressor"
+// filter, tuned here with the same threshold/ratio/attack/release/makeup-
+// gain numbers to land in the same ballpark rather than reproduce it exactly.
+private data class CompressionPreset(
+    val thresholdDb: Float,
+    val ratio: Float,
+    val attackMs: Float,
+    val releaseMs: Float,
+    val makeupGainDb: Float
+)
+
+private val COMPRESSION_PRESETS = mapOf(
+    "leger" to CompressionPreset(thresholdDb = -15f, ratio = 2f, attackMs = 25f, releaseMs = 150f, makeupGainDb = 3f),
+    "modere" to CompressionPreset(thresholdDb = -18f, ratio = 3f, attackMs = 20f, releaseMs = 120f, makeupGainDb = 5f),
+    "fort" to CompressionPreset(thresholdDb = -22f, ratio = 4.5f, attackMs = 15f, releaseMs = 100f, makeupGainDb = 7f)
+)
+
+// DynamicsProcessing needs its channel count fixed at construction time -
+// audiobooks are effectively always mono or stereo, and stereo is the safer
+// assumption (a mono session opened as stereo generally still works; the
+// reverse can throw).
+private const val COMPRESSION_CHANNEL_COUNT = 2
 
 /**
  * JS-facing bridge to the background-audio playback service
@@ -60,10 +87,12 @@ class AudookPlayerPlugin : Plugin() {
     // effect instance always starts back at its flat/off default.
     private var equalizer: Equalizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var dynamicsProcessing: DynamicsProcessing? = null
     private var lastAudioSessionId: Int = 0
     private var desiredEqBands: FloatArray? = null // 10 values, dB - null means off
     private var desiredEqPreamp: Float = 0f
     private var desiredLoudnessGainDb: Float = 0f
+    private var desiredCompressionPreset: String? = null
 
     override fun load() {
         val sessionToken = SessionToken(
@@ -156,8 +185,36 @@ class AudookPlayerPlugin : Plugin() {
             loudnessEnhancer = null
         }
 
+        try {
+            dynamicsProcessing?.release()
+        } catch (e: Exception) { /* already released or invalid - fine */ }
+        dynamicsProcessing = null
+        // A single-band multi-band-compressor stage is configured up front
+        // (mbcInUse=true) since DynamicsProcessing's stages can't be added
+        // after construction, only reconfigured/enabled - so this has to
+        // exist from the start even before the user picks a preset, sitting
+        // disabled (see applyCompression) until they do. Assumes a stereo
+        // session; a mono one would fail this construction and just leave
+        // compression silently unavailable for that book (caught below).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val config = DynamicsProcessing.Config.Builder(
+                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                    COMPRESSION_CHANNEL_COUNT,
+                    false, 0,
+                    true, 1,
+                    false, 0,
+                    false
+                ).build()
+                dynamicsProcessing = DynamicsProcessing(0, sessionId, config)
+            } catch (e: Exception) {
+                dynamicsProcessing = null
+            }
+        }
+
         applyEqualizer()
         applyLoudnessGain()
+        applyCompression()
     }
 
     // Maps the 10 desktop-style dB values onto however many bands this
@@ -215,6 +272,43 @@ class AudookPlayerPlugin : Plugin() {
             try { loudnessEnhancer?.enabled = false } catch (e: Exception) { }
             val linear = 10.0.pow(gainDb / 20.0).toFloat().coerceIn(0f, 1f)
             positionHandler.post { controller?.volume = linear }
+        }
+    }
+
+    // Applies (or disables) the single-band MBC stage configured at
+    // construction time (see ensureAudioEffects) using the same threshold/
+    // ratio/attack/release/makeup-gain numbers as VLC's compressor presets -
+    // an approximation given the different underlying algorithm, not a
+    // reproduction of VLC's own filter.
+    private fun applyCompression() {
+        val dp = dynamicsProcessing ?: return
+        val presetKey = desiredCompressionPreset
+        if (presetKey == null) {
+            try { dp.setEnabled(false) } catch (e: Exception) { }
+            return
+        }
+        val preset = COMPRESSION_PRESETS[presetKey] ?: return
+        try {
+            for (channel in 0 until COMPRESSION_CHANNEL_COUNT) {
+                val mbcBand = DynamicsProcessing.MbcBand(
+                    true, // enabled
+                    0f, // cutoffFrequency - only band, covers the whole spectrum
+                    preset.attackMs,
+                    preset.releaseMs,
+                    preset.ratio,
+                    preset.thresholdDb,
+                    3f, // kneeWidth
+                    -80f, // noiseGateThreshold
+                    1f, // expanderRatio
+                    0f, // preGain
+                    preset.makeupGainDb // postGain
+                )
+                dp.setMbcBandByChannelIndex(channel, 0, mbcBand)
+            }
+            dp.setEnabled(true)
+        } catch (e: Exception) {
+            // Device-specific quirk rejected a parameter - leave whatever
+            // was already applied rather than crash over a cosmetic feature.
         }
     }
 
@@ -342,6 +436,14 @@ class AudookPlayerPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setCompression(call: PluginCall) {
+        val preset = call.getString("preset")
+        desiredCompressionPreset = if (preset.isNullOrEmpty()) null else preset
+        applyCompression()
+        call.resolve()
+    }
+
+    @PluginMethod
     fun previousChapter(call: PluginCall) {
         // The "MediaItem" variant always jumps to the actual previous
         // playlist entry (or does nothing at the first one) - unlike plain
@@ -395,6 +497,7 @@ class AudookPlayerPlugin : Plugin() {
         stopPositionUpdates()
         try { equalizer?.release() } catch (e: Exception) { }
         try { loudnessEnhancer?.release() } catch (e: Exception) { }
+        try { dynamicsProcessing?.release() } catch (e: Exception) { }
         controller?.release()
         controller = null
         super.handleOnDestroy()

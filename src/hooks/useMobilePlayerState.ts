@@ -39,7 +39,7 @@ export function usePlayerState() {
     speed: native.speed,
     equalizerPresetId: native.equalizerPresetId,
     loudnessNormalizationEnabled: native.loudnessNormalizationEnabled,
-    compressionPreset: null,
+    compressionPreset: native.compressionPreset,
     sleepTimerRemainingSeconds: null,
     isCasting: false,
     castDeviceName: null
@@ -72,7 +72,9 @@ export function usePlayerState() {
   const handleToggleLoudnessNormalization = () => {
     mobilePlayerStore.toggleLoudnessNormalization(!state.loudnessNormalizationEnabled);
   };
-  const handleCycleCompression = async () => {};
+  const handleCycleCompression = async () => {
+    await mobilePlayerStore.cycleCompression();
+  };
   const handleCycleSleepTimer = async () => {};
   const handleScanCastDevices = async () => {};
   const handleConnectCastDevice = async (_deviceName: string) => {};

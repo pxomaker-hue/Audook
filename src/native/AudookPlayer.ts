@@ -24,6 +24,12 @@ export interface AudookPlayerPlugin {
   // Per-book EBU-style gain in dB (0 disables it) - positive boosts via
   // LoudnessEnhancer, negative attenuates via the player's own volume.
   setLoudnessGain(options: { gainDb: number }): Promise<void>;
+  // preset: one of COMPRESSOR_PRESETS' keys in app/player/vlc_player.py
+  // ("leger"/"modere"/"fort"), or null/omitted to disable. Applied via
+  // Android's DynamicsProcessing multi-band compressor - a different
+  // algorithm than VLC's own "compressor" filter, tuned to land in the same
+  // ballpark rather than reproduce it exactly.
+  setCompression(options: { preset: string | null }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   seek(options: { ms: number }): Promise<void>;

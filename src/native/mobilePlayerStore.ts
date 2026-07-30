@@ -25,7 +25,12 @@ export interface MobilePlayerState {
   speed: number;
   equalizerPresetId: string | null;
   loudnessNormalizationEnabled: boolean;
+  compressionPreset: string | null;
 }
+
+// Same cycle/keys as PlayerService.COMPRESSION_STEPS in
+// app/services/player_service.py - off -> léger -> modéré -> fort -> off.
+const COMPRESSION_STEPS: (string | null)[] = [null, 'leger', 'modere', 'fort'];
 
 const PROGRESS_PUSH_INTERVAL_MS = 15000;
 // If the backend hasn't measured a book's loudness gain yet, one retry
@@ -41,7 +46,8 @@ let state: MobilePlayerState = {
   duration: 0,
   speed: 1,
   equalizerPresetId: null,
-  loudnessNormalizationEnabled: false
+  loudnessNormalizationEnabled: false,
+  compressionPreset: null
 };
 
 // Fetched lazily once and cached - the actual band/preamp values used to
@@ -167,6 +173,9 @@ async function play(book: any, chapterIndex?: number, positionSeconds?: number) 
       await AudookPlayer.setEqualizer({ bands: preset.bands, preamp: preset.preamp });
     }
   }
+  if (state.compressionPreset) {
+    await AudookPlayer.setCompression({ preset: state.compressionPreset });
+  }
   // Unlike speed/equalizer (global preferences), loudness gain is specific
   // to whichever book is now playing - always re-fetch/apply it for the
   // new book rather than carrying over the previous book's gain.
@@ -237,6 +246,14 @@ async function applyLoudnessGainForBook(bookId: string, isRetry = false) {
   } catch (error) {
     console.error('Failed to fetch loudness gain:', error);
   }
+}
+
+async function cycleCompression(): Promise<string | null> {
+  const currentIndex = COMPRESSION_STEPS.indexOf(state.compressionPreset);
+  const nextPreset = COMPRESSION_STEPS[(currentIndex + 1) % COMPRESSION_STEPS.length];
+  setState({ compressionPreset: nextPreset });
+  await AudookPlayer.setCompression({ preset: nextPreset });
+  return nextPreset;
 }
 
 async function toggleLoudnessNormalization(enabled: boolean) {
@@ -329,6 +346,7 @@ export const mobilePlayerStore = {
   setSpeed,
   fetchEqualizerPresets,
   cycleEqualizer,
+  cycleCompression,
   toggleLoudnessNormalization,
   goToNextChapter,
   goToPreviousChapter,
