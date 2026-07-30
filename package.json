@@ -16,7 +16,7 @@
     "electron-build": "npm run react-build && npm run preelectron-build && electron-builder",
     "build": "npm run electron-build",
     "start": "npm run electron-dev",
-    "android-sync": "npm run react-build && npx cap sync android",
+    "android-sync": "npm run react-build && node -e \"const fs=require('fs'); fs.rmSync('android/app/src/main/assets/public', { recursive: true, force: true })\" && npx cap sync android",
     "android-open": "npx cap open android"
   },
   "dependencies": {
