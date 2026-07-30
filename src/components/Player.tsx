@@ -130,6 +130,83 @@ const Player: React.FC = () => {
     />
   );
 
+  // Shared between the mobile compact bar's "..." popover and the
+  // full-screen player's own popover - both need the same speed/equalizer/
+  // normalization/compression/cast rows, just alongside a different set of
+  // other rows (chapters in the compact one, none in the expanded one since
+  // chapters already has its own main button there).
+  const mobileMoreMenuExtras = () => (
+    <>
+      <div className="more-menu-row">
+        <span className="more-menu-label">Vitesse ({state.speed}x)</span>
+        <button className="player-button more-menu-icon" onClick={handleCycleSpeed} title="Vitesse de lecture">
+          <Gauge size={16} />
+        </button>
+      </div>
+      <div className="more-menu-row">
+        <span className="more-menu-label">
+          Égaliseur{state.equalizerPresetId ? ` (${equalizerPresets.find((p) => p.id === state.equalizerPresetId)?.name ?? ''})` : ' (désactivé)'}
+        </span>
+        <button className="player-button more-menu-icon" onClick={handleCycleEqualizer} title="Égaliseur">
+          <SlidersHorizontal size={16} />
+        </button>
+      </div>
+      <div className="more-menu-row">
+        <span className="more-menu-label">Normalisation du volume</span>
+        <button
+          className={`player-button more-menu-icon ${state.loudnessNormalizationEnabled ? 'confirmed' : ''}`}
+          onClick={handleToggleLoudnessNormalization}
+          title="Normalisation du volume (par livre)"
+        >
+          <AudioLines size={16} />
+        </button>
+      </div>
+      <div className="more-menu-row">
+        <span className="more-menu-label">
+          Compression ({COMPRESSION_LABELS[state.compressionPreset ?? ''] ?? 'désactivée'})
+        </span>
+        <button className="player-button more-menu-icon" onClick={handleCycleCompression} title="Compression dynamique">
+          <Activity size={16} />
+        </button>
+      </div>
+      {state.isCasting ? (
+        <div className="more-menu-row">
+          <span className="more-menu-label">Diffusion sur {state.castDeviceName}</span>
+          <button className="player-button more-menu-icon" onClick={handleDisconnectCastDevice} title="Arrêter la diffusion">
+            <X size={16} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="more-menu-row">
+            <span className="more-menu-label">Google Home / Chromecast</span>
+            <button
+              className="player-button more-menu-icon"
+              onClick={handleScanCastDevices}
+              disabled={castScanning}
+              title="Rechercher un appareil"
+            >
+              {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+            </button>
+          </div>
+          {castDevices.map((device) => (
+            <div className="more-menu-row" key={device.uuid}>
+              <span className="more-menu-label">{device.name}</span>
+              <button
+                className="player-button more-menu-icon"
+                onClick={() => handleConnectCastDevice(device.uuid)}
+                disabled={castConnecting === device.uuid}
+                title={`Diffuser sur ${device.name}`}
+              >
+                {castConnecting === device.uuid ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+
   const bookmarkButton = (size: number) => (
     <button
       className={`player-button ${bookmarkAdded ? 'confirmed' : ''}`}
@@ -283,73 +360,7 @@ const Player: React.FC = () => {
                       {addingBookmark ? <Loader2 size={16} className="spin" /> : bookmarkAdded ? <Check size={16} /> : <Bookmark size={16} />}
                     </button>
                   </div>
-                  <div className="more-menu-row">
-                    <span className="more-menu-label">Vitesse ({state.speed}x)</span>
-                    <button className="player-button more-menu-icon" onClick={handleCycleSpeed} title="Vitesse de lecture">
-                      <Gauge size={16} />
-                    </button>
-                  </div>
-                  <div className="more-menu-row">
-                    <span className="more-menu-label">
-                      Égaliseur{state.equalizerPresetId ? ` (${equalizerPresets.find((p) => p.id === state.equalizerPresetId)?.name ?? ''})` : ' (désactivé)'}
-                    </span>
-                    <button className="player-button more-menu-icon" onClick={handleCycleEqualizer} title="Égaliseur">
-                      <SlidersHorizontal size={16} />
-                    </button>
-                  </div>
-                  <div className="more-menu-row">
-                    <span className="more-menu-label">Normalisation du volume</span>
-                    <button
-                      className={`player-button more-menu-icon ${state.loudnessNormalizationEnabled ? 'confirmed' : ''}`}
-                      onClick={handleToggleLoudnessNormalization}
-                      title="Normalisation du volume (par livre)"
-                    >
-                      <AudioLines size={16} />
-                    </button>
-                  </div>
-                  <div className="more-menu-row">
-                    <span className="more-menu-label">
-                      Compression ({COMPRESSION_LABELS[state.compressionPreset ?? ''] ?? 'désactivée'})
-                    </span>
-                    <button className="player-button more-menu-icon" onClick={handleCycleCompression} title="Compression dynamique">
-                      <Activity size={16} />
-                    </button>
-                  </div>
-                  {state.isCasting ? (
-                    <div className="more-menu-row">
-                      <span className="more-menu-label">Diffusion sur {state.castDeviceName}</span>
-                      <button className="player-button more-menu-icon" onClick={handleDisconnectCastDevice} title="Arrêter la diffusion">
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="more-menu-row">
-                        <span className="more-menu-label">Google Home / Chromecast</span>
-                        <button
-                          className="player-button more-menu-icon"
-                          onClick={handleScanCastDevices}
-                          disabled={castScanning}
-                          title="Rechercher un appareil"
-                        >
-                          {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-                        </button>
-                      </div>
-                      {castDevices.map((device) => (
-                        <div className="more-menu-row" key={device.uuid}>
-                          <span className="more-menu-label">{device.name}</span>
-                          <button
-                            className="player-button more-menu-icon"
-                            onClick={() => handleConnectCastDevice(device.uuid)}
-                            disabled={castConnecting === device.uuid}
-                            title={`Diffuser sur ${device.name}`}
-                          >
-                            {castConnecting === device.uuid ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
-                          </button>
-                        </div>
-                      ))}
-                    </>
-                  )}
+                  {mobileMoreMenuExtras()}
                 </div>
               )}
               <button className="player-button" onClick={() => setShowExpandedMenu((v) => !v)} title="Plus d'options">
@@ -481,6 +492,7 @@ const Player: React.FC = () => {
                         <ListMusic size={16} />
                       </button>
                     </div>
+                    {mobileMoreMenuExtras()}
                   </div>
                 )}
                 <button className="player-button" onClick={() => setShowCompactMenu(v => !v)} title="Plus d'options">

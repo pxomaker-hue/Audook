@@ -7,6 +7,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
@@ -56,6 +57,8 @@ private val COMPRESSION_PRESETS = mapOf(
 // assumption (a mono session opened as stereo generally still works; the
 // reverse can throw).
 private const val COMPRESSION_CHANNEL_COUNT = 2
+
+private const val TAG = "AudookAudioFx"
 
 /**
  * JS-facing bridge to the background-audio playback service
@@ -237,6 +240,7 @@ class AudookPlayerPlugin : Plugin() {
         }
 
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            Log.d(TAG, "onAudioSessionIdChanged: $audioSessionId")
             ensureAudioEffects(audioSessionId)
         }
     }
@@ -247,7 +251,10 @@ class AudookPlayerPlugin : Plugin() {
     // again if it's ever regenerated), since audio effects only work
     // attached to a real, current session id.
     private fun ensureAudioEffects(sessionId: Int) {
-        if (sessionId == 0 || sessionId == lastAudioSessionId) return
+        if (sessionId == 0 || sessionId == lastAudioSessionId) {
+            Log.d(TAG, "ensureAudioEffects: skipped (sessionId=$sessionId, lastAudioSessionId=$lastAudioSessionId)")
+            return
+        }
         lastAudioSessionId = sessionId
 
         try {
@@ -255,7 +262,9 @@ class AudookPlayerPlugin : Plugin() {
         } catch (e: Exception) { /* already released or invalid - fine */ }
         try {
             equalizer = Equalizer(0, sessionId)
+            Log.d(TAG, "Equalizer created for session $sessionId, bands=${equalizer?.numberOfBands}, range=${equalizer?.bandLevelRange?.toList()}")
         } catch (e: Exception) {
+            Log.w(TAG, "Failed to create Equalizer for session $sessionId", e)
             equalizer = null
         }
 
@@ -304,15 +313,21 @@ class AudookPlayerPlugin : Plugin() {
     // device's Equalizer effect actually has, each one taking the nearest
     // desktop band by center frequency - see DESKTOP_EQ_FREQUENCIES.
     private fun applyEqualizer() {
-        val eq = equalizer ?: return
+        val eq = equalizer
+        if (eq == null) {
+            Log.w(TAG, "applyEqualizer: no Equalizer instance (creation failed or no session yet)")
+            return
+        }
         val bands = desiredEqBands
         if (bands == null) {
             try { eq.enabled = false } catch (e: Exception) { }
+            Log.d(TAG, "applyEqualizer: disabled")
             return
         }
         try {
             val range = eq.bandLevelRange
             val numBands = eq.numberOfBands.toInt()
+            val applied = mutableListOf<String>()
             for (androidBand in 0 until numBands) {
                 val centerFreqHz = eq.getCenterFreq(androidBand.toShort()) / 1000
                 var bestIdx = 0
@@ -329,12 +344,15 @@ class AudookPlayerPlugin : Plugin() {
                     .toInt()
                     .coerceIn(range[0].toInt(), range[1].toInt())
                 eq.setBandLevel(androidBand.toShort(), millibels.toShort())
+                applied.add("band$androidBand(${centerFreqHz}Hz)=${millibels}mB")
             }
             eq.enabled = true
+            Log.d(TAG, "applyEqualizer: enabled=${eq.enabled}, $applied")
         } catch (e: Exception) {
             // Effect exists but a device-specific quirk rejected a band/
             // range value - leave whatever was already applied rather than
             // crash the plugin over a cosmetic feature.
+            Log.w(TAG, "applyEqualizer failed", e)
         }
     }
 
@@ -519,6 +537,7 @@ class AudookPlayerPlugin : Plugin() {
             FloatArray(bandsArray.length()) { i -> bandsArray.getDouble(i).toFloat() }
         }
         desiredEqPreamp = preamp
+        Log.d(TAG, "setEqualizer called: bands=${desiredEqBands?.toList()}, preamp=$preamp, hasEqualizerInstance=${equalizer != null}")
         applyEqualizer()
         call.resolve()
     }
@@ -602,15 +621,20 @@ class AudookPlayerPlugin : Plugin() {
         call.resolve()
     }
 
+    // MediaRouter/CastContext calls (all four methods below) must run on the
+    // main thread, same as MediaController - Capacitor plugin methods run
+    // on their own background thread by default, which was silently
+    // swallowed by AudookCastManager's broad try/catch, so scanning/
+    // connecting never actually did anything.
     @PluginMethod
     fun scanCastDevices(call: PluginCall) {
-        castManager.startDiscovery()
+        positionHandler.post { castManager.startDiscovery() }
         call.resolve()
     }
 
     @PluginMethod
     fun stopCastDiscovery(call: PluginCall) {
-        castManager.stopDiscovery()
+        positionHandler.post { castManager.stopDiscovery() }
         call.resolve()
     }
 
@@ -621,16 +645,18 @@ class AudookPlayerPlugin : Plugin() {
             call.reject("deviceId is required")
             return
         }
-        if (!castManager.connect(deviceId)) {
-            call.reject("Device not found")
-            return
+        positionHandler.post {
+            if (!castManager.connect(deviceId)) {
+                call.reject("Device not found")
+            } else {
+                call.resolve()
+            }
         }
-        call.resolve()
     }
 
     @PluginMethod
     fun disconnectCastDevice(call: PluginCall) {
-        castManager.disconnect()
+        positionHandler.post { castManager.disconnect() }
         call.resolve()
     }
 
