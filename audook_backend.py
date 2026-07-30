@@ -344,6 +344,11 @@ def get_book_details(book_id):
         if not book:
             return jsonify({'error': 'Book not found'}), 404
 
+        try:
+            progress_sync.reconcile_progress(book_id)
+        except Exception as e:
+            logger.warning(f"Failed to reconcile progress before returning book details: {e}")
+
         session = get_session()
         progress_repo = ReadingProgressRepository(session)
         progress = progress_repo.get_or_create(book_id)

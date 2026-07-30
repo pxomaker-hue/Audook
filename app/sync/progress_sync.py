@@ -7,9 +7,14 @@ local playback.
 
 from typing import Optional, Dict, Any, List
 
-from app.database import get_session, ServerRepository, BookRepository
+from app.database import get_session, ServerRepository, BookRepository, ReadingProgressRepository
 from app.clients import PlexClient, AudiobookshelfClient
 from app.utils import logger
+
+# Below this, a remote position ahead of local is treated as noise (network
+# jitter, rounding) rather than a real difference worth writing to the DB -
+# same order of magnitude as the push side's own polling interval.
+RECONCILE_MIN_AHEAD_SECONDS = 5
 
 # A push whose new position is more than this far BEHIND the position
 # already recorded on the source server is treated as a stray/test session
@@ -125,6 +130,62 @@ def push_progress(book_id: str, chapter_index: int, position_seconds: float, fin
     except Exception as e:
         logger.warning(f"Failed to push progress for {book_id}: {e}")
         return False
+    finally:
+        session.close()
+
+
+def reconcile_progress(book_id: str) -> None:
+    """Best-effort merge of local progress against the source server's,
+    called whenever a book's details are fetched (i.e. right before a client
+    - desktop or mobile - is about to offer/start playback). Each platform
+    talks to its own Audook backend with its own local DB (desktop runs its
+    backend locally, mobile talks to the one on the NAS) and, previously,
+    only ever pulled remote progress once - the first time a book was seen
+    with zero local progress (see scanner.py's _seed_remote_progress_if_new).
+    After that, the two local DBs could only drift further apart from each
+    other and from Audiobookshelf/Plex, since neither backend ever looked at
+    the server again except to push its own view of things.
+
+    This does not replace that first-time seed (still needed so a book with
+    remote-only progress shows up under "Reprendre l'écoute" before it has
+    ever been touched locally) - it keeps both local DBs converging on
+    whichever is actually furthest along every time the book is opened,
+    which is what actually matters for a correct resume position: if the
+    remote server is genuinely ahead (played elsewhere: the other platform,
+    the ABS app, Plex's own web player...), adopt its position. If local is
+    ahead (this device just hasn't pushed yet, e.g. mid-session), leave it -
+    a stale remote read must never roll a fresher local position backward.
+    """
+    session = get_session()
+    try:
+        book = BookRepository(session).get_by_id(book_id)
+        if not book:
+            return
+        server = ServerRepository(session).get_by_id(book.server_id)
+        if not server or server.type not in ("plex", "audiobookshelf"):
+            return
+
+        remote = pull_progress(book_id)
+        if not remote:
+            return
+
+        progress_repo = ReadingProgressRepository(session)
+        local = progress_repo.get_or_create(book_id)
+        if local.is_finished:
+            return
+
+        local_cumulative = _cumulative_seconds(book.chapters or [], local.current_chapter_index, local.position_seconds)
+        remote_cumulative = _cumulative_seconds(book.chapters or [], remote["chapter_index"], remote["position_seconds"])
+
+        if remote.get("finished") and not local.is_finished:
+            progress_repo.set_finished(book_id, True)
+            return
+
+        if remote_cumulative - local_cumulative > RECONCILE_MIN_AHEAD_SECONDS:
+            percent = (remote_cumulative / book.duration * 100) if book.duration else 0.0
+            progress_repo.update_progress(book_id, remote["chapter_index"], remote["position_seconds"], max(0.0, min(100.0, percent)))
+    except Exception as e:
+        logger.warning(f"Failed to reconcile progress for {book_id}: {e}")
     finally:
         session.close()
 
