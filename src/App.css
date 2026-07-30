@@ -569,6 +569,14 @@ input[type="checkbox"] {
   opacity: 1;
 }
 
+/* No hover on touch devices - shown permanently instead, in its "resting"
+   (not actively hovered) desktop look: same dark translucent circle/white
+   cross, just always visible rather than opacity:0 until a mouse hover that
+   can never happen on Android. */
+.book-card-dismiss.book-card-dismiss-mobile {
+  opacity: 1;
+}
+
 .book-card-dismiss:hover {
   background-color: #e81123;
 }

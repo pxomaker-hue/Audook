@@ -388,7 +388,7 @@ const HomePage: React.FC = () => {
           <>
             {!discreet && (
               <button
-                className="book-card-dismiss"
+                className={`book-card-dismiss ${isCapacitorPlatform ? 'book-card-dismiss-mobile' : ''}`}
                 onClick={(e) => handleDismissProgress(e, book.id)}
                 title="Retirer de Reprendre l'écoute"
               >
