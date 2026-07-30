@@ -45,8 +45,24 @@ function ensureNativeListeners() {
   AudookPlayer.addListener('stateChange', (data) => {
     setState({ isPlaying: data.isPlaying });
   });
+  // Fires for every chapter change ExoPlayer makes on its own within the
+  // playlist handed to it in play() below - including auto-advancing past
+  // the end of a chapter, which now happens natively regardless of whether
+  // the WebView is active. Previously the JS side only learned "a chapter
+  // ended" via the 'ended' event and had to decide + start the next one
+  // itself, which never ran while the app was backgrounded/screen off,
+  // silently stopping playback at every chapter boundary.
+  AudookPlayer.addListener('chapterChanged', (data) => {
+    const book = state.currentBook;
+    const duration = book?.chapters?.[data.chapterIndex]?.duration || 0;
+    setState({ currentChapterIndex: data.chapterIndex, position: 0, duration });
+  });
+  // Only fires once the very last chapter in the playlist finishes - every
+  // earlier chapter boundary is now a 'chapterChanged' event instead (see
+  // above), not this one.
   AudookPlayer.addListener('ended', () => {
-    goToNextChapter();
+    pushProgress(true);
+    stopProgressPushLoop();
   });
 }
 
@@ -77,32 +93,42 @@ function stopProgressPushLoop() {
   }
 }
 
-async function playChapter(book: any, chapterIndex: number, positionSeconds = 0) {
+// The whole book's chapters are sent to the native side as one playlist -
+// see AudookPlayer.ts/AudookPlayerPlugin.kt - so ExoPlayer can advance
+// through every chapter entirely on its own from here on. Chapter
+// navigation (goToNextChapter/goToPreviousChapter below) no longer calls
+// this again; it just moves within the already-loaded playlist natively.
+async function play(book: any, chapterIndex?: number, positionSeconds?: number) {
   ensureNativeListeners();
-  const chapter = book.chapters?.[chapterIndex];
-  if (!chapter) return;
+  const idx = chapterIndex ?? 0;
+  const pos = positionSeconds ?? 0;
+  const chapters = book.chapters || [];
+  if (!chapters.length) return;
 
-  const url = `${getApiBase()}/cast/local-audio?path=${encodeURIComponent(chapter.audio_file)}`;
-  setState({ currentBook: book, currentChapterIndex: chapterIndex, position: positionSeconds, duration: chapter.duration || 0 });
+  const playlist = chapters.map((chapter: any) => ({
+    url: `${getApiBase()}/cast/local-audio?path=${encodeURIComponent(chapter.audio_file)}`,
+    title: chapter.title || book.title
+  }));
+
+  setState({
+    currentBook: book,
+    currentChapterIndex: idx,
+    position: pos,
+    duration: chapters[idx]?.duration || 0
+  });
 
   // The resume position goes straight into play() (native side passes it to
-  // ExoPlayer's setMediaItem) rather than a separate seek() call right
+  // ExoPlayer's setMediaItems) rather than a separate seek() call right
   // after - a seek issued that early could arrive before the player
   // finished loading the item and get silently dropped once it became
   // ready, which is why resuming a book on mobile always restarted from 0.
   await AudookPlayer.play({
-    url,
-    title: chapter.title || book.title,
+    chapters: playlist,
+    startIndex: idx,
     cover: book.cover_url || undefined,
-    positionMs: positionSeconds > 0 ? positionSeconds * 1000 : undefined
+    positionMs: pos > 0 ? pos * 1000 : undefined
   });
   startProgressPushLoop();
-}
-
-async function play(book: any, chapterIndex?: number, positionSeconds?: number) {
-  const idx = chapterIndex ?? 0;
-  const pos = positionSeconds ?? 0;
-  await playChapter(book, idx, pos);
 }
 
 // Convenience for call sites (HomePage/AuthorPage library grids) that only
@@ -146,23 +172,11 @@ async function seekStep(deltaSeconds: number) {
 }
 
 async function goToNextChapter() {
-  const book = state.currentBook;
-  if (!book || !book.chapters) return;
-  pushProgress(true);
-  const nextIndex = state.currentChapterIndex + 1;
-  if (nextIndex >= book.chapters.length) {
-    await AudookPlayer.stop();
-    stopProgressPushLoop();
-    return;
-  }
-  await playChapter(book, nextIndex, 0);
+  await AudookPlayer.nextChapter();
 }
 
 async function goToPreviousChapter() {
-  const book = state.currentBook;
-  if (!book) return;
-  const prevIndex = Math.max(0, state.currentChapterIndex - 1);
-  await playChapter(book, prevIndex, 0);
+  await AudookPlayer.previousChapter();
 }
 
 async function stop() {

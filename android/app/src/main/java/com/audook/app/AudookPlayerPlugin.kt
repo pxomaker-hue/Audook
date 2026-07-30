@@ -59,6 +59,13 @@ class AudookPlayerPlugin : Plugin() {
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            // Only the very last chapter in the playlist reaches ENDED -
+            // ExoPlayer auto-advances through every earlier one on its own
+            // (see play() below), which is what makes chapter transitions
+            // survive the WebView being suspended in the background/screen
+            // off. Before this, the JS side alone decided "what's next and
+            // play it" on every chapter end, which never ran while
+            // backgrounded, so playback just silently stopped there.
             if (playbackState == Player.STATE_ENDED) {
                 val data = JSObject()
                 data.put("ended", true)
@@ -76,6 +83,18 @@ class AudookPlayerPlugin : Plugin() {
                     }
                 }
             }
+        }
+
+        // Fires on every chapter change - both ExoPlayer's own automatic
+        // advance at the end of a chapter, and a manual previousChapter()/
+        // nextChapter() call. The JS side has no other way to learn which
+        // chapter is now playing once the native playlist advances on its
+        // own without it.
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val c = controller ?: return
+            val data = JSObject()
+            data.put("chapterIndex", c.currentMediaItemIndex)
+            notifyListeners("chapterChanged", data)
         }
     }
 
@@ -106,8 +125,8 @@ class AudookPlayerPlugin : Plugin() {
 
     @PluginMethod
     fun play(call: PluginCall) {
-        val url = call.getString("url")
-        val title = call.getString("title") ?: ""
+        val chaptersArray = call.getArray("chapters")
+        val startIndex = call.getInt("startIndex") ?: 0
         val cover = call.getString("cover")
         // PluginCall.getLong() only returns a value if it's already boxed as
         // a Java Long - a JS number arrives as Integer or Double instead, so
@@ -115,8 +134,8 @@ class AudookPlayerPlugin : Plugin() {
         // and is why resuming a book always restarted from 0.
         val startPositionMs = call.getDouble("positionMs")?.toLong() ?: 0L
 
-        if (url == null) {
-            call.reject("url is required")
+        if (chaptersArray == null || chaptersArray.length() == 0) {
+            call.reject("chapters is required")
             return
         }
 
@@ -126,32 +145,60 @@ class AudookPlayerPlugin : Plugin() {
             return
         }
 
-        val metadataBuilder = MediaMetadata.Builder().setTitle(title)
-        if (cover != null) {
-            metadataBuilder.setArtworkUri(android.net.Uri.parse(cover))
+        // The whole book's chapters are handed to ExoPlayer as one playlist
+        // (instead of a single chapter re-played on every transition) so it
+        // can advance through them entirely on its own. That's what makes
+        // auto-advance survive the WebView being suspended in the
+        // background/screen off - see onPlaybackStateChanged above.
+        val mediaItems = mutableListOf<MediaItem>()
+        for (i in 0 until chaptersArray.length()) {
+            val chapter = chaptersArray.getJSONObject(i)
+            val chapterTitle = chapter.optString("title", "")
+            val metadataBuilder = MediaMetadata.Builder().setTitle(chapterTitle)
+            if (cover != null) {
+                metadataBuilder.setArtworkUri(android.net.Uri.parse(cover))
+            }
+            mediaItems.add(
+                MediaItem.Builder()
+                    .setUri(chapter.getString("url"))
+                    .setMediaMetadata(metadataBuilder.build())
+                    .build()
+            )
         }
-
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setMediaMetadata(metadataBuilder.build())
-            .build()
 
         // MediaController must only be touched from the thread that built it
         // (the main thread here, via positionHandler) - Capacitor plugin
         // methods run on their own "CapacitorPlugins" handler thread, which
         // crashed the app with IllegalStateException before this dispatch.
         //
-        // The resume position is passed to setMediaItem() itself rather than
-        // a separate seekTo() call afterward - a seek issued right after
-        // prepare() can arrive before the player has finished loading the
-        // item and get silently dropped/reset once it becomes ready, which
-        // is why resuming a book on mobile always restarted from 0.
+        // The resume position is passed to setMediaItems() itself rather
+        // than a separate seekTo() call afterward - a seek issued right
+        // after prepare() can arrive before the player has finished loading
+        // the item and get silently dropped/reset once it becomes ready,
+        // which is why resuming a book on mobile always restarted from 0.
         pendingResumeMs = if (startPositionMs > 0) startPositionMs else null
         positionHandler.post {
-            c.setMediaItem(mediaItem, startPositionMs)
+            c.setMediaItems(mediaItems, startIndex, startPositionMs)
             c.prepare()
             c.play()
         }
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun previousChapter(call: PluginCall) {
+        // The "MediaItem" variant always jumps to the actual previous
+        // playlist entry (or does nothing at the first one) - unlike plain
+        // seekToPrevious(), which restarts the current item instead once
+        // playback is a few seconds in. Chapter buttons always mean "go to
+        // that chapter", never "restart this one".
+        positionHandler.post { controller?.seekToPreviousMediaItem() }
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun nextChapter(call: PluginCall) {
+        positionHandler.post { controller?.seekToNextMediaItem() }
         call.resolve()
     }
 
