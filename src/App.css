@@ -1358,9 +1358,9 @@ input[type="checkbox"] {
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   margin-right: 6px;
-  padding: 4px 8px;
+  padding: 4px;
   background-color: var(--surface);
   box-shadow: var(--shadow-pop);
   border-radius: 999px;
@@ -1380,35 +1380,57 @@ input[type="checkbox"] {
   }
 }
 
-/* Each cycle-style option (speed/EBU/compression/equalizer/sleep timer):
-   its current value shown as a small label sitting above the button at all
-   times while the pill is open, not just on hover. */
+/* Each cycle-style option (speed/EBU/compression/equalizer/sleep timer) -
+   buttons sit flush side by side (no gap); the current value only shows as
+   a label when that specific button is hovered/focused, floating above the
+   pill's own background rather than squeezed inside it. */
 .more-menu-pill-item {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
 }
 
 .more-menu-pill-item-label {
-  font-size: 10px;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  font-size: 11px;
   font-weight: 700;
-  color: var(--text-secondary);
-  background-color: var(--surface-muted);
+  color: var(--text-primary);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-soft);
   border-radius: 999px;
-  padding: 2px 7px;
+  padding: 6px 12px;
   white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-/* Volume folds/unfolds upward (a vertical slider), rather than always
-   showing inline, since a slider needs continuous input rather than a
-   single cycle-on-click like the other options. */
+.more-menu-pill-item:hover .more-menu-pill-item-label,
+.more-menu-pill-item:focus-within .more-menu-pill-item-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Volume folds/unfolds upward (a vertical slider) on click rather than
+   hover (it needs continuous input, not just a status readout) - floats
+   above the pill the same way the labels do, instead of taking up
+   permanent space in the row. */
 .more-menu-pill-volume-slider {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
   writing-mode: vertical-lr;
   direction: rtl;
   -webkit-appearance: slider-vertical;
   width: 20px;
   height: 70px;
+  background-color: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+  padding: 8px 0;
 }
 
 .more-menu-pill-cast {
