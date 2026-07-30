@@ -8,23 +8,46 @@ import { getApiBase } from '../config';
 // component is currently mounted, and useMobilePlayerState (the hook
 // components read from) just subscribes to this store.
 
+export interface EqualizerPreset {
+  id: string;
+  name: string;
+  bands: number[];
+  preamp: number;
+  is_builtin: boolean;
+}
+
 export interface MobilePlayerState {
   isPlaying: boolean;
   currentBook: any | null;
   currentChapterIndex: number;
   position: number; // seconds
   duration: number; // seconds
+  speed: number;
+  equalizerPresetId: string | null;
+  loudnessNormalizationEnabled: boolean;
 }
 
 const PROGRESS_PUSH_INTERVAL_MS = 15000;
+// If the backend hasn't measured a book's loudness gain yet, one retry
+// after this delay is usually enough (the ffmpeg analysis only samples the
+// first 10 minutes of audio) - see get_book_loudness_gain in audook_backend.py.
+const LOUDNESS_GAIN_RETRY_MS = 5000;
 
 let state: MobilePlayerState = {
   isPlaying: false,
   currentBook: null,
   currentChapterIndex: 0,
   position: 0,
-  duration: 0
+  duration: 0,
+  speed: 1,
+  equalizerPresetId: null,
+  loudnessNormalizationEnabled: false
 };
+
+// Fetched lazily once and cached - the actual band/preamp values used to
+// build the Android Equalizer effect (see AudookPlayerPlugin.kt), same
+// presets desktop's VLC equalizer applies.
+let equalizerPresets: EqualizerPreset[] | null = null;
 
 const listeners = new Set<(s: MobilePlayerState) => void>();
 let progressInterval: ReturnType<typeof setInterval> | null = null;
@@ -128,7 +151,104 @@ async function play(book: any, chapterIndex?: number, positionSeconds?: number) 
     cover: book.cover_url || undefined,
     positionMs: pos > 0 ? pos * 1000 : undefined
   });
+  // PlaybackParameters/audio effects live on the player itself, not the
+  // media item, so they should already carry over across chapters within
+  // one playlist - but a fresh play() call rebuilds the whole playlist from
+  // scratch, which on a cold app start means a MediaController that's never
+  // had these applied yet. Re-asserting them here keeps the chosen
+  // speed/equalizer across "start listening to a different book" too, not
+  // just chapter transitions.
+  if (state.speed !== 1) {
+    await AudookPlayer.setSpeed({ speed: state.speed });
+  }
+  if (state.equalizerPresetId) {
+    const preset = (equalizerPresets || []).find((p) => p.id === state.equalizerPresetId);
+    if (preset) {
+      await AudookPlayer.setEqualizer({ bands: preset.bands, preamp: preset.preamp });
+    }
+  }
+  // Unlike speed/equalizer (global preferences), loudness gain is specific
+  // to whichever book is now playing - always re-fetch/apply it for the
+  // new book rather than carrying over the previous book's gain.
+  if (state.loudnessNormalizationEnabled) {
+    applyLoudnessGainForBook(book.id);
+  } else {
+    await AudookPlayer.setLoudnessGain({ gainDb: 0 });
+  }
   startProgressPushLoop();
+}
+
+async function setSpeed(speed: number) {
+  setState({ speed });
+  await AudookPlayer.setSpeed({ speed });
+}
+
+async function fetchEqualizerPresets(): Promise<EqualizerPreset[]> {
+  if (equalizerPresets) return equalizerPresets;
+  try {
+    const response = await axios.get(`${getApiBase()}/equalizer/presets`);
+    equalizerPresets = Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    console.error('Failed to fetch equalizer presets:', error);
+    equalizerPresets = [];
+  }
+  return equalizerPresets;
+}
+
+// Cycles null (off) -> each preset in turn -> back to null, mirroring
+// desktop's /api/player/equalizer/cycle - applied locally here instead of
+// through the backend's VLC session, which mobile never plays through.
+async function cycleEqualizer(): Promise<string | null> {
+  const presets = await fetchEqualizerPresets();
+  const ids: (string | null)[] = [null, ...presets.map((p) => p.id)];
+  const currentIndex = ids.indexOf(state.equalizerPresetId);
+  const nextId = ids[(currentIndex + 1) % ids.length];
+  setState({ equalizerPresetId: nextId });
+
+  if (nextId === null) {
+    await AudookPlayer.setEqualizer({ bands: null });
+  } else {
+    const preset = presets.find((p) => p.id === nextId);
+    if (preset) {
+      await AudookPlayer.setEqualizer({ bands: preset.bands, preamp: preset.preamp });
+    }
+  }
+  return nextId;
+}
+
+// Fetches (or kicks off measuring, see get_book_loudness_gain in
+// audook_backend.py) the per-book gain and applies it - retried once after
+// a delay if the backend hadn't measured it yet, rather than leaving
+// normalization silently doing nothing on a book that was never analyzed.
+async function applyLoudnessGainForBook(bookId: string, isRetry = false) {
+  try {
+    const response = await axios.get(`${getApiBase()}/books/${bookId}/loudness-gain`);
+    const gainDb = response.data?.gain_db;
+    if (typeof gainDb === 'number') {
+      // Only apply if still on the same book and normalization is still on -
+      // avoids slapping a stale/unwanted gain onto whatever's playing by
+      // the time this (potentially slow, retried) measurement resolves.
+      if (state.loudnessNormalizationEnabled && state.currentBook?.id === bookId) {
+        await AudookPlayer.setLoudnessGain({ gainDb });
+      }
+    } else if (!isRetry) {
+      setTimeout(() => applyLoudnessGainForBook(bookId, true), LOUDNESS_GAIN_RETRY_MS);
+    }
+  } catch (error) {
+    console.error('Failed to fetch loudness gain:', error);
+  }
+}
+
+async function toggleLoudnessNormalization(enabled: boolean) {
+  setState({ loudnessNormalizationEnabled: enabled });
+  if (!enabled) {
+    await AudookPlayer.setLoudnessGain({ gainDb: 0 });
+    return;
+  }
+  const book = state.currentBook;
+  if (book) {
+    await applyLoudnessGainForBook(book.id);
+  }
 }
 
 // Convenience for call sites (HomePage/AuthorPage library grids) that only
@@ -206,6 +326,10 @@ export const mobilePlayerStore = {
   togglePlayPause,
   seek,
   seekStep,
+  setSpeed,
+  fetchEqualizerPresets,
+  cycleEqualizer,
+  toggleLoudnessNormalization,
   goToNextChapter,
   goToPreviousChapter,
   stop

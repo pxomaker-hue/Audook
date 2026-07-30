@@ -16,6 +16,14 @@ export interface AudookPlayerPlugin {
   }): Promise<void>;
   previousChapter(): Promise<void>;
   nextChapter(): Promise<void>;
+  setSpeed(options: { speed: number }): Promise<void>;
+  // bands: 10 dB values (null disables the equalizer entirely) - mapped
+  // onto whichever bands this device's own Equalizer effect exposes, see
+  // AudookPlayerPlugin.kt's DESKTOP_EQ_FREQUENCIES.
+  setEqualizer(options: { bands: number[] | null; preamp?: number }): Promise<void>;
+  // Per-book EBU-style gain in dB (0 disables it) - positive boosts via
+  // LoudnessEnhancer, negative attenuates via the player's own volume.
+  setLoudnessGain(options: { gainDb: number }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   seek(options: { ms: number }): Promise<void>;

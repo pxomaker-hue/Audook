@@ -1,19 +1,34 @@
 package com.audook.app
 
 import android.content.ComponentName
+import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.MoreExecutors
+import kotlin.math.abs
+import kotlin.math.pow
+
+// Standard 10-band ISO graphic EQ center frequencies (Hz) - matches VLC's
+// own AudioEqualizer band layout, which the desktop presets
+// (EqualizerPresetRepository, 10 bands + preamp) are built against. Android's
+// own Equalizer effect exposes a different (usually smaller, device-
+// dependent) number of bands, so each desktop band is mapped onto whichever
+// Android band's own center frequency is closest - an approximation, not an
+// exact match, since the two don't line up 1:1.
+private val DESKTOP_EQ_FREQUENCIES = listOf(31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 
 /**
  * JS-facing bridge to the background-audio playback service
@@ -37,6 +52,18 @@ class AudookPlayerPlugin : Plugin() {
     // the player actually reaches STATE_READY, re-assert the intended
     // position if it hasn't drifted there on its own.
     private var pendingResumeMs: Long? = null
+
+    // Audio effects, attached to ExoPlayer's own audio session id - built
+    // fresh whenever that id changes (a new one can be assigned when the
+    // playback service's underlying player is recreated), and re-applied
+    // from the "desired" fields below each time, since a freshly created
+    // effect instance always starts back at its flat/off default.
+    private var equalizer: Equalizer? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var lastAudioSessionId: Int = 0
+    private var desiredEqBands: FloatArray? = null // 10 values, dB - null means off
+    private var desiredEqPreamp: Float = 0f
+    private var desiredLoudnessGainDb: Float = 0f
 
     override fun load() {
         val sessionToken = SessionToken(
@@ -95,6 +122,99 @@ class AudookPlayerPlugin : Plugin() {
             val data = JSObject()
             data.put("chapterIndex", c.currentMediaItemIndex)
             notifyListeners("chapterChanged", data)
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            ensureAudioEffects(audioSessionId)
+        }
+    }
+
+    // Rebuilds the Equalizer/LoudnessEnhancer against a new audio session id
+    // and re-applies whatever the JS side last asked for - called whenever
+    // ExoPlayer reports a session id (once playback actually starts, and
+    // again if it's ever regenerated), since audio effects only work
+    // attached to a real, current session id.
+    private fun ensureAudioEffects(sessionId: Int) {
+        if (sessionId == 0 || sessionId == lastAudioSessionId) return
+        lastAudioSessionId = sessionId
+
+        try {
+            equalizer?.release()
+        } catch (e: Exception) { /* already released or invalid - fine */ }
+        try {
+            equalizer = Equalizer(0, sessionId)
+        } catch (e: Exception) {
+            equalizer = null
+        }
+
+        try {
+            loudnessEnhancer?.release()
+        } catch (e: Exception) { /* already released or invalid - fine */ }
+        try {
+            loudnessEnhancer = LoudnessEnhancer(sessionId)
+        } catch (e: Exception) {
+            loudnessEnhancer = null
+        }
+
+        applyEqualizer()
+        applyLoudnessGain()
+    }
+
+    // Maps the 10 desktop-style dB values onto however many bands this
+    // device's Equalizer effect actually has, each one taking the nearest
+    // desktop band by center frequency - see DESKTOP_EQ_FREQUENCIES.
+    private fun applyEqualizer() {
+        val eq = equalizer ?: return
+        val bands = desiredEqBands
+        if (bands == null) {
+            try { eq.enabled = false } catch (e: Exception) { }
+            return
+        }
+        try {
+            val range = eq.bandLevelRange
+            val numBands = eq.numberOfBands.toInt()
+            for (androidBand in 0 until numBands) {
+                val centerFreqHz = eq.getCenterFreq(androidBand.toShort()) / 1000
+                var bestIdx = 0
+                var bestDiff = Int.MAX_VALUE
+                for ((i, freq) in DESKTOP_EQ_FREQUENCIES.withIndex()) {
+                    val diff = abs(freq - centerFreqHz)
+                    if (diff < bestDiff) {
+                        bestDiff = diff
+                        bestIdx = i
+                    }
+                }
+                val gainDb = (bands.getOrElse(bestIdx) { 0f }) + desiredEqPreamp
+                val millibels = (gainDb * 100)
+                    .toInt()
+                    .coerceIn(range[0].toInt(), range[1].toInt())
+                eq.setBandLevel(androidBand.toShort(), millibels.toShort())
+            }
+            eq.enabled = true
+        } catch (e: Exception) {
+            // Effect exists but a device-specific quirk rejected a band/
+            // range value - leave whatever was already applied rather than
+            // crash the plugin over a cosmetic feature.
+        }
+    }
+
+    // Positive gain (boosting a quiet book) goes through LoudnessEnhancer,
+    // the Android effect actually meant for gain beyond unity - its own
+    // volume control can only attenuate (0..1), never amplify. Negative
+    // gain (a book already mastered loud) goes through the player's own
+    // volume instead, converting dB to the linear scale it expects.
+    private fun applyLoudnessGain() {
+        val gainDb = desiredLoudnessGainDb
+        if (gainDb > 0f) {
+            try {
+                loudnessEnhancer?.setTargetGain((gainDb * 100).toInt())
+                loudnessEnhancer?.enabled = true
+            } catch (e: Exception) { }
+            positionHandler.post { controller?.volume = 1f }
+        } else {
+            try { loudnessEnhancer?.enabled = false } catch (e: Exception) { }
+            val linear = 10.0.pow(gainDb / 20.0).toFloat().coerceIn(0f, 1f)
+            positionHandler.post { controller?.volume = linear }
         }
     }
 
@@ -186,6 +306,42 @@ class AudookPlayerPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setSpeed(call: PluginCall) {
+        val speed = call.getDouble("speed")?.toFloat()
+        if (speed == null) {
+            call.reject("speed is required")
+            return
+        }
+        // PlaybackParameters is a player-level property, not tied to the
+        // current MediaItem - it carries over automatically across chapter
+        // transitions within the playlist, no need to re-apply it per chapter.
+        positionHandler.post { controller?.playbackParameters = PlaybackParameters(speed) }
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun setEqualizer(call: PluginCall) {
+        val bandsArray: JSArray? = call.getArray("bands")
+        val preamp = call.getFloat("preamp") ?: 0f
+        desiredEqBands = if (bandsArray == null) {
+            null
+        } else {
+            FloatArray(bandsArray.length()) { i -> bandsArray.getDouble(i).toFloat() }
+        }
+        desiredEqPreamp = preamp
+        applyEqualizer()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun setLoudnessGain(call: PluginCall) {
+        val gainDb = call.getFloat("gainDb") ?: 0f
+        desiredLoudnessGainDb = gainDb
+        applyLoudnessGain()
+        call.resolve()
+    }
+
+    @PluginMethod
     fun previousChapter(call: PluginCall) {
         // The "MediaItem" variant always jumps to the actual previous
         // playlist entry (or does nothing at the first one) - unlike plain
@@ -237,6 +393,8 @@ class AudookPlayerPlugin : Plugin() {
 
     override fun handleOnDestroy() {
         stopPositionUpdates()
+        try { equalizer?.release() } catch (e: Exception) { }
+        try { loudnessEnhancer?.release() } catch (e: Exception) { }
         controller?.release()
         controller = null
         super.handleOnDestroy()

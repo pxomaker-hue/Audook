@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { getApiBase } from '../config';
-import { mobilePlayerStore, MobilePlayerState } from '../native/mobilePlayerStore';
+import { mobilePlayerStore, MobilePlayerState, EqualizerPreset } from '../native/mobilePlayerStore';
 
 // Mobile (Capacitor/Android) counterpart to usePlayerState.ts. Mirrors its
 // PlayerState shape closely enough for Player.tsx to swap between the two,
@@ -9,14 +9,23 @@ import { mobilePlayerStore, MobilePlayerState } from '../native/mobilePlayerStor
 // instead of the desktop backend's VLC/Chromecast player - mobile plays
 // audio outside the PlayerService session entirely (see mobilePlayerStore).
 const SEEK_STEP_SECONDS = 30;
+// Same cycle as usePlayerState.ts's SPEEDS, kept in sync manually since
+// mobile has no equivalent import to share it from (the desktop hook talks
+// to the backend's own player session, this one to the native plugin).
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 export function usePlayerState() {
   const [native, setNative] = useState<MobilePlayerState>(mobilePlayerStore.getState());
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
+  const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
 
   useEffect(() => {
     return mobilePlayerStore.subscribe(setNative);
+  }, []);
+
+  useEffect(() => {
+    mobilePlayerStore.fetchEqualizerPresets().then(setEqualizerPresets);
   }, []);
 
   const state = {
@@ -27,9 +36,9 @@ export function usePlayerState() {
     position: native.position,
     duration: native.duration,
     volume: 100,
-    speed: 1,
-    equalizerPresetId: null,
-    loudnessNormalizationEnabled: false,
+    speed: native.speed,
+    equalizerPresetId: native.equalizerPresetId,
+    loudnessNormalizationEnabled: native.loudnessNormalizationEnabled,
     compressionPreset: null,
     sleepTimerRemainingSeconds: null,
     isCasting: false,
@@ -48,13 +57,21 @@ export function usePlayerState() {
 
   const handleSeekStep = (deltaSeconds: number) => mobilePlayerStore.seekStep(deltaSeconds);
 
-  // Volume/speed/equalizer/cast are desktop (VLC/Chromecast) features with
-  // no equivalent wired into the native ExoPlayer plugin yet - no-ops here
+  // Volume/equalizer/cast are desktop (VLC/Chromecast) features with no
+  // equivalent wired into the native ExoPlayer plugin yet - no-ops here
   // rather than pretending to support them.
   const handleVolumeChange = (_volume: number) => {};
-  const handleCycleSpeed = () => {};
-  const handleCycleEqualizer = async () => {};
-  const handleToggleLoudnessNormalization = () => {};
+  const handleCycleSpeed = () => {
+    const currentIndex = SPEEDS.indexOf(state.speed);
+    const nextSpeed = SPEEDS[(currentIndex + 1) % SPEEDS.length] ?? 1;
+    mobilePlayerStore.setSpeed(nextSpeed);
+  };
+  const handleCycleEqualizer = async () => {
+    await mobilePlayerStore.cycleEqualizer();
+  };
+  const handleToggleLoudnessNormalization = () => {
+    mobilePlayerStore.toggleLoudnessNormalization(!state.loudnessNormalizationEnabled);
+  };
   const handleCycleCompression = async () => {};
   const handleCycleSleepTimer = async () => {};
   const handleScanCastDevices = async () => {};
@@ -82,7 +99,7 @@ export function usePlayerState() {
     state,
     addingBookmark,
     bookmarkAdded,
-    equalizerPresets: [] as any[],
+    equalizerPresets,
     handlePlayPause,
     handlePreviousClick,
     handleNextClick,

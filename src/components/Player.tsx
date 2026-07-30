@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines } from 'lucide-react';
 import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
 import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
@@ -274,6 +274,30 @@ const Player: React.FC = () => {
                       title="Marquer la position actuelle"
                     >
                       {addingBookmark ? <Loader2 size={16} className="spin" /> : bookmarkAdded ? <Check size={16} /> : <Bookmark size={16} />}
+                    </button>
+                  </div>
+                  <div className="more-menu-row">
+                    <span className="more-menu-label">Vitesse ({state.speed}x)</span>
+                    <button className="player-button more-menu-icon" onClick={handleCycleSpeed} title="Vitesse de lecture">
+                      <Gauge size={16} />
+                    </button>
+                  </div>
+                  <div className="more-menu-row">
+                    <span className="more-menu-label">
+                      Égaliseur{state.equalizerPresetId ? ` (${equalizerPresets.find((p) => p.id === state.equalizerPresetId)?.name ?? ''})` : ' (désactivé)'}
+                    </span>
+                    <button className="player-button more-menu-icon" onClick={handleCycleEqualizer} title="Égaliseur">
+                      <SlidersHorizontal size={16} />
+                    </button>
+                  </div>
+                  <div className="more-menu-row">
+                    <span className="more-menu-label">Normalisation du volume</span>
+                    <button
+                      className={`player-button more-menu-icon ${state.loudnessNormalizationEnabled ? 'confirmed' : ''}`}
+                      onClick={handleToggleLoudnessNormalization}
+                      title="Normalisation du volume (par livre)"
+                    >
+                      <AudioLines size={16} />
                     </button>
                   </div>
                 </div>

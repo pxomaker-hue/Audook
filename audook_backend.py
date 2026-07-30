@@ -6,6 +6,7 @@ Audook Backend - Exposes services via HTTP API for Electron frontend
 import os
 import sys
 import re
+import threading
 from pathlib import Path
 import asyncio
 import requests
@@ -21,7 +22,7 @@ from app.sync.scanner import scanner
 from app.sync import progress_sync
 from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
-from app.utils import logger, generate_id, online_metadata
+from app.utils import logger, generate_id, online_metadata, audio_loudness
 from app.database.models import Book as DbBook
 from app import CACHE_DIR
 
@@ -1177,6 +1178,46 @@ def set_player_sleep_timer():
         })
     except Exception as e:
         logger.error(f"Failed to set sleep timer: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<book_id>/loudness-gain', methods=['GET'])
+def get_book_loudness_gain(book_id):
+    """Per-book EBU-style loudness gain (see app/utils/audio_loudness.py) -
+    used by the mobile app to apply the same normalization desktop does via
+    VLC's equalizer preamp, through Android's LoudnessEnhancer/volume
+    instead. Returns the cached value immediately if there is one;
+    otherwise kicks off the (slow, ffmpeg-based) measurement in the
+    background - same as the desktop player does on first play of a book -
+    and returns null so the caller can poll again shortly after."""
+    try:
+        session = get_session()
+        book = BookRepository(session).get_by_id(book_id)
+        if not book:
+            return jsonify({'error': 'Book not found'}), 404
+
+        cached_gain = BookRepository(session).get_loudness_gain(book_id)
+        if cached_gain is not None:
+            return jsonify({'gain_db': cached_gain})
+
+        chapters = book.chapters or []
+        source = chapters[0].get('audio_file') if chapters else None
+        if not source:
+            return jsonify({'gain_db': None})
+
+        def measure_and_cache():
+            gain = audio_loudness.measure_loudness_gain(source)
+            if gain is None:
+                return
+            measure_session = get_session()
+            try:
+                BookRepository(measure_session).set_loudness_gain(book_id, gain)
+            finally:
+                measure_session.close()
+
+        threading.Thread(target=measure_and_cache, daemon=True).start()
+        return jsonify({'gain_db': None})
+    except Exception as e:
+        logger.error(f"Failed to get loudness gain for {book_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Equalizer preset management (fine-tuning lives in Settings)
