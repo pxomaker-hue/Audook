@@ -13,12 +13,18 @@ const SEEK_STEP_SECONDS = 30;
 // mobile has no equivalent import to share it from (the desktop hook talks
 // to the backend's own player session, this one to the native plugin).
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+// MediaRouter discovery has no "scan finished" signal like desktop's
+// blocking pychromecast scan does - devices stream in via castDevices as
+// they're found during this window, then the "scanning" spinner just stops.
+const CAST_SCAN_DURATION_MS = 6000;
 
 export function usePlayerState() {
   const [native, setNative] = useState<MobilePlayerState>(mobilePlayerStore.getState());
   const [addingBookmark, setAddingBookmark] = useState(false);
   const [bookmarkAdded, setBookmarkAdded] = useState(false);
   const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
+  const [castScanning, setCastScanning] = useState(false);
+  const [castConnecting, setCastConnecting] = useState<string | null>(null);
 
   useEffect(() => {
     return mobilePlayerStore.subscribe(setNative);
@@ -41,8 +47,8 @@ export function usePlayerState() {
     loudnessNormalizationEnabled: native.loudnessNormalizationEnabled,
     compressionPreset: native.compressionPreset,
     sleepTimerRemainingSeconds: null,
-    isCasting: false,
-    castDeviceName: null
+    isCasting: native.isCasting,
+    castDeviceName: native.castDeviceName
   };
 
   const handlePlayPause = () => mobilePlayerStore.togglePlayPause();
@@ -76,9 +82,25 @@ export function usePlayerState() {
     await mobilePlayerStore.cycleCompression();
   };
   const handleCycleSleepTimer = async () => {};
-  const handleScanCastDevices = async () => {};
-  const handleConnectCastDevice = async (_deviceName: string) => {};
-  const handleDisconnectCastDevice = async () => {};
+  const handleScanCastDevices = async () => {
+    setCastScanning(true);
+    await mobilePlayerStore.scanCastDevices();
+    setTimeout(async () => {
+      setCastScanning(false);
+      await mobilePlayerStore.stopCastDiscovery();
+    }, CAST_SCAN_DURATION_MS);
+  };
+  const handleConnectCastDevice = async (deviceId: string) => {
+    try {
+      setCastConnecting(deviceId);
+      await mobilePlayerStore.connectCastDevice(deviceId);
+    } finally {
+      setCastConnecting(null);
+    }
+  };
+  const handleDisconnectCastDevice = async () => {
+    await mobilePlayerStore.disconnectCastDevice();
+  };
 
   const handleAddBookmark = async () => {
     if (!state.currentBook) return;
@@ -114,9 +136,9 @@ export function usePlayerState() {
     handleToggleLoudnessNormalization,
     handleCycleCompression,
     handleCycleSleepTimer,
-    castDevices: [] as any[],
-    castScanning: false,
-    castConnecting: null as string | null,
+    castDevices: native.castDevices,
+    castScanning,
+    castConnecting,
     handleScanCastDevices,
     handleConnectCastDevice,
     handleDisconnectCastDevice,

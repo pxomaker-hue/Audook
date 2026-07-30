@@ -34,6 +34,15 @@ export interface AudookPlayerPlugin {
   resume(): Promise<void>;
   seek(options: { ms: number }): Promise<void>;
   stop(): Promise<void>;
+  // Chromecast/Google Home - independent of the NAS backend (unlike
+  // desktop's cast, which goes through the backend's own pychromecast
+  // session). scanCastDevices starts MediaRouter discovery; results stream
+  // in via the 'castDevicesChanged' event as they're found, rather than a
+  // single blocking scan like desktop's.
+  scanCastDevices(): Promise<void>;
+  stopCastDiscovery(): Promise<void>;
+  connectCastDevice(options: { deviceId: string }): Promise<void>;
+  disconnectCastDevice(): Promise<void>;
   addListener(
     eventName: 'positionUpdate',
     listenerFunc: (data: { positionMs: number; durationMs: number }) => void
@@ -49,6 +58,14 @@ export interface AudookPlayerPlugin {
   addListener(
     eventName: 'chapterChanged',
     listenerFunc: (data: { chapterIndex: number }) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'castDevicesChanged',
+    listenerFunc: (data: { devices: { id: string; name: string }[] }) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'castStateChanged',
+    listenerFunc: (data: { isCasting: boolean; deviceName: string | null }) => void
   ): Promise<{ remove: () => void }>;
 }
 

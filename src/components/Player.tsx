@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines, Activity } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines, Activity, Cast, RefreshCw, X } from 'lucide-react';
 import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
 import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
@@ -315,6 +315,41 @@ const Player: React.FC = () => {
                       <Activity size={16} />
                     </button>
                   </div>
+                  {state.isCasting ? (
+                    <div className="more-menu-row">
+                      <span className="more-menu-label">Diffusion sur {state.castDeviceName}</span>
+                      <button className="player-button more-menu-icon" onClick={handleDisconnectCastDevice} title="Arrêter la diffusion">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="more-menu-row">
+                        <span className="more-menu-label">Google Home / Chromecast</span>
+                        <button
+                          className="player-button more-menu-icon"
+                          onClick={handleScanCastDevices}
+                          disabled={castScanning}
+                          title="Rechercher un appareil"
+                        >
+                          {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
+                        </button>
+                      </div>
+                      {castDevices.map((device) => (
+                        <div className="more-menu-row" key={device.uuid}>
+                          <span className="more-menu-label">{device.name}</span>
+                          <button
+                            className="player-button more-menu-icon"
+                            onClick={() => handleConnectCastDevice(device.uuid)}
+                            disabled={castConnecting === device.uuid}
+                            title={`Diffuser sur ${device.name}`}
+                          >
+                            {castConnecting === device.uuid ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+                          </button>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
               <button className="player-button" onClick={() => setShowExpandedMenu((v) => !v)} title="Plus d'options">

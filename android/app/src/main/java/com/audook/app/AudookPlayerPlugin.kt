@@ -94,6 +94,11 @@ class AudookPlayerPlugin : Plugin() {
     private var desiredLoudnessGainDb: Float = 0f
     private var desiredCompressionPreset: String? = null
 
+    // Chromecast/Google Home - fully independent of the local ExoPlayer;
+    // see AudookCastManager for why the local playlist stays loaded (paused,
+    // silent) while casting instead of being torn down.
+    private lateinit var castManager: AudookCastManager
+
     override fun load() {
         val sessionToken = SessionToken(
             context,
@@ -104,6 +109,84 @@ class AudookPlayerPlugin : Plugin() {
             controller = future.get()
             controller?.addListener(playerListener)
         }, MoreExecutors.directExecutor())
+
+        castManager = AudookCastManager(context)
+        castManager.listener = object : AudookCastManager.Listener {
+            override fun onDevicesChanged(devices: List<AudookCastManager.CastDeviceInfo>) {
+                val data = JSObject()
+                val arr = JSArray()
+                for (d in devices) {
+                    val obj = JSObject()
+                    obj.put("id", d.id)
+                    obj.put("name", d.name)
+                    arr.put(obj)
+                }
+                data.put("devices", arr)
+                notifyListeners("castDevicesChanged", data)
+            }
+
+            override fun onCastStateChanged(isCasting: Boolean, deviceName: String?) {
+                val data = JSObject()
+                data.put("isCasting", isCasting)
+                data.put("deviceName", deviceName)
+                notifyListeners("castStateChanged", data)
+                if (isCasting) {
+                    // Hand off whatever's currently parked on locally to the
+                    // cast device, from wherever local playback had reached.
+                    positionHandler.post {
+                        val c = controller ?: return@post
+                        c.pause()
+                        loadCurrentChapterOnCast(c.currentPosition)
+                    }
+                } else {
+                    // Resume locally from wherever the cast device had
+                    // reached, so switching back doesn't restart the chapter.
+                    val resumeMs = castManager.getPositionMs()
+                    positionHandler.post {
+                        controller?.seekTo(resumeMs)
+                    }
+                }
+            }
+
+            override fun onRemotePlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) startPositionUpdates() else stopPositionUpdates()
+                val data = JSObject()
+                data.put("isPlaying", isPlaying)
+                notifyListeners("stateChange", data)
+            }
+
+            override fun onRemoteChapterEnded() {
+                // Mirrors the local STATE_ENDED handling: advance the
+                // (paused, silent) local playlist so both the chapter index
+                // bookkeeping and the "was this the last chapter" check stay
+                // exactly the same as local playback, then mirror the new
+                // current item to the cast device.
+                positionHandler.post {
+                    val c = controller ?: return@post
+                    val wasLastChapter = c.currentMediaItemIndex >= c.mediaItemCount - 1
+                    if (wasLastChapter) {
+                        val data = JSObject()
+                        data.put("ended", true)
+                        notifyListeners("ended", data)
+                    } else {
+                        c.seekToNextMediaItem()
+                        loadCurrentChapterOnCast(0)
+                    }
+                }
+            }
+        }
+    }
+
+    // Reads whichever chapter the local (paused, silent) ExoPlayer playlist
+    // is currently parked on and mirrors it to the cast device - used both
+    // when a cast session starts and on every chapter transition while
+    // casting (see previousChapter/nextChapter and onRemoteChapterEnded).
+    private fun loadCurrentChapterOnCast(positionMs: Long) {
+        val c = controller ?: return
+        val item = c.currentMediaItem ?: return
+        val url = item.localConfiguration?.uri?.toString() ?: return
+        val title = item.mediaMetadata.title?.toString() ?: ""
+        castManager.loadMedia(url, title, null, positionMs)
     }
 
     private val playerListener = object : Player.Listener {
@@ -330,10 +413,15 @@ class AudookPlayerPlugin : Plugin() {
     }
 
     private fun emitPosition() {
-        val c = controller ?: return
         val data = JSObject()
-        data.put("positionMs", c.currentPosition)
-        data.put("durationMs", if (c.duration > 0) c.duration else 0)
+        if (castManager.isCasting()) {
+            data.put("positionMs", castManager.getPositionMs())
+            data.put("durationMs", castManager.getDurationMs())
+        } else {
+            val c = controller ?: return
+            data.put("positionMs", c.currentPosition)
+            data.put("durationMs", if (c.duration > 0) c.duration else 0)
+        }
         notifyListeners("positionUpdate", data)
     }
 
@@ -394,7 +482,15 @@ class AudookPlayerPlugin : Plugin() {
         positionHandler.post {
             c.setMediaItems(mediaItems, startIndex, startPositionMs)
             c.prepare()
-            c.play()
+            // While casting, the local playlist is only kept as a silent
+            // source of truth for chapter sequencing (see
+            // AudookCastManager's class doc) - actual sound comes from the
+            // cast device instead.
+            if (castManager.isCasting()) {
+                loadCurrentChapterOnCast(startPositionMs)
+            } else {
+                c.play()
+            }
         }
         call.resolve()
     }
@@ -449,26 +545,42 @@ class AudookPlayerPlugin : Plugin() {
         // playlist entry (or does nothing at the first one) - unlike plain
         // seekToPrevious(), which restarts the current item instead once
         // playback is a few seconds in. Chapter buttons always mean "go to
-        // that chapter", never "restart this one".
-        positionHandler.post { controller?.seekToPreviousMediaItem() }
+        // that chapter", never "restart this one". Always applied to the
+        // local playlist (even while casting - see AudookCastManager's
+        // class doc) so it stays the single source of truth for the index.
+        positionHandler.post {
+            controller?.seekToPreviousMediaItem()
+            if (castManager.isCasting()) loadCurrentChapterOnCast(0)
+        }
         call.resolve()
     }
 
     @PluginMethod
     fun nextChapter(call: PluginCall) {
-        positionHandler.post { controller?.seekToNextMediaItem() }
+        positionHandler.post {
+            controller?.seekToNextMediaItem()
+            if (castManager.isCasting()) loadCurrentChapterOnCast(0)
+        }
         call.resolve()
     }
 
     @PluginMethod
     fun pause(call: PluginCall) {
-        positionHandler.post { controller?.pause() }
+        if (castManager.isCasting()) {
+            castManager.pause()
+        } else {
+            positionHandler.post { controller?.pause() }
+        }
         call.resolve()
     }
 
     @PluginMethod
     fun resume(call: PluginCall) {
-        positionHandler.post { controller?.play() }
+        if (castManager.isCasting()) {
+            castManager.resume()
+        } else {
+            positionHandler.post { controller?.play() }
+        }
         call.resolve()
     }
 
@@ -482,7 +594,43 @@ class AudookPlayerPlugin : Plugin() {
             call.reject("ms is required")
             return
         }
-        positionHandler.post { controller?.seekTo(ms) }
+        if (castManager.isCasting()) {
+            castManager.seek(ms)
+        } else {
+            positionHandler.post { controller?.seekTo(ms) }
+        }
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun scanCastDevices(call: PluginCall) {
+        castManager.startDiscovery()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun stopCastDiscovery(call: PluginCall) {
+        castManager.stopDiscovery()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun connectCastDevice(call: PluginCall) {
+        val deviceId = call.getString("deviceId")
+        if (deviceId == null) {
+            call.reject("deviceId is required")
+            return
+        }
+        if (!castManager.connect(deviceId)) {
+            call.reject("Device not found")
+            return
+        }
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun disconnectCastDevice(call: PluginCall) {
+        castManager.disconnect()
         call.resolve()
     }
 
@@ -498,6 +646,7 @@ class AudookPlayerPlugin : Plugin() {
         try { equalizer?.release() } catch (e: Exception) { }
         try { loudnessEnhancer?.release() } catch (e: Exception) { }
         try { dynamicsProcessing?.release() } catch (e: Exception) { }
+        if (::castManager.isInitialized) castManager.stopDiscovery()
         controller?.release()
         controller = null
         super.handleOnDestroy()

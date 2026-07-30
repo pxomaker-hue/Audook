@@ -42,6 +42,11 @@ dependencies {
     // service that survives lock-screen/backgrounding.
     implementation "androidx.media3:media3-exoplayer:1.4.1"
     implementation "androidx.media3:media3-session:1.4.1"
+    // Chromecast/Google Home casting - the Cast Sender SDK, driving the
+    // device's built-in default media receiver directly (no custom receiver
+    // app needed for plain audio playback). See AudookCastManager.kt.
+    implementation "androidx.mediarouter:mediarouter:1.6.0"
+    implementation "com.google.android.gms:play-services-cast-framework:21.3.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

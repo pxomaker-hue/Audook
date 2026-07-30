@@ -16,6 +16,16 @@ export interface EqualizerPreset {
   is_builtin: boolean;
 }
 
+// Matches usePlayerState.ts's CastDevice shape ({name, model, uuid}) for
+// structural compatibility with Player.tsx, which picks one hook or the
+// other via a ternary - model is always '' here, mobile has no equivalent
+// concept, uuid is the MediaRouter route id used to actually connect.
+export interface CastDevice {
+  name: string;
+  model: string;
+  uuid: string;
+}
+
 export interface MobilePlayerState {
   isPlaying: boolean;
   currentBook: any | null;
@@ -26,6 +36,9 @@ export interface MobilePlayerState {
   equalizerPresetId: string | null;
   loudnessNormalizationEnabled: boolean;
   compressionPreset: string | null;
+  isCasting: boolean;
+  castDeviceName: string | null;
+  castDevices: CastDevice[];
 }
 
 // Same cycle/keys as PlayerService.COMPRESSION_STEPS in
@@ -47,7 +60,10 @@ let state: MobilePlayerState = {
   speed: 1,
   equalizerPresetId: null,
   loudnessNormalizationEnabled: false,
-  compressionPreset: null
+  compressionPreset: null,
+  isCasting: false,
+  castDeviceName: null,
+  castDevices: []
 };
 
 // Fetched lazily once and cached - the actual band/preamp values used to
@@ -92,6 +108,14 @@ function ensureNativeListeners() {
   AudookPlayer.addListener('ended', () => {
     pushProgress(true);
     stopProgressPushLoop();
+  });
+  AudookPlayer.addListener('castDevicesChanged', (data) => {
+    setState({
+      castDevices: data.devices.map((d) => ({ name: d.name, model: '', uuid: d.id }))
+    });
+  });
+  AudookPlayer.addListener('castStateChanged', (data) => {
+    setState({ isCasting: data.isCasting, castDeviceName: data.deviceName });
   });
 }
 
@@ -316,6 +340,23 @@ async function goToPreviousChapter() {
   await AudookPlayer.previousChapter();
 }
 
+async function scanCastDevices() {
+  ensureNativeListeners();
+  await AudookPlayer.scanCastDevices();
+}
+
+async function stopCastDiscovery() {
+  await AudookPlayer.stopCastDiscovery();
+}
+
+async function connectCastDevice(deviceId: string) {
+  await AudookPlayer.connectCastDevice({ deviceId });
+}
+
+async function disconnectCastDevice() {
+  await AudookPlayer.disconnectCastDevice();
+}
+
 async function stop() {
   await AudookPlayer.stop();
   stopProgressPushLoop();
@@ -348,6 +389,10 @@ export const mobilePlayerStore = {
   cycleEqualizer,
   cycleCompression,
   toggleLoudnessNormalization,
+  scanCastDevices,
+  stopCastDiscovery,
+  connectCastDevice,
+  disconnectCastDevice,
   goToNextChapter,
   goToPreviousChapter,
   stop
