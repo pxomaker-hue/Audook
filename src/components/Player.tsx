@@ -49,6 +49,7 @@ const Player: React.FC = () => {
     castDevices,
     castScanning,
     castConnecting,
+    castError,
     handleScanCastDevices,
     handleConnectCastDevice,
     handleDisconnectCastDevice,
@@ -135,6 +136,7 @@ const Player: React.FC = () => {
       castDevices={castDevices}
       castScanning={castScanning}
       castConnecting={castConnecting}
+      castError={castError}
       onScanCast={handleScanCastDevices}
       onConnectCast={handleConnectCastDevice}
       onDisconnectCast={handleDisconnectCastDevice}
@@ -226,6 +228,7 @@ const Player: React.FC = () => {
           >
             {castScanning ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
           </button>
+          {castError && <div className="more-menu-error">{castError}</div>}
         </div>
       )}
     </>

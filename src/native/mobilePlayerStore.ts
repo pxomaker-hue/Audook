@@ -116,6 +116,14 @@ function ensureNativeListeners() {
   });
   AudookPlayer.addListener('castStateChanged', (data) => {
     setState({ isCasting: data.isCasting, castDeviceName: data.deviceName });
+    // Without this, the freshly-restored position (native side seeks the
+    // local player back to wherever the cast device had reached, and emits
+    // one final positionUpdate for it) only reaches the backend on the next
+    // periodic tick of the 15s push loop - if the user backgrounds/closes
+    // the app shortly after stopping the cast, that tick never happens and
+    // the whole cast session's listening is lost. Push right away instead,
+    // same as pause()/seek() already do for their own state changes.
+    pushProgress();
   });
 }
 

@@ -77,6 +77,7 @@ export function usePlayerState() {
   const [castDevices, setCastDevices] = useState<CastDevice[]>([]);
   const [castScanning, setCastScanning] = useState(false);
   const [castConnecting, setCastConnecting] = useState<string | null>(null);
+  const [castError, setCastError] = useState<string | null>(null);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchState = async () => {
@@ -279,6 +280,7 @@ export function usePlayerState() {
 
   const handleScanCastDevices = async () => {
     try {
+      setCastError(null);
       setCastScanning(true);
       const response = await axios.get(`${getApiBase()}/cast/devices`);
       setCastDevices(response.data);
@@ -291,11 +293,13 @@ export function usePlayerState() {
 
   const handleConnectCastDevice = async (deviceName: string) => {
     try {
+      setCastError(null);
       setCastConnecting(deviceName);
       await axios.post(`${getApiBase()}/cast/connect`, { device_name: deviceName });
       await fetchState();
     } catch (error) {
       console.error('Failed to connect to cast device:', error);
+      setCastError("Impossible de se connecter à cet appareil. Réessayez, ou vérifiez qu'il est bien sur le même réseau.");
     } finally {
       setCastConnecting(null);
     }
@@ -330,6 +334,7 @@ export function usePlayerState() {
     castDevices,
     castScanning,
     castConnecting,
+    castError,
     handleScanCastDevices,
     handleConnectCastDevice,
     handleDisconnectCastDevice,

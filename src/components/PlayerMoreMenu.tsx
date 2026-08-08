@@ -1,6 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MoreHorizontal, Gauge, SlidersHorizontal, Volume1, Volume2, VolumeX, Moon, AudioLines, Activity, Cast, RefreshCw, Loader2, X } from 'lucide-react';
 import { EqualizerPreset, CastDevice } from '../hooks/usePlayerState';
+import { isCapacitorPlatform } from '../native/platform';
+
+// The two platforms key a cast device differently: desktop's backend
+// connects by Chromecast friendly name (pychromecast), mobile's native
+// plugin connects by the MediaRouter route id - passing the wrong one to
+// onConnectCast means it can never find a match (silently, since the plugin
+// just rejects with "Device not found"), which looked exactly like
+// "selecting a device does nothing".
+const castDeviceKey = (device: CastDevice) => (isCapacitorPlatform ? device.uuid : device.name);
 
 interface PlayerMoreMenuProps {
   speed: number;
@@ -27,6 +36,7 @@ interface PlayerMoreMenuProps {
   castDevices: CastDevice[];
   castScanning: boolean;
   castConnecting: string | null;
+  castError?: string | null;
   onScanCast: () => void;
   onConnectCast: (deviceName: string) => void;
   onDisconnectCast: () => void;
@@ -69,6 +79,7 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
   castDevices,
   castScanning,
   castConnecting,
+  castError,
   onScanCast,
   onConnectCast,
   onDisconnectCast,
@@ -155,14 +166,15 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
                             <span className="more-menu-label">{device.name}</span>
                             <button
                               className="player-button more-menu-icon"
-                              onClick={() => onConnectCast(device.name)}
-                              disabled={castConnecting === device.name}
+                              onClick={() => onConnectCast(castDeviceKey(device))}
+                              disabled={castConnecting === castDeviceKey(device)}
                               title={`Diffuser sur ${device.name}`}
                             >
-                              {castConnecting === device.name ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+                              {castConnecting === castDeviceKey(device) ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
                             </button>
                           </div>
                         ))}
+                        {castError && <div className="more-menu-error">{castError}</div>}
                       </>
                     )}
                   </div>
@@ -347,14 +359,15 @@ const PlayerMoreMenu: React.FC<PlayerMoreMenuProps> = ({
                   <span className="more-menu-label">{device.name}</span>
                   <button
                     className="player-button more-menu-icon"
-                    onClick={() => onConnectCast(device.name)}
-                    disabled={castConnecting === device.name}
+                    onClick={() => onConnectCast(castDeviceKey(device))}
+                    disabled={castConnecting === castDeviceKey(device)}
                     title={`Diffuser sur ${device.name}`}
                   >
-                    {castConnecting === device.name ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
+                    {castConnecting === castDeviceKey(device) ? <Loader2 size={16} className="spin" /> : <Cast size={16} />}
                   </button>
                 </div>
               ))}
+              {castError && <div className="more-menu-error">{castError}</div>}
             </>
           )}
         </div>

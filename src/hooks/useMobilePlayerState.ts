@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { getApiBase } from '../config';
 import { mobilePlayerStore, MobilePlayerState, EqualizerPreset } from '../native/mobilePlayerStore';
@@ -17,6 +17,14 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 // blocking pychromecast scan does - devices stream in via castDevices as
 // they're found during this window, then the "scanning" spinner just stops.
 const CAST_SCAN_DURATION_MS = 6000;
+// Discovery itself (the actual MediaRouter callback that keeps routes
+// live/selectable) used to stop at the same 6s mark as the spinner - if the
+// user took a moment to read the list before tapping a device, the route
+// could already be gone from MediaRouter by the time connect() looked it up,
+// which failed silently (no error surfaced) and looked like "nothing
+// happens". Discovery now outlives the spinner by a lot more margin, and is
+// cut short immediately on a successful connect instead of waiting on this.
+const CAST_DISCOVERY_SAFETY_TIMEOUT_MS = 120000;
 
 export function usePlayerState() {
   const [native, setNative] = useState<MobilePlayerState>(mobilePlayerStore.getState());
@@ -25,6 +33,8 @@ export function usePlayerState() {
   const [equalizerPresets, setEqualizerPresets] = useState<EqualizerPreset[]>([]);
   const [castScanning, setCastScanning] = useState(false);
   const [castConnecting, setCastConnecting] = useState<string | null>(null);
+  const [castError, setCastError] = useState<string | null>(null);
+  const discoverySafetyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return mobilePlayerStore.subscribe(setNative);
@@ -83,17 +93,32 @@ export function usePlayerState() {
   };
   const handleCycleSleepTimer = async () => {};
   const handleScanCastDevices = async () => {
+    setCastError(null);
     setCastScanning(true);
     await mobilePlayerStore.scanCastDevices();
-    setTimeout(async () => {
-      setCastScanning(false);
-      await mobilePlayerStore.stopCastDiscovery();
-    }, CAST_SCAN_DURATION_MS);
+    // Only the spinner stops here - see CAST_DISCOVERY_SAFETY_TIMEOUT_MS for
+    // why discovery itself needs to keep running well past this.
+    setTimeout(() => setCastScanning(false), CAST_SCAN_DURATION_MS);
+    if (discoverySafetyTimeout.current) clearTimeout(discoverySafetyTimeout.current);
+    discoverySafetyTimeout.current = setTimeout(() => {
+      mobilePlayerStore.stopCastDiscovery();
+    }, CAST_DISCOVERY_SAFETY_TIMEOUT_MS);
   };
   const handleConnectCastDevice = async (deviceId: string) => {
     try {
+      setCastError(null);
       setCastConnecting(deviceId);
       await mobilePlayerStore.connectCastDevice(deviceId);
+      // Connected - no need to keep discovery running (and the device list
+      // popover is about to close anyway).
+      if (discoverySafetyTimeout.current) {
+        clearTimeout(discoverySafetyTimeout.current);
+        discoverySafetyTimeout.current = null;
+      }
+      await mobilePlayerStore.stopCastDiscovery();
+    } catch (error) {
+      console.error('Failed to connect to cast device:', error);
+      setCastError("Impossible de se connecter à cet appareil. Réessayez, ou vérifiez qu'il est bien sur le même réseau.");
     } finally {
       setCastConnecting(null);
     }
@@ -139,6 +164,7 @@ export function usePlayerState() {
     castDevices: native.castDevices,
     castScanning,
     castConnecting,
+    castError,
     handleScanCastDevices,
     handleConnectCastDevice,
     handleDisconnectCastDevice,

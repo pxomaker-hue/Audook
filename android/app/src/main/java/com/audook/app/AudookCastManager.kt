@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.mediarouter.media.MediaRouteSelector
 import androidx.mediarouter.media.MediaRouter
+import com.google.android.gms.cast.CastDevice
 import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
@@ -31,6 +32,31 @@ import com.google.android.gms.common.images.WebImage
  * the cast device instead of sounding it locally.
  */
 private const val TAG = "AudookCast"
+
+// Mirrors CONTENT_TYPES in app/cast/cast_player.py (desktop's cast
+// implementation) - without a correct content type, the Chromecast/Google
+// Home default media receiver accepts the load request and the device
+// visibly connects/launches, but the actual audio never plays (silently
+// stalls or errors on-device with nothing surfaced back to the sender).
+// Audiobooks are very often .m4b, not .mp3 - hardcoding "audio/mpeg" here
+// (the previous behavior) broke exactly that case while desktop, which
+// already guessed per-extension, kept working.
+private val CAST_CONTENT_TYPES = mapOf(
+    "mp3" to "audio/mpeg",
+    "m4a" to "audio/mp4",
+    "m4b" to "audio/mp4",
+    "flac" to "audio/flac",
+    "ogg" to "audio/ogg",
+    "opus" to "audio/ogg",
+    "wav" to "audio/wav",
+    "aac" to "audio/aac"
+)
+
+private fun guessContentType(url: String): String {
+    val withoutQuery = url.substringBefore('?')
+    val ext = withoutQuery.substringAfterLast('.', "").lowercase()
+    return CAST_CONTENT_TYPES[ext] ?: "audio/mpeg"
+}
 
 class AudookCastManager(private val context: Context) {
 
@@ -154,17 +180,31 @@ class AudookCastManager(private val context: Context) {
         mediaRouter.removeCallback(routerCallback)
     }
 
+    // Some devices are announced twice by Play Services - once via the legacy
+    // MediaRouteProviderService and once via the newer MediaRoute2ProviderService
+    // - same physical device, two different route ids. The route's extras
+    // bundle carries the actual CastDevice, whose deviceId is stable across
+    // both announcements (unlike the route id), so that's the real identity
+    // to dedupe on; fall back to a normalized name if a route doesn't carry
+    // one (shouldn't happen for a route that matched the cast selector, but
+    // degrading to the old behavior beats crashing on it).
+    private fun dedupeKey(route: MediaRouter.RouteInfo): String {
+        try {
+            val device = CastDevice.getFromBundle(route.extras)
+            if (device != null) return "id:${device.deviceId}"
+        } catch (e: Exception) {
+            Log.w(TAG, "dedupeKey: failed to read CastDevice from route ${route.id}", e)
+        }
+        return "name:${route.name?.toString()?.trim()?.lowercase()}"
+    }
+
     private fun notifyDevices() {
         val allRoutes = mediaRouter.routes
         Log.d(TAG, "notifyDevices: ${allRoutes.size} total routes: ${allRoutes.map { "id=${it.id} name='${it.name}' matches=${it.matchesSelector(routeSelector)} defaultOrBt=${it.isDefaultOrBluetooth}" }}")
         val devices = allRoutes
             .filter { it.matchesSelector(routeSelector) && !it.isDefaultOrBluetooth }
+            .distinctBy { dedupeKey(it) }
             .map { CastDeviceInfo(it.id, it.name.toString()) }
-            // Some devices are announced twice by Play Services - once via the
-            // legacy MediaRouteProviderService and once via the newer
-            // MediaRoute2ProviderService. Same physical device, same name -
-            // keep only the first entry per name to avoid a confusing duplicate.
-            .distinctBy { it.name }
         Log.d(TAG, "notifyDevices: filtered to ${devices.size} cast devices: $devices")
         listener?.onDevicesChanged(devices)
     }
@@ -194,7 +234,7 @@ class AudookCastManager(private val context: Context) {
         }
         val mediaInfo = MediaInfo.Builder(url)
             .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-            .setContentType("audio/mpeg")
+            .setContentType(guessContentType(url))
             .setMetadata(metadata)
             .build()
         val request = MediaLoadRequestData.Builder()

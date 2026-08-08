@@ -29,6 +29,7 @@ const MiniPlayerView: React.FC = () => {
     castDevices,
     castScanning,
     castConnecting,
+    castError,
     handleScanCastDevices,
     handleConnectCastDevice,
     handleDisconnectCastDevice,
@@ -137,6 +138,7 @@ const MiniPlayerView: React.FC = () => {
               castDevices={castDevices}
               castScanning={castScanning}
               castConnecting={castConnecting}
+              castError={castError}
               onScanCast={handleScanCastDevices}
               onConnectCast={handleConnectCastDevice}
               onDisconnectCast={handleDisconnectCastDevice}
