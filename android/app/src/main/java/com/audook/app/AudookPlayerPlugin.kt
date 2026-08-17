@@ -73,6 +73,19 @@ class AudookPlayerPlugin : Plugin() {
     private val positionHandler = Handler(Looper.getMainLooper())
     private var positionRunnable: Runnable? = null
 
+    // Sleep timer - runs on positionHandler (main looper) like everything
+    // else here, which is enough for it to survive backgrounding since the
+    // whole point of AudookPlaybackService is to keep this process's main
+    // thread alive as a foreground service during playback (same reason
+    // chapter auto-advance survives the WebView being suspended). Mirrors
+    // PlayerService.set_sleep_timer in app/services/player_service.py:
+    // fades the volume out over the last SLEEP_TIMER_FADE_SECONDS, then
+    // pauses and restores the original volume.
+    private var sleepTimerEndTimeMs: Long? = null
+    private var sleepTimerGeneration: Int = 0
+    private var sleepTimerRunnable: Runnable? = null
+    private var sleepTimerOriginalVolume: Float = 1f
+
     // On a cold app start, the MediaController/session/player pipeline is
     // still spinning up when play() is first called - setMediaItem's own
     // startPositionMs argument (see play() below) is supposed to be honored
@@ -477,6 +490,74 @@ class AudookPlayerPlugin : Plugin() {
         notifyListeners("positionUpdate", data)
     }
 
+    private fun emitSleepTimer(remainingSeconds: Long?) {
+        val data = JSObject()
+        data.put("remainingSeconds", remainingSeconds)
+        notifyListeners("sleepTimerUpdate", data)
+    }
+
+    // Cancels any running timer and restores volume (harmless no-op if it
+    // wasn't mid-fade). Doesn't emit - callers that want the UI updated do
+    // so themselves, since some callers (a fresh startSleepTimer call) don't
+    // want the "off" state to flash on screen first.
+    private fun cancelSleepTimerInternal() {
+        sleepTimerGeneration++
+        sleepTimerRunnable?.let { positionHandler.removeCallbacks(it) }
+        sleepTimerRunnable = null
+        sleepTimerEndTimeMs = null
+        controller?.volume = sleepTimerOriginalVolume
+    }
+
+    private fun startSleepTimer(minutes: Double) {
+        cancelSleepTimerInternal()
+        val generation = ++sleepTimerGeneration
+        sleepTimerEndTimeMs = System.currentTimeMillis() + (minutes * 60_000).toLong()
+        sleepTimerOriginalVolume = controller?.volume ?: 1f
+
+        val fadeSeconds = 20L
+        val runnable = object : Runnable {
+            override fun run() {
+                if (generation != sleepTimerGeneration) return
+                val endTime = sleepTimerEndTimeMs ?: return
+                val remainingMs = endTime - System.currentTimeMillis()
+
+                if (remainingMs <= 0) {
+                    controller?.pause()
+                    controller?.volume = sleepTimerOriginalVolume
+                    sleepTimerEndTimeMs = null
+                    sleepTimerRunnable = null
+                    emitSleepTimer(null)
+                    return
+                }
+
+                val remainingSeconds = remainingMs / 1000
+                emitSleepTimer(remainingSeconds)
+                if (remainingSeconds <= fadeSeconds) {
+                    val fadeFraction = (remainingSeconds.toFloat() / fadeSeconds.toFloat()).coerceIn(0f, 1f)
+                    controller?.volume = sleepTimerOriginalVolume * fadeFraction
+                }
+
+                positionHandler.postDelayed(this, 1000)
+            }
+        }
+        sleepTimerRunnable = runnable
+        positionHandler.post(runnable)
+    }
+
+    @PluginMethod
+    fun setSleepTimer(call: PluginCall) {
+        val minutes = call.getDouble("minutes")
+        positionHandler.post {
+            if (minutes == null || minutes <= 0.0) {
+                cancelSleepTimerInternal()
+                emitSleepTimer(null)
+            } else {
+                startSleepTimer(minutes)
+            }
+        }
+        call.resolve()
+    }
+
     @PluginMethod
     fun play(call: PluginCall) {
         val chaptersArray = call.getArray("chapters")
@@ -696,13 +777,18 @@ class AudookPlayerPlugin : Plugin() {
 
     @PluginMethod
     fun stop(call: PluginCall) {
-        positionHandler.post { controller?.stop() }
+        positionHandler.post {
+            controller?.stop()
+            cancelSleepTimerInternal()
+            emitSleepTimer(null)
+        }
         stopPositionUpdates()
         call.resolve()
     }
 
     override fun handleOnDestroy() {
         stopPositionUpdates()
+        cancelSleepTimerInternal()
         try { equalizer?.release() } catch (e: Exception) { }
         try { loudnessEnhancer?.release() } catch (e: Exception) { }
         try { dynamicsProcessing?.release() } catch (e: Exception) { }

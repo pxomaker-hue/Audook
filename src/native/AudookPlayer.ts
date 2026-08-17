@@ -43,6 +43,9 @@ export interface AudookPlayerPlugin {
   stopCastDiscovery(): Promise<void>;
   connectCastDevice(options: { deviceId: string }): Promise<void>;
   disconnectCastDevice(): Promise<void>;
+  // Cycles like desktop's SLEEP_TIMER_STEPS: fades volume out over the last
+  // 20s before pausing, then restores it. minutes null/0 cancels.
+  setSleepTimer(options: { minutes: number | null }): Promise<void>;
   addListener(
     eventName: 'positionUpdate',
     listenerFunc: (data: { positionMs: number; durationMs: number }) => void
@@ -66,6 +69,10 @@ export interface AudookPlayerPlugin {
   addListener(
     eventName: 'castStateChanged',
     listenerFunc: (data: { isCasting: boolean; deviceName: string | null }) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'sleepTimerUpdate',
+    listenerFunc: (data: { remainingSeconds: number | null }) => void
   ): Promise<{ remove: () => void }>;
 }
 

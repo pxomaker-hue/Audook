@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines, Activity, Cast, RefreshCw, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines, Activity, Cast, RefreshCw, X, Moon } from 'lucide-react';
 import { usePlayerState as useDesktopPlayerState, formatTime } from '../hooks/usePlayerState';
 import { usePlayerState as useMobilePlayerState } from '../hooks/useMobilePlayerState';
 import PlayerMoreMenu from './PlayerMoreMenu';
@@ -104,6 +104,13 @@ const Player: React.FC = () => {
     if (revealLabelRef.current) clearTimeout(revealLabelRef.current);
     revealLabelRef.current = setTimeout(() => setRevealedLabel((cur) => (cur === id ? null : cur)), 1800);
   };
+  const sleepTimerLabel = (() => {
+    if (state.sleepTimerRemainingSeconds === null) return 'off';
+    const totalSeconds = Math.round(state.sleepTimerRemainingSeconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  })();
 
   if (!state.currentBook) {
     return (
@@ -193,6 +200,18 @@ const Player: React.FC = () => {
           title="Compression dynamique"
         >
           <Activity size={16} />
+        </button>
+      </div>
+      <div className="more-menu-row">
+        <span className={`more-menu-label ${revealedLabel === 'sleep' ? 'more-menu-label-visible' : ''}`}>
+          Minuteur de veille ({sleepTimerLabel})
+        </span>
+        <button
+          className={`player-button more-menu-icon ${state.sleepTimerRemainingSeconds !== null ? 'confirmed' : ''}`}
+          onClick={() => { handleCycleSleepTimer(); revealLabel('sleep'); }}
+          title="Minuteur de veille"
+        >
+          <Moon size={16} />
         </button>
       </div>
       {state.isCasting ? (

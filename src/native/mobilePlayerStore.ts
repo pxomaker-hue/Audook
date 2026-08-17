@@ -39,6 +39,7 @@ export interface MobilePlayerState {
   isCasting: boolean;
   castDeviceName: string | null;
   castDevices: CastDevice[];
+  sleepTimerRemainingSeconds: number | null;
 }
 
 // Same cycle/keys as PlayerService.COMPRESSION_STEPS in
@@ -63,7 +64,8 @@ let state: MobilePlayerState = {
   compressionPreset: null,
   isCasting: false,
   castDeviceName: null,
-  castDevices: []
+  castDevices: [],
+  sleepTimerRemainingSeconds: null
 };
 
 // Fetched lazily once and cached - the actual band/preamp values used to
@@ -124,6 +126,9 @@ function ensureNativeListeners() {
     // the whole cast session's listening is lost. Push right away instead,
     // same as pause()/seek() already do for their own state changes.
     pushProgress();
+  });
+  AudookPlayer.addListener('sleepTimerUpdate', (data) => {
+    setState({ sleepTimerRemainingSeconds: data.remainingSeconds });
   });
 }
 
@@ -365,6 +370,11 @@ async function disconnectCastDevice() {
   await AudookPlayer.disconnectCastDevice();
 }
 
+async function setSleepTimer(minutes: number | null) {
+  setState({ sleepTimerRemainingSeconds: minutes ? minutes * 60 : null });
+  await AudookPlayer.setSleepTimer({ minutes });
+}
+
 async function stop() {
   await AudookPlayer.stop();
   stopProgressPushLoop();
@@ -403,5 +413,6 @@ export const mobilePlayerStore = {
   disconnectCastDevice,
   goToNextChapter,
   goToPreviousChapter,
+  setSleepTimer,
   stop
 };

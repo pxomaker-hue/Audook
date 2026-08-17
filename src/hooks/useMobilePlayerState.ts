@@ -25,6 +25,8 @@ const CAST_SCAN_DURATION_MS = 6000;
 // happens". Discovery now outlives the spinner by a lot more margin, and is
 // cut short immediately on a successful connect instead of waiting on this.
 const CAST_DISCOVERY_SAFETY_TIMEOUT_MS = 120000;
+// Same cycle as usePlayerState.ts's SLEEP_TIMER_STEPS.
+const SLEEP_TIMER_STEPS: Array<number | null> = [null, 5, 10, 15, 20, 30, 60];
 
 export function usePlayerState() {
   const [native, setNative] = useState<MobilePlayerState>(mobilePlayerStore.getState());
@@ -34,6 +36,7 @@ export function usePlayerState() {
   const [castScanning, setCastScanning] = useState(false);
   const [castConnecting, setCastConnecting] = useState<string | null>(null);
   const [castError, setCastError] = useState<string | null>(null);
+  const [sleepTimerStepIndex, setSleepTimerStepIndex] = useState(0);
   const discoverySafetyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -56,7 +59,7 @@ export function usePlayerState() {
     equalizerPresetId: native.equalizerPresetId,
     loudnessNormalizationEnabled: native.loudnessNormalizationEnabled,
     compressionPreset: native.compressionPreset,
-    sleepTimerRemainingSeconds: null,
+    sleepTimerRemainingSeconds: native.sleepTimerRemainingSeconds,
     isCasting: native.isCasting,
     castDeviceName: native.castDeviceName
   };
@@ -91,7 +94,12 @@ export function usePlayerState() {
   const handleCycleCompression = async () => {
     await mobilePlayerStore.cycleCompression();
   };
-  const handleCycleSleepTimer = async () => {};
+  const handleCycleSleepTimer = async () => {
+    const nextIndex = (sleepTimerStepIndex + 1) % SLEEP_TIMER_STEPS.length;
+    const minutes = SLEEP_TIMER_STEPS[nextIndex];
+    setSleepTimerStepIndex(nextIndex);
+    await mobilePlayerStore.setSleepTimer(minutes);
+  };
   const handleScanCastDevices = async () => {
     setCastError(null);
     setCastScanning(true);
