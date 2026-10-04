@@ -1,6 +1,6 @@
 {
   "name": "audook",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modern audiobook player for Windows",
   "main": "build/electron.js",
   "homepage": "./",
@@ -12,6 +12,7 @@
     "test:frontend": "react-scripts test --watchAll=false",
     "test:backend": "python -m pytest -q",
     "test": "npm run test:backend && npm run test:frontend",
+    "version": "node scripts/sync-version.js && git add app/__init__.py",
     "react-eject": "react-scripts eject",
     "electron-start": "electron .",
     "electron-dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && npm run electron-start\"",

@@ -235,6 +235,16 @@ Double-clique sur `build-release.bat` (ou lance-le depuis un terminal) : il cons
 
 Prérequis : Node.js, Python avec les dépendances de `requirements.txt` et PyInstaller, et pour l'APK le SDK Android, un JDK (celui d'Android Studio convient) et le fichier `android/keystore.properties` de la clé de signature (jamais commité).
 
+### Changer de version
+
+`package.json` est la seule source de la version : l'installeur Windows, l'APK (nom et code de version), les noms des fichiers de `release/`, la page Paramètres et le backend en dérivent. Pour passer à une nouvelle version :
+
+```bash
+npm version patch --no-git-tag-version   # ou minor / major / 1.2.3
+```
+
+Cela met aussi à jour `app/__init__.py`. Le code de version Android vaut `major*10000 + minor*100 + patch` (1.2.3 donne 10203) : il doit toujours augmenter pour qu'Android accepte la mise à jour, et minor/patch restent sous 100. Des tests vérifient que tout reste aligné.
+
 ## Tests
 
 - Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : ta bibliothèque n'est jamais touchée.

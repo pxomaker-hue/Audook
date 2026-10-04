@@ -722,7 +722,7 @@ const SettingsPage: React.FC = () => {
       <div style={cardStyle}>
         <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>À propos</h2>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-          <strong>Audook</strong> v1.0.0
+          <strong>Audook</strong>{process.env.REACT_APP_VERSION ? ` v${process.env.REACT_APP_VERSION}` : ''}
         </p>
         <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
           Lecteur d'audiolivres moderne et élégant pour Windows

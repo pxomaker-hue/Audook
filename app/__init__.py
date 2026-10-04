@@ -3,7 +3,7 @@ Audook - Audiobook Client for Windows
 A modern audiobook player supporting Audiobookshelf and Plex
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Audook Team"
 __description__ = "Windows audiobook client for Audiobookshelf and Plex"
 
