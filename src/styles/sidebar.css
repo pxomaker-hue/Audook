@@ -1,0 +1,90 @@
+/* Sidebar */
+.sidebar {
+  width: 76px;
+  flex-shrink: 0;
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 0;
+}
+
+.sidebar-header {
+  margin-bottom: 30px;
+}
+
+.sidebar-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--logo-orange);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Compact bottom tab bar shown while the mobile full-screen player is open
+   (see expandedPlayerStore.ts) - icons only, no logo, laid out horizontally. */
+.sidebar.sidebar-bottom {
+  width: 100%;
+  flex-direction: row;
+  padding: 8px 12px;
+}
+
+.sidebar.sidebar-bottom .sidebar-header {
+  display: none;
+}
+
+.sidebar.sidebar-bottom .sidebar-nav {
+  flex-direction: row;
+  width: 100%;
+  justify-content: space-around;
+}
+
+.sidebar.sidebar-bottom .sidebar-spacer {
+  display: none;
+}
+
+.sidebar-spacer {
+  flex: 1;
+}
+
+.nav-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background-color: var(--surface-muted);
+}
+
+.nav-item.active {
+  color: var(--accent-ink);
+  background-color: var(--background);
+  box-shadow: var(--shadow-pop);
+}
+
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+}

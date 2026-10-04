@@ -1,0 +1,60 @@
+/* Pages */
+.page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 4px 4px 0;
+}
+
+.page-header {
+  margin-bottom: 30px;
+}
+
+.page-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.page-subtitle {
+  color: var(--text-secondary);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 34px 0 16px;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+/* Search bar (legacy, kept for pages not yet using top-bar) */
+.search-bar {
+  width: 100%;
+  max-width: 500px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  background-color: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+
+.search-bar input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.search-bar input::placeholder {
+  color: var(--text-tertiary);
+}

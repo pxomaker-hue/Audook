@@ -1,0 +1,301 @@
+/* Books grid */
+.books-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+/* Featured grid (e.g. "in progress" books) - bigger, square covers to stand
+   out from the regular 2:3 book-cover grid */
+.books-grid--featured {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 20px;
+}
+
+.books-grid--featured .book-card-cover {
+  aspect-ratio: 1 / 1;
+}
+
+.book-card-progress-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background-color: rgba(23, 22, 27, 0.25);
+}
+
+.book-card-progress-fill {
+  height: 100%;
+  background-color: var(--accent);
+}
+
+/* Book card */
+.book-card {
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.25s;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-pop);
+}
+
+.book-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-soft);
+}
+
+.book-card-cover {
+  width: 100%;
+  aspect-ratio: 2/3;
+  background-color: var(--surface-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  position: relative;
+  overflow: hidden;
+}
+
+.book-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.book-card-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+
+.book-card-dismiss {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(23, 22, 27, 0.55);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.15s;
+}
+
+.book-card:hover .book-card-dismiss {
+  opacity: 1;
+}
+
+/* No hover on touch devices - shown permanently instead, in its "resting"
+   (not actively hovered) desktop look: same dark translucent circle/white
+   cross, just always visible rather than opacity:0 until a mouse hover that
+   can never happen on Android. */
+.book-card-dismiss.book-card-dismiss-mobile {
+  opacity: 1;
+}
+
+.book-card-dismiss:hover {
+  background-color: #e81123;
+}
+
+.book-card-bookmark {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-pop);
+  z-index: 1;
+}
+
+.book-card-finished {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #35c46a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-pop);
+  z-index: 1;
+}
+
+.library-sort-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  border: none;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  font-family: inherit;
+}
+
+.library-sort-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
+.library-sort-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background-color: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  z-index: 10;
+}
+
+.library-sort-option {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.library-sort-option:hover {
+  background-color: var(--surface-muted);
+}
+
+.library-sort-option.active {
+  color: var(--accent-ink);
+  font-weight: 700;
+  background-color: var(--surface-muted);
+}
+
+.library-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+
+.book-card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(23, 22, 27, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.book-card:hover .book-card-overlay {
+  opacity: 1;
+}
+
+.play-button {
+  width: 46px;
+  height: 46px;
+  background-color: var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.play-button:hover {
+  transform: scale(1.06);
+}
+
+.play-button:active {
+  transform: scale(0.9);
+}
+
+.play-button svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-ink);
+}
+
+.book-card-info {
+  padding: 12px 14px 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.book-card-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-card-author {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-card-chapter {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-card-rating {
+  font-size: 12px;
+  color: var(--accent-ink);
+  margin-top: 4px;
+}

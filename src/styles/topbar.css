@@ -1,0 +1,130 @@
+/* Top bar */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.category-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.category-pill {
+  padding: 9px 18px;
+  border-radius: 999px;
+  background-color: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.category-pill:hover {
+  color: var(--text-primary);
+}
+
+.category-pill.active {
+  background-color: var(--accent-ink);
+  color: var(--accent);
+}
+
+.top-bar-search {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  background-color: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+
+.top-bar-search input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.top-bar-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.top-bar-search svg {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.top-bar-icon-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--surface);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.top-bar-icon-button:hover {
+  color: var(--text-primary);
+}
+
+.top-bar-icon-button.dark {
+  background-color: var(--accent-ink);
+  color: var(--accent);
+}
+
+.top-bar-icon-button:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.sync-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+  margin-bottom: 20px;
+  animation: sync-toast-in 0.2s ease-out;
+}
+
+@keyframes sync-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.top-bar-icon-button .dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  border: 2px solid var(--accent-ink);
+}

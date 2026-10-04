@@ -1,0 +1,329 @@
+/* "..." button (see PlayerMoreMenu) - unfolds a small popover upward with
+   speed/normalization/equalizer, replacing the old standalone speed pill. */
+.more-menu-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.more-menu-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 5;
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Without this, once the rows exceed max-height, Chromium/Electron falls
+     back to the native OS scrollbar (grey track, arrow buttons on Windows) -
+     jarring against this app's borderless, rounded, shadow-only chrome. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-tertiary) transparent;
+}
+
+.more-menu-popover::-webkit-scrollbar {
+  width: 5px;
+}
+
+.more-menu-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.more-menu-popover::-webkit-scrollbar-thumb {
+  background-color: var(--text-tertiary);
+  border-radius: 999px;
+}
+
+/* "pill" layout (mini-player): a rounded bar that unfolds sideways from the
+   "..." button, which stays fixed in place at the right edge - the
+   mini-player window is too short for anything to unfold above/below the
+   button, so this floats over the other controls instead of needing
+   vertical room.
+
+   The "..." button itself is left as a normal in-flow child of
+   .more-menu-wrapper (so the wrapper keeps its real size and position) -
+   only the icon row is absolutely positioned, anchored to sit immediately
+   left of the button via right: 100%. Making the *whole* pill (button
+   included) position:absolute used to leave the wrapper with no in-flow
+   content at all, so it collapsed to a 0x0 box and "right: 0" ended up
+   anchored to wherever that empty box happened to land in the row instead
+   of the button's actual position. */
+.more-menu-pill-icons {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-right: 6px;
+  padding: 4px;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-pop);
+  border-radius: 999px;
+  z-index: 6;
+  transform-origin: right center;
+  animation: more-menu-pill-unfold 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+@keyframes more-menu-pill-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+  }
+}
+
+/* Each cycle-style option (speed/EBU/compression/equalizer/sleep timer) -
+   buttons sit flush side by side (no gap); the current value only shows as
+   a label when that specific button is hovered/focused, floating above the
+   pill's own background rather than squeezed inside it. */
+.more-menu-pill-item {
+  position: relative;
+  display: flex;
+}
+
+.more-menu-pill-item-label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.more-menu-pill-item:hover .more-menu-pill-item-label,
+.more-menu-pill-item:focus-within .more-menu-pill-item-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Volume folds/unfolds upward (a vertical slider) on click rather than
+   hover (it needs continuous input, not just a status readout) - floats
+   above the pill the same way the labels do, instead of taking up
+   permanent space in the row. */
+.more-menu-pill-volume-slider {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  width: 20px;
+  height: 70px;
+  background-color: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+  padding: 8px 0;
+}
+
+.more-menu-pill-cast {
+  position: relative;
+  display: flex;
+}
+
+/* Mobile cast device list: inline (not absolutely unfolded like the desktop
+   mini-player's pill - the popover it lives in scrolls vertically, which
+   would clip anything escaping via position:absolute) row of icons sitting
+   between the label and the scan button, each with its name always visible
+   above it (touch has no hover state) and truncated (names can run long). */
+.mobile-cast-row {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.mobile-cast-devices {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.mobile-cast-device {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.mobile-cast-device-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-menu-pill-cast-popover {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  padding: 10px;
+  z-index: 7;
+}
+
+.more-menu-pill-cast-popover .more-menu-row {
+  justify-content: space-between;
+}
+
+.more-menu-pill-cast-popover .more-menu-label {
+  max-width: none;
+  opacity: 1;
+  padding: 0;
+  margin-right: 0;
+  white-space: normal;
+}
+
+/* Each row unfolds upward with a "bouncy" overshoot, cascading top-to-bottom
+   (the last row - closest to the "..." button - appears first). */
+.more-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  animation: more-menu-unfold 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.more-menu-error {
+  font-size: 11px;
+  color: var(--error);
+  text-align: right;
+  max-width: 220px;
+  align-self: flex-end;
+  margin-top: 2px;
+}
+
+.more-menu-row:nth-child(1) { animation-delay: 0.15s; }
+.more-menu-row:nth-child(2) { animation-delay: 0.12s; }
+.more-menu-row:nth-child(3) { animation-delay: 0.09s; }
+.more-menu-row:nth-child(4) { animation-delay: 0.06s; }
+.more-menu-row:nth-child(5) { animation-delay: 0.03s; }
+.more-menu-row:nth-child(6) { animation-delay: 0s; }
+
+@keyframes more-menu-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Label pill: collapsed by default, slides out to the left of its icon
+   button on hover. */
+.more-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 0;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: max-width 0.25s ease, opacity 0.2s ease, transform 0.25s ease, margin-right 0.25s ease, padding 0.25s ease;
+}
+
+.more-menu-label b {
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+
+.more-menu-row:hover .more-menu-label {
+  max-width: 180px;
+  margin-right: 8px;
+  padding: 8px 14px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Every row label in the mobile "..." menus was built on the same
+   reveal-on-hover pattern as desktop's, invisible (max-width:0, opacity:0)
+   until :hover - which touch has no equivalent for, so every single label
+   (Vitesse, Égaliseur, ...) was permanently invisible on mobile. Rather than
+   force them always-visible (cluttered, and desktop's brief hover-reveal
+   confirmation is nicer), Player.tsx now toggles this class on tap instead,
+   showing the label (with the new value) briefly right after a setting is
+   changed, then hiding it again - see revealMobileLabel(). */
+.more-menu-label.more-menu-label-visible {
+  max-width: 180px;
+  margin-right: 8px;
+  padding: 8px 14px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.more-menu-icon.confirmed {
+  background-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Volume row: same collapse/expand shell as .more-menu-label, but holding a
+   live horizontal slider instead of static text - unfolds "like the other
+   '...' buttons" per request, rather than the separate floating vertical
+   popup the docked player's standalone volume button still uses. */
+.more-menu-volume-slider {
+  display: flex;
+  align-items: center;
+  max-width: 0;
+  margin-right: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: max-width 0.25s ease, opacity 0.2s ease, transform 0.25s ease, margin-right 0.25s ease, padding 0.25s ease;
+}
+
+.more-menu-row:hover .more-menu-volume-slider,
+.more-menu-row:focus-within .more-menu-volume-slider {
+  max-width: 140px;
+  margin-right: 8px;
+  padding: 0 14px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.more-menu-volume-slider input[type='range'] {
+  width: 100px;
+  cursor: pointer;
+  accent-color: var(--accent-ink);
+}

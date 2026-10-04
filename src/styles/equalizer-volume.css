@@ -1,0 +1,86 @@
+.volume-popover-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.volume-popover {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+  padding: 14px 0;
+  display: flex;
+  justify-content: center;
+  z-index: 5;
+}
+
+/* Equalizer band sliders (SettingsPage -> EqualizerSettings.tsx). Each
+   vertical `writing-mode` range input reports an intrinsic content width
+   equal to its *height* (a Chromium quirk with vertical writing modes),
+   which used to blow out the flex row's auto min-width and crush the whole
+   page down to a few px with a giant horizontal scroll. Grid + explicit
+   fixed-width, overflow-hidden wrappers around each slider fully insulate
+   the layout from that. */
+.eq-band-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 20px;
+  min-width: 0;
+}
+
+.eq-band-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eq-band-slider-wrap {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.eq-band-bar-track {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.eq-band-bar-fill {
+  width: 6px;
+  min-height: 2px;
+  border-radius: 3px;
+  background-color: var(--accent-ink);
+}
+
+.eq-band-slider {
+  -webkit-appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: 110px;
+  cursor: pointer;
+  accent-color: var(--accent-ink);
+  flex-shrink: 0;
+}
+
+.volume-slider-vertical {
+  -webkit-appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: 90px;
+  cursor: pointer;
+  accent-color: var(--accent-ink);
+}
