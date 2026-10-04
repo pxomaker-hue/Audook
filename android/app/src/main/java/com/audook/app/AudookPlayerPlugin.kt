@@ -84,7 +84,12 @@ class AudookPlayerPlugin : Plugin() {
     private var sleepTimerEndTimeMs: Long? = null
     private var sleepTimerGeneration: Int = 0
     private var sleepTimerRunnable: Runnable? = null
-    private var sleepTimerOriginalVolume: Float = 1f
+    // Effective player volume = loudness-normalization base * sleep fade, so
+    // the two features never overwrite each other's value (the fade used to
+    // snapshot/restore the volume itself, clobbering a normalization change
+    // made mid-timer).
+    private var loudnessBaseVolume: Float = 1f
+    private var sleepFadeFactor: Float = 1f
 
     // On a cold app start, the MediaController/session/player pipeline is
     // still spinning up when play() is first called - setMediaItem's own
@@ -413,11 +418,11 @@ class AudookPlayerPlugin : Plugin() {
                 loudnessEnhancer?.setTargetGain((gainDb * 100).toInt())
                 loudnessEnhancer?.enabled = true
             } catch (e: Exception) { }
-            positionHandler.post { controller?.volume = 1f }
+            positionHandler.post { loudnessBaseVolume = 1f; applyEffectiveVolume() }
         } else {
             try { loudnessEnhancer?.enabled = false } catch (e: Exception) { }
             val linear = 10.0.pow(gainDb / 20.0).toFloat().coerceIn(0f, 1f)
-            positionHandler.post { controller?.volume = linear }
+            positionHandler.post { loudnessBaseVolume = linear; applyEffectiveVolume() }
         }
     }
 
@@ -490,6 +495,10 @@ class AudookPlayerPlugin : Plugin() {
         notifyListeners("positionUpdate", data)
     }
 
+    private fun applyEffectiveVolume() {
+        controller?.volume = loudnessBaseVolume * sleepFadeFactor
+    }
+
     private fun emitSleepTimer(remainingSeconds: Long?) {
         val data = JSObject()
         data.put("remainingSeconds", remainingSeconds)
@@ -505,14 +514,14 @@ class AudookPlayerPlugin : Plugin() {
         sleepTimerRunnable?.let { positionHandler.removeCallbacks(it) }
         sleepTimerRunnable = null
         sleepTimerEndTimeMs = null
-        controller?.volume = sleepTimerOriginalVolume
+        sleepFadeFactor = 1f
+        applyEffectiveVolume()
     }
 
     private fun startSleepTimer(minutes: Double) {
         cancelSleepTimerInternal()
         val generation = ++sleepTimerGeneration
         sleepTimerEndTimeMs = System.currentTimeMillis() + (minutes * 60_000).toLong()
-        sleepTimerOriginalVolume = controller?.volume ?: 1f
 
         val fadeSeconds = 20L
         val runnable = object : Runnable {
@@ -522,8 +531,12 @@ class AudookPlayerPlugin : Plugin() {
                 val remainingMs = endTime - System.currentTimeMillis()
 
                 if (remainingMs <= 0) {
+                    // While casting the local player is already paused - the
+                    // cast device is what actually has to stop.
+                    if (castManager.isCasting()) castManager.pause()
                     controller?.pause()
-                    controller?.volume = sleepTimerOriginalVolume
+                    sleepFadeFactor = 1f
+                    applyEffectiveVolume()
                     sleepTimerEndTimeMs = null
                     sleepTimerRunnable = null
                     emitSleepTimer(null)
@@ -534,7 +547,8 @@ class AudookPlayerPlugin : Plugin() {
                 emitSleepTimer(remainingSeconds)
                 if (remainingSeconds <= fadeSeconds) {
                     val fadeFraction = (remainingSeconds.toFloat() / fadeSeconds.toFloat()).coerceIn(0f, 1f)
-                    controller?.volume = sleepTimerOriginalVolume * fadeFraction
+                    sleepFadeFactor = fadeFraction
+                    applyEffectiveVolume()
                 }
 
                 positionHandler.postDelayed(this, 1000)

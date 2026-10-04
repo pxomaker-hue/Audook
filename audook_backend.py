@@ -24,7 +24,7 @@ from app.clients import PlexClient, AudiobookshelfClient
 from app.local import LocalClient
 from app.utils import logger, generate_id, online_metadata, audio_loudness
 from app.database.models import Book as DbBook
-from app import CACHE_DIR
+from app import CACHE_DIR, DATA_DIR
 
 app = Flask(__name__)
 CORS(app)
@@ -1402,6 +1402,28 @@ def disconnect_cast_device():
         logger.error(f"Failed to disconnect cast device: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+def _allowed_audio_sources():
+    """Hosts and folders /api/cast/local-audio is allowed to serve from: only
+    what the user configured as a server (Plex/Audiobookshelf hosts, local
+    library folders) plus Audook's own data dir (cleaned audio copies).
+    Without this the endpoint was an open proxy (any URL) and an arbitrary
+    audio-file reader (any path on the machine)."""
+    from urllib.parse import urlparse
+    hosts, roots = set(), [DATA_DIR.resolve()]
+    session = get_session()
+    for server in ServerRepository(session).get_all():
+        if server.type == 'local':
+            if server.url:
+                roots.append(Path(server.url).resolve())
+            continue
+        for candidate in (server.url, server.remote_url):
+            if candidate:
+                host = urlparse(candidate if '://' in candidate else f'http://{candidate}').netloc.lower()
+                if host:
+                    hosts.add(host)
+    return hosts, roots
+
 @app.route('/api/cast/local-audio', methods=['GET'])
 def stream_local_audio_for_cast():
     """Streams an audio chapter over HTTP (with Range support) so a
@@ -1416,11 +1438,16 @@ def stream_local_audio_for_cast():
         if not path:
             return jsonify({'error': 'Fichier audio introuvable'}), 404
 
+        allowed_hosts, allowed_roots = _allowed_audio_sources()
+
         if path.startswith('http://') or path.startswith('https://'):
+            from urllib.parse import urlparse
+            if urlparse(path).netloc.lower() not in allowed_hosts:
+                return jsonify({'error': 'Source non autorisée'}), 403
             headers = {}
             if 'Range' in request.headers:
                 headers['Range'] = request.headers['Range']
-            upstream = requests.get(path, headers=headers, stream=True, timeout=15)
+            upstream = requests.get(path, headers=headers, stream=True, timeout=15, allow_redirects=False)
             excluded = {'content-encoding', 'transfer-encoding', 'connection'}
             response_headers = [
                 (k, v) for k, v in upstream.headers.items() if k.lower() not in excluded
@@ -1432,9 +1459,11 @@ def stream_local_audio_for_cast():
             )
 
         AUDIO_EXTENSIONS = {'.mp3', '.m4b', '.m4a', '.flac', '.ogg', '.wav', '.aac', '.opus'}
-        file_path = Path(path)
+        file_path = Path(path).resolve()
         if file_path.suffix.lower() not in AUDIO_EXTENSIONS or not file_path.is_file():
             return jsonify({'error': 'Fichier audio introuvable'}), 404
+        if not any(root == file_path or root in file_path.parents for root in allowed_roots):
+            return jsonify({'error': 'Source non autorisée'}), 403
 
         return send_file(str(file_path), conditional=True)
     except Exception as e:
@@ -1515,6 +1544,8 @@ def shutdown_backend():
     """Best-effort cleanup called by Electron right before it force-kills this
     process on quit, so an in-progress reading session gets a final, accurate
     end time instead of relying solely on the periodic checkpoint."""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'Forbidden'}), 403
     try:
         player_service.stop()
     except Exception as e:

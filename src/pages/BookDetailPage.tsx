@@ -143,6 +143,18 @@ const BookDetailPage: React.FC = () => {
   }, [id]);
 
   const fetchPlayerState = async () => {
+    // Mobile plays through the native plugin, so the backend's own player
+    // session is always empty there - read the local store instead.
+    if (isCapacitorPlatform) {
+      const local = mobilePlayerStore.getState();
+      if (local.currentBook?.id === id) {
+        setActiveChapterIndex(local.currentChapterIndex);
+        setActivePosition(local.position);
+      } else {
+        setActiveChapterIndex(null);
+      }
+      return;
+    }
     try {
       const response = await axios.get(`${apiBase}/player/state`);
       if (response.data.currentBook?.id === id) {
@@ -158,6 +170,9 @@ const BookDetailPage: React.FC = () => {
 
   useEffect(() => {
     fetchPlayerState();
+    if (isCapacitorPlatform) {
+      return mobilePlayerStore.subscribe(fetchPlayerState);
+    }
     const interval = setInterval(fetchPlayerState, 2000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
