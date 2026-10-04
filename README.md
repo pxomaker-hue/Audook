@@ -235,6 +235,8 @@ Double-clique sur `build-release.bat` (ou lance-le depuis un terminal) : il cons
 
 Prérequis : Node.js, Python avec les dépendances de `requirements.txt` et PyInstaller, et pour l'APK le SDK Android, un JDK (celui d'Android Studio convient) et le fichier `android/keystore.properties` de la clé de signature (jamais commité).
 
+L'installeur Windows se met à jour par-dessus l'ancienne version, sans désinstallation préalable : il ferme lui-même Audook et son backend s'ils tournent encore (`assets/installer.nsh`).
+
 ### Changer de version
 
 `package.json` est la seule source de la version : l'installeur Windows, l'APK (nom et code de version), les noms des fichiers de `release/`, la page Paramètres et le backend en dérivent. Pour passer à une nouvelle version :
