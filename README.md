@@ -217,6 +217,16 @@ Cet environnement de développement n'a pas de SDK Android/Gradle/JDK installés
 
 Pour une release signée (Play Store ou distribution directe), suivez le flux standard **Build > Generate Signed Bundle / APK** d'Android Studio (nécessite de créer un keystore).
 
+## Build de release
+
+Double-clique sur `build-release.bat` (ou lance-le depuis un terminal) : il construit l'installeur Windows (NSIS) et l'APK Android signé, puis les place dans le dossier `release/` (`Audook-Setup-<version>.exe` et `Audook-<version>.apk`).
+
+- `build-release.bat -SkipAndroid` : seulement l'installeur Windows.
+- `build-release.bat -SkipWindows` : seulement l'APK.
+- `build-release.bat -RunTests` : lance les tests avant de construire.
+
+Prérequis : Node.js, Python avec les dépendances de `requirements.txt` et PyInstaller, et pour l'APK le SDK Android, un JDK (celui d'Android Studio convient) et le fichier `android/keystore.properties` de la clé de signature (jamais commité).
+
 ## Tests
 
 - Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : ta bibliothèque n'est jamais touchée.

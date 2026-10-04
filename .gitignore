@@ -75,3 +75,6 @@ out/
 # Unused ffmpeg companions (only ffmpeg.exe is bundled/used)
 assets/bin/ffplay.exe
 assets/bin/ffprobe.exe
+
+# Release output of build-release.ps1
+release/
