@@ -8,7 +8,7 @@ Deliberately NOT applied automatically to every book: most sources (ABS/Plex
 professional narrations) are already clean, and a full-book denoise pass
 takes real time proportional to the book's length. This is opt-in, per book,
 triggered by the user for a specifically noisy recording - see
-POST /api/books/<id>/clean-audio in audook_backend.py.
+POST /api/books/<id>/clean-audio in app/api/books.py.
 """
 
 import subprocess

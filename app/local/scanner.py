@@ -55,7 +55,7 @@ COVER_FILENAMES = ['cover.jpg', 'cover.jpeg', 'cover.png', 'folder.jpg', 'folder
 
 # Base URL of this same backend, used to build local-cover URLs the
 # frontend can load like any other cover_url - see GET /api/local-cover/<id>
-# in audook_backend.py.
+# in app/api/covers.py.
 BACKEND_BASE_URL = "http://127.0.0.1:5000"
 
 
