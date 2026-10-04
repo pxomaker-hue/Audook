@@ -7,7 +7,7 @@ import MiniPlayerView from './components/MiniPlayerView';
 import CloseAppDialog from './components/CloseAppDialog';
 import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
-import { getApiBase, setApiBase } from './config';
+import { authHeaders, getApiBase, getApiToken, setApiBase, setApiToken } from './config';
 import { isCapacitorPlatform } from './native/platform';
 import { useExpandedPlayer } from './native/expandedPlayerStore';
 import './App.css';
@@ -24,11 +24,13 @@ const isMiniWindow = window.location.hash.startsWith('#/mini');
 // need an escape hatch to configure it before a connection ever succeeds.
 const ServerConfigForm: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
   const [value, setValue] = useState(getApiBase());
+  const [token, setToken] = useState(getApiToken());
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
     if (!value.trim()) return;
     setApiBase(value);
+    setApiToken(token);
     setSaved(true);
     onSaved();
   };
@@ -41,6 +43,21 @@ const ServerConfigForm: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
         value={value}
         onChange={(e) => { setValue(e.target.value); setSaved(false); }}
         placeholder="http://192.168.1.200:5000/api"
+        style={{
+          padding: '10px',
+          borderRadius: '6px',
+          border: '1px solid var(--border, #444)',
+          backgroundColor: 'var(--surface, #222)',
+          color: 'var(--text-primary)'
+        }}
+      />
+      <label style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Jeton d'accès (laisser vide si le serveur n'en demande pas)</label>
+      <input
+        type="password"
+        value={token}
+        onChange={(e) => { setToken(e.target.value); setSaved(false); }}
+        placeholder="AUDOOK_API_TOKEN du serveur"
+        autoComplete="off"
         style={{
           padding: '10px',
           borderRadius: '6px',
@@ -91,6 +108,7 @@ const CHECK_INTERVAL_MS = 1500;
 const App: React.FC = () => {
   const [backendOnline, setBackendOnline] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const firstFailureRef = useRef<number | null>(null);
@@ -123,8 +141,22 @@ const App: React.FC = () => {
         if (cancelled) return;
 
         if (response.ok) {
+          // /health is public (liveness); /api/health needs the API token when
+          // the backend has one - this is what tells "unreachable" apart from
+          // "reachable but token missing/wrong".
+          const authCheck = await fetch(`${apiBase}/health`, { headers: authHeaders() });
+          if (cancelled) return;
+          if (authCheck.status === 401) {
+            firstFailureRef.current = null;
+            setBackendOnline(false);
+            setAuthRequired(true);
+            setError("Accès refusé : jeton d'accès manquant ou invalide.");
+            setShowError(true);
+            return;
+          }
           firstFailureRef.current = null;
           setBackendOnline(true);
+          setAuthRequired(false);
           setShowError(false);
           setError(null);
         } else {
@@ -169,9 +201,9 @@ const App: React.FC = () => {
             fontFamily: 'inherit'
           }}>
             <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔴</div>
-            <h1>Serveur non disponible</h1>
+            <h1>{authRequired ? 'Accès refusé' : 'Serveur non disponible'}</h1>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
-            {isCapacitorPlatform ? (
+            {isCapacitorPlatform || authRequired ? (
               <ServerConfigForm onSaved={() => {
                 firstFailureRef.current = null;
                 setShowError(false);

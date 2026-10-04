@@ -3,7 +3,7 @@ import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
 import EqualizerSettings from '../components/EqualizerSettings';
-import { getApiBase, setApiBase, resetApiBase } from '../config';
+import { getApiBase, setApiBase, resetApiBase, getApiToken, setApiToken } from '../config';
 
 type ServerType = 'plex' | 'audiobookshelf' | 'local';
 
@@ -110,6 +110,7 @@ const SettingsPage: React.FC = () => {
   const [togglingHiddenId, setTogglingHiddenId] = useState<string | null>(null);
   const [serverUrlDraft, setServerUrlDraft] = useState(getApiBase());
   const [serverUrlSaved, setServerUrlSaved] = useState(false);
+  const [apiTokenDraft, setApiTokenDraft] = useState(getApiToken());
 
   const loadServers = useCallback(async () => {
     try {
@@ -291,6 +292,7 @@ const SettingsPage: React.FC = () => {
     const trimmed = serverUrlDraft.trim();
     if (!trimmed) return;
     setApiBase(trimmed);
+    setApiToken(apiTokenDraft);
     setServerUrlDraft(getApiBase());
     setServerUrlSaved(true);
     setTimeout(() => setServerUrlSaved(false), 2000);
@@ -298,6 +300,8 @@ const SettingsPage: React.FC = () => {
 
   const handleResetServerUrl = () => {
     resetApiBase();
+    setApiToken('');
+    setApiTokenDraft('');
     setServerUrlDraft(getApiBase());
     setServerUrlSaved(true);
     setTimeout(() => setServerUrlSaved(false), 2000);
@@ -409,6 +413,18 @@ const SettingsPage: React.FC = () => {
             Réinitialiser
           </button>
         </div>
+        <label style={{ ...labelStyle, marginTop: '15px' }}>Jeton d'accès (optionnel)</label>
+        <input
+          type="password"
+          value={apiTokenDraft}
+          onChange={(e) => setApiTokenDraft(e.target.value)}
+          placeholder="Laisser vide si le serveur n'en demande pas"
+          autoComplete="off"
+          style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+        />
+        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '8px' }}>
+          À renseigner seulement si le backend a été lancé avec la variable <code>AUDOOK_API_TOKEN</code> ; enregistré avec l'adresse ci-dessus.
+        </p>
         {serverUrlSaved && (
           <p style={{ color: 'var(--primary)', fontSize: '12px', marginTop: '10px' }}>Adresse enregistrée.</p>
         )}

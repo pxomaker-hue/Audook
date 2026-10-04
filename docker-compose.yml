@@ -8,6 +8,13 @@ services:
       - audook-net
     ports:
       - "5000:5000"
+    environment:
+      # Optional shared secret protecting the whole API (recommended as soon as the
+      # NAS is reachable by anything other than you). Set it in a .env file next to
+      # this compose file (AUDOOK_API_TOKEN=a-long-random-string) or replace the
+      # value below; leave empty to keep the API open on the LAN. Enter the same
+      # value in the app (connection screen / Settings > Jeton d'accès).
+      - AUDOOK_API_TOKEN=${AUDOOK_API_TOKEN:-}
     volumes:
       # Persists the NAS instance's own SQLite DB + cache (separate from the
       # desktop app's local DB). Point this at a real path on the OMV host.

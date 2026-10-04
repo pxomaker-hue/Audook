@@ -37,6 +37,44 @@ export function resetApiBase(): void {
   }
 }
 
+const TOKEN_STORAGE_KEY = 'audook_api_token';
+
+// Jeton d'accès optionnel : seulement nécessaire si le backend (typiquement
+// sur le NAS) a été lancé avec AUDOOK_API_TOKEN. Vide = pas d'authentification.
+export function getApiToken(): string {
+  try {
+    return (localStorage.getItem(TOKEN_STORAGE_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export function setApiToken(token: string): void {
+  try {
+    const trimmed = token.trim();
+    if (trimmed) localStorage.setItem(TOKEN_STORAGE_KEY, trimmed);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // ignorer si localStorage indisponible
+  }
+}
+
+// En-têtes d'authentification pour les requêtes fetch() maison (axios les
+// reçoit via l'intercepteur de apiAuth.ts).
+export function authHeaders(): Record<string, string> {
+  const token = getApiToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// Pour les URLs lues par quelqu'un qui ne peut pas envoyer d'en-têtes
+// (ExoPlayer, Chromecast) : le jeton passe dans la query string. Le backend
+// ne l'accepte ainsi que sur /api/cast/local-audio.
+export function withApiToken(url: string): string {
+  const token = getApiToken();
+  if (!token) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+}
+
 export const API_CONFIG = {
   get BASE_URL(): string {
     return getApiBase();
@@ -68,6 +106,7 @@ export async function apiFetch<T>(
 
     const response = await fetch(url, {
       ...options,
+      headers: { ...authHeaders(), ...(options?.headers as Record<string, string> | undefined) },
       signal: controller.signal,
     });
 

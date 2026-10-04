@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { installApiAuth } from './apiAuth';
+
+installApiAuth();
 
 // Temporary diagnostic aid for the mobile build: the WebView has no console
 // visible to the user, so an uncaught error currently just leaves a blank

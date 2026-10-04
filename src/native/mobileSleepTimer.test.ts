@@ -26,7 +26,7 @@ jest.mock('axios', () => ({
   __esModule: true,
   default: { get: jest.fn(() => Promise.resolve({ data: [] })), post: jest.fn(() => Promise.resolve({ data: {} })) }
 }));
-jest.mock('../config', () => ({ getApiBase: () => 'http://nas/api' }));
+jest.mock('../config', () => ({ getApiBase: () => 'http://nas/api', withApiToken: (url: string) => url }));
 
 import axios from 'axios';
 import { mobilePlayerStore } from './mobilePlayerStore';

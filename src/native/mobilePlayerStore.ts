@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AudookPlayer from './AudookPlayer';
-import { getApiBase } from '../config';
+import { getApiBase, withApiToken } from '../config';
 
 // Singleton playback state for the mobile (Capacitor) player, independent of
 // React's component tree - HomePage/BookDetailPage/AuthorPage all need to
@@ -172,7 +172,7 @@ async function play(book: any, chapterIndex?: number, positionSeconds?: number) 
   if (!chapters.length) return;
 
   const playlist = chapters.map((chapter: any) => ({
-    url: `${getApiBase()}/cast/local-audio?path=${encodeURIComponent(chapter.audio_file)}`,
+    url: withApiToken(`${getApiBase()}/cast/local-audio?path=${encodeURIComponent(chapter.audio_file)}`),
     title: chapter.title || book.title
   }));
 

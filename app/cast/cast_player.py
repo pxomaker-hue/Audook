@@ -10,6 +10,7 @@ have no Chromecast equivalent - those methods are no-ops here (VLC-only
 audio processing, not applicable once audio is decoded on the cast device).
 """
 
+import os
 import re
 import threading
 import time
@@ -179,7 +180,13 @@ class CastPlayer:
             return audio_file
         if WINDOWS_DRIVE_PATH.match(audio_file) or Path(audio_file).exists():
             lan_ip = get_lan_ip()
-            return f"http://{lan_ip}:5000/api/cast/local-audio?path={quote(audio_file, safe='')}"
+            url = f"http://{lan_ip}:5000/api/cast/local-audio?path={quote(audio_file, safe='')}"
+            # The Chromecast can't send headers - when the API is protected
+            # (AUDOOK_API_TOKEN) the token travels in the query string.
+            token = os.environ.get("AUDOOK_API_TOKEN", "").strip()
+            if token:
+                url += f"&token={quote(token, safe='')}"
+            return url
         return audio_file
 
     @staticmethod

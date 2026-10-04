@@ -17,6 +17,7 @@ from flask_cors import CORS
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.api import register_blueprints
+from app.api.auth import install_log_redaction, require_api_token
 from app.api.context import services
 from app.database import init_database, get_session, remove_session, EqualizerPresetRepository
 from app.services import LibraryService, PlayerService, SyncService
@@ -24,6 +25,7 @@ from app.utils import logger
 
 app = Flask(__name__)
 CORS(app)
+install_log_redaction()
 
 
 # Health check endpoint for Electron app (before services init)
@@ -38,6 +40,10 @@ def cleanup_db_session(exception=None):
     # of leaking it, which otherwise exhausts SQLAlchemy's default pool
     # (size 5 + 10 overflow) within seconds under mobile's frequent polling.
     remove_session()
+
+# Registered before init_services so an unauthenticated request is rejected
+# without triggering the (heavy) lazy service initialisation.
+app.before_request(require_api_token)
 
 @app.before_request
 def init_services():

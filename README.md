@@ -193,6 +193,14 @@ En plus de l'application Windows, une instance backend séparée peut tourner su
 1. Créez une nouvelle **Stack**, collez le contenu de `docker-compose.yml` (adapté avec vos chemins réels)
 2. Déployez la stack ; le conteneur `audook-nas` écoute sur le port `5000`
 
+### Protéger l'API avec un jeton (recommandé)
+Par défaut l'API du NAS est ouverte à tout le réseau local. Pour la protéger :
+1. Générez un jeton long et aléatoire, par exemple `openssl rand -hex 24`
+2. Mettez-le dans un fichier `.env` à côté de `docker-compose.yml` : `AUDOOK_API_TOKEN=votre-jeton` (ou remplacez la valeur dans le compose), puis redéployez
+3. Dans l'app, saisissez le même jeton dans l'écran de connexion (il s'affiche tout seul avec « Accès refusé ») ou dans Paramètres > Connexion au backend > Jeton d'accès
+
+Toutes les requêtes doivent alors porter `Authorization: Bearer <jeton>` (ou l'en-tête `X-Audook-Token`). Seul `/health` reste public (sonde de vie, sans donnée). Le flux audio `/api/cast/local-audio` accepte aussi `?token=` car ExoPlayer et les Chromecast ne peuvent pas envoyer d'en-têtes ; le jeton est masqué dans les logs. L'app Windows locale n'en a pas besoin (le backend n'écoute que sur 127.0.0.1) : ne définissez pas la variable côté desktop. Sans HTTPS, le jeton circule en clair sur le réseau local : il protège contre les accès non voulus, pas contre quelqu'un qui écoute le réseau.
+
 ### Notes
 - Le conteneur tourne en mode headless (`AUDOOK_HEADLESS=1`) : VLC utilise une sortie audio factice, la lecture audio se fait côté client (VLC/Chromecast desktop, ExoPlayer mobile), pas dans le conteneur
 - Le port `5000` est exposé via un réseau bridge (pas de `network_mode: host`) ; adaptez le mapping de port si `5000` est déjà utilisé sur le NAS
