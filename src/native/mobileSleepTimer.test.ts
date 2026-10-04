@@ -82,3 +82,33 @@ describe('useMobilePlayerState.handleCycleSleepTimer', () => {
     expect(sent).toEqual([5, 10, 15, 20, 30, 60, null]);
   });
 });
+
+describe('sleep timer button after the timer ends', () => {
+  it('starts over at 5 minutes instead of continuing from the last setting', async () => {
+    const { result } = renderHook(() => usePlayerState());
+    await mobilePlayerStore.play(book); // registers the native listeners
+    mockNative.setSleepTimer?.mockClear();
+    const click = () => act(async () => { await result.current.handleCycleSleepTimer(); });
+    const lastMinutes = () => mockNative.setSleepTimer.mock.calls.slice(-1)[0][0].minutes;
+
+    await click(); // 5
+    await click(); // 10
+    expect(lastMinutes()).toBe(10);
+
+    act(() => handlers.sleepTimerUpdate({ remainingSeconds: 30 })); // counting down
+    act(() => handlers.sleepTimerUpdate({ remainingSeconds: null })); // 10 min elapsed
+    await click();
+    expect(lastMinutes()).toBe(5);
+  });
+
+  it('keeps cycling normally while the timer is still running', async () => {
+    const { result } = renderHook(() => usePlayerState());
+    await mobilePlayerStore.play(book);
+    mockNative.setSleepTimer?.mockClear();
+    const click = () => act(async () => { await result.current.handleCycleSleepTimer(); });
+    await click(); // 5 (store sets remaining = 300 right away)
+    act(() => handlers.sleepTimerUpdate({ remainingSeconds: 250 }));
+    await click();
+    expect(mockNative.setSleepTimer.mock.calls.slice(-1)[0][0].minutes).toBe(10);
+  });
+});

@@ -43,6 +43,21 @@ export function usePlayerState() {
     return mobilePlayerStore.subscribe(setNative);
   }, []);
 
+
+  // The button's step index is local, so it has to follow the timer's real
+  // state: when a running timer ends (or is cancelled elsewhere) the remaining
+  // time goes from a number back to null - without resetting here the next
+  // click kept cycling from the last chosen duration (10 min -> 15 min)
+  // instead of starting over at 5. Only the number -> null transition counts,
+  // so a not-yet-updated null right after a click doesn't reset it.
+  const previousSleepRemaining = useRef<number | null>(null);
+  useEffect(() => {
+    if (previousSleepRemaining.current !== null && native.sleepTimerRemainingSeconds === null) {
+      setSleepTimerStepIndex(0);
+    }
+    previousSleepRemaining.current = native.sleepTimerRemainingSeconds;
+  }, [native.sleepTimerRemainingSeconds]);
+
   useEffect(() => {
     mobilePlayerStore.fetchEqualizerPresets().then(setEqualizerPresets);
   }, []);
