@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { getApiBase } from '../config';
+import { usePolling } from './usePolling';
 
 // Click window (ms) to detect a double-click on the "previous chapter" button
 const PREVIOUS_DOUBLE_CLICK_WINDOW = 300;
@@ -85,17 +86,26 @@ export function usePlayerState() {
       const response = await axios.get(`${getApiBase()}/player/state`);
       // Backend uses snake_case (is_playing); explicitly map it instead of
       // relying on the spread, otherwise `isPlaying` never actually updates.
-      setState(prev => ({
-        ...prev,
-        ...response.data,
-        isPlaying: response.data.is_playing ?? prev.isPlaying,
-        equalizerPresetId: response.data.equalizer_preset_id ?? null,
-        loudnessNormalizationEnabled: response.data.loudness_normalization_enabled ?? false,
-        compressionPreset: response.data.compression_preset ?? null,
-        sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null,
-        isCasting: response.data.is_casting ?? false,
-        castDeviceName: response.data.cast_device_name ?? null
-      }));
+      setState(prev => {
+        const next = {
+          ...prev,
+          ...response.data,
+          isPlaying: response.data.is_playing ?? prev.isPlaying,
+          equalizerPresetId: response.data.equalizer_preset_id ?? null,
+          loudnessNormalizationEnabled: response.data.loudness_normalization_enabled ?? false,
+          compressionPreset: response.data.compression_preset ?? null,
+          sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null,
+          isCasting: response.data.is_casting ?? false,
+          castDeviceName: response.data.cast_device_name ?? null
+        };
+        // Same values as last tick (typical while paused): keep the old
+        // object so React skips the re-render instead of redoing the whole
+        // player every second for nothing.
+        const unchanged = (Object.keys(next) as (keyof typeof next)[]).every(
+          (k) => k === 'currentBook' ? next.currentBook?.id === prev.currentBook?.id : next[k] === (prev as any)[k]
+        );
+        return unchanged ? prev : next;
+      });
     } catch (error) {
       console.error('Failed to get player state:', error);
     }
@@ -120,9 +130,9 @@ export function usePlayerState() {
       .then(res => setEqualizerPresets(res.data))
       .catch(error => console.error('Failed to load equalizer presets:', error));
 
-    const interval = setInterval(fetchState, 1000);
-    return () => clearInterval(interval);
   }, []);
+
+  usePolling(fetchState, 1000);
 
   useEffect(() => {
     return () => {

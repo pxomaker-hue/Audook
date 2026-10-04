@@ -6,6 +6,7 @@ import { getApiBase } from '../config';
 import CoverImage from '../components/CoverImage';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
+import { usePolling } from '../hooks/usePolling';
 
 interface BookmarkEntry {
   id: number;
@@ -173,19 +174,15 @@ const BookDetailPage: React.FC = () => {
     if (isCapacitorPlatform) {
       return mobilePlayerStore.subscribe(fetchPlayerState);
     }
-    const interval = setInterval(fetchPlayerState, 2000);
-    return () => clearInterval(interval);
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  usePolling(fetchPlayerState, 2000, !isCapacitorPlatform);
+
   // While a noise-reduction pass is running in the background, poll for it
   // to finish so the button/status updates without a manual refresh.
-  useEffect(() => {
-    if (book?.noise_reduction_status !== 'processing') return;
-    const interval = setInterval(fetchBookDetail, 3000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.noise_reduction_status]);
+  usePolling(fetchBookDetail, 3000, book?.noise_reduction_status === 'processing');
 
   const handlePlayBook = async () => {
     if (book) {

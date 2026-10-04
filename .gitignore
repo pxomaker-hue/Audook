@@ -71,3 +71,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Unused ffmpeg companions (only ffmpeg.exe is bundled/used)
+assets/bin/ffplay.exe
+assets/bin/ffprobe.exe

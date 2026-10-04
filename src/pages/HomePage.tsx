@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
@@ -7,6 +7,7 @@ import { getApiBase } from '../config';
 import CoverImage from '../components/CoverImage';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
+import { usePolling } from '../hooks/usePolling';
 
 const SORT_STORAGE_KEY = 'audook_library_sort';
 
@@ -104,6 +105,7 @@ const HomePage: React.FC = () => {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [confirmDismissId, setConfirmDismissId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const lastBooksJson = useRef<string>('');
 
   useEffect(() => {
     localStorage.setItem(SORT_STORAGE_KEY, sortMode);
@@ -120,7 +122,9 @@ const HomePage: React.FC = () => {
       // plain string instead of a parsed array in some WebView/network
       // configurations - guard against that instead of crashing every
       // .map()/.filter() downstream.
-      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
+      const fetchedBooks = Array.isArray(booksRes.data) ? booksRes.data : [];
+      lastBooksJson.current = JSON.stringify(fetchedBooks);
+      setBooks(fetchedBooks);
       setServers(Array.isArray(serversRes.data) ? serversRes.data : []);
       setCollections(Array.isArray(collectionsRes.data) ? collectionsRes.data : []);
     } catch (error) {
@@ -134,7 +138,13 @@ const HomePage: React.FC = () => {
   const refreshBooksQuietly = async () => {
     try {
       const booksRes = await axios.get(`${getApiBase()}/books`);
-      setBooks(Array.isArray(booksRes.data) ? booksRes.data : []);
+      const next = Array.isArray(booksRes.data) ? booksRes.data : [];
+      // Skip the state update (and the whole grid re-render) when nothing
+      // changed since the last poll - the common case.
+      const serialized = JSON.stringify(next);
+      if (serialized === lastBooksJson.current) return;
+      lastBooksJson.current = serialized;
+      setBooks(next);
     } catch (error) {
       console.error('Failed to refresh library:', error);
     }
@@ -143,9 +153,20 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     fetchAll().finally(() => setLoading(false));
+  }, []);
 
-    const interval = setInterval(refreshBooksQuietly, 4000);
-    return () => clearInterval(interval);
+  // Desktop: the backend player lives in another process, so poll. Mobile:
+  // progress only changes through the local player, so refresh on its
+  // play/pause transitions plus a slow safety poll (other devices' progress).
+  usePolling(refreshBooksQuietly, isCapacitorPlatform ? 30000 : 4000);
+  useEffect(() => {
+    if (!isCapacitorPlatform) return;
+    let wasPlaying = mobilePlayerStore.getState().isPlaying;
+    return mobilePlayerStore.subscribe((s) => {
+      if (wasPlaying && !s.isPlaying) refreshBooksQuietly();
+      wasPlaying = s.isPlaying;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const availableSources = useMemo(
