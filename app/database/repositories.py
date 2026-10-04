@@ -589,6 +589,22 @@ class BookmarkRepository(BaseRepository):
             Bookmark.chapter_index.asc(), Bookmark.position_seconds.asc()
         ).all()
 
+    def update_title(self, bookmark_id: int, title: Optional[str]) -> Optional[Bookmark]:
+        """Rename a bookmark (empty/None clears the custom name)"""
+        bookmark = self.get_by_id(bookmark_id)
+        if not bookmark:
+            return None
+        bookmark.title = (title or '').strip()[:255] or None
+        self.session.commit()
+        return bookmark
+
+    def find_near(self, book_id: str, chapter_index: int, position: float, tolerance: float = 2.0) -> Optional[Bookmark]:
+        """An existing bookmark of this book at (almost) the same spot, if any"""
+        for bookmark in self.get_by_book(book_id):
+            if bookmark.chapter_index == chapter_index and abs(bookmark.position_seconds - position) < tolerance:
+                return bookmark
+        return None
+
     def delete(self, bookmark_id: int):
         """Delete a bookmark"""
         bookmark = self.session.query(Bookmark).filter_by(id=bookmark_id).first()

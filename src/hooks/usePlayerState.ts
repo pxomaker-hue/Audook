@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { getApiBase } from '../config';
+import { notifyBookmarksChanged } from '../bookmarkEvents';
 import { usePolling } from './usePolling';
 
 // Click window (ms) to detect a double-click on the "previous chapter" button
@@ -246,6 +247,7 @@ export function usePlayerState() {
     try {
       setAddingBookmark(true);
       await axios.post(`${getApiBase()}/books/${state.currentBook.id}/bookmarks`, {});
+      notifyBookmarksChanged();
       setBookmarkAdded(true);
       setTimeout(() => setBookmarkAdded(false), 1800);
     } catch (error) {

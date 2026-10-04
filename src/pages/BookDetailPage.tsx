@@ -7,6 +7,8 @@ import CoverImage from '../components/CoverImage';
 import { isCapacitorPlatform } from '../native/platform';
 import { mobilePlayerStore } from '../native/mobilePlayerStore';
 import { usePolling } from '../hooks/usePolling';
+import { BOOKMARKS_CHANGED_EVENT } from '../bookmarkEvents';
+import { formatBookmarkDate, formatBookmarkPosition } from '../bookmarkFormat';
 
 interface BookmarkEntry {
   id: number;
@@ -180,6 +182,13 @@ const BookDetailPage: React.FC = () => {
 
   usePolling(fetchPlayerState, 2000, !isCapacitorPlatform);
 
+  // A bookmark added from the player shows up here right away.
+  useEffect(() => {
+    window.addEventListener(BOOKMARKS_CHANGED_EVENT, fetchBookDetail);
+    return () => window.removeEventListener(BOOKMARKS_CHANGED_EVENT, fetchBookDetail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   // While a noise-reduction pass is running in the background, poll for it
   // to finish so the button/status updates without a manual refresh.
   usePolling(fetchBookDetail, 3000, book?.noise_reduction_status === 'processing');
@@ -255,14 +264,31 @@ const BookDetailPage: React.FC = () => {
     }
   };
 
-  const handleResumeBookmark = async (bookmarkId: number) => {
+  const handleResumeBookmark = async (bookmark: BookmarkEntry) => {
     try {
-      setResumingBookmarkId(bookmarkId);
-      await axios.post(`${apiBase}/bookmarks/${bookmarkId}/resume`);
+      setResumingBookmarkId(bookmark.id);
+      if (isCapacitorPlatform && book) {
+        // Mobile plays through the native player on the phone - the backend's
+        // /resume would start playback on the NAS side instead.
+        await mobilePlayerStore.play(book, bookmark.chapter_index, bookmark.position_seconds);
+      } else {
+        await axios.post(`${apiBase}/bookmarks/${bookmark.id}/resume`);
+      }
     } catch (error) {
       console.error('Failed to resume bookmark:', error);
     } finally {
       setResumingBookmarkId(null);
+    }
+  };
+
+  const handleRenameBookmark = async (bookmark: BookmarkEntry) => {
+    const name = window.prompt('Nom du marque-page (vide pour retirer le nom)', bookmark.title || '');
+    if (name === null) return;
+    try {
+      await axios.patch(`${apiBase}/bookmarks/${bookmark.id}`, { title: name });
+      await fetchBookDetail();
+    } catch (error) {
+      console.error('Failed to rename bookmark:', error);
     }
   };
 
@@ -853,8 +879,6 @@ const BookDetailPage: React.FC = () => {
           >
             {(book.bookmarks || []).map((bookmark, index) => {
               const chapter = (book.chapters || [])[bookmark.chapter_index];
-              const minutes = Math.floor(bookmark.position_seconds / 60);
-              const seconds = Math.floor(bookmark.position_seconds % 60);
               return (
                 <div
                   key={bookmark.id}
@@ -872,7 +896,9 @@ const BookDetailPage: React.FC = () => {
                       {bookmark.title || chapter?.title || `Chapitre ${bookmark.chapter_index + 1}`}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      {minutes}:{seconds.toString().padStart(2, '0')}
+                      {bookmark.title && chapter?.title ? `${chapter.title} · ` : ''}
+                      {formatBookmarkPosition(bookmark.position_seconds)}
+                      {formatBookmarkDate(bookmark.created_at) ? ` · ${formatBookmarkDate(bookmark.created_at)}` : ''}
                     </div>
                   </div>
                   <button
@@ -884,13 +910,20 @@ const BookDetailPage: React.FC = () => {
                       opacity: resumingBookmarkId === bookmark.id ? 0.6 : 1
                     }}
                     disabled={resumingBookmarkId === bookmark.id}
-                    onClick={() => handleResumeBookmark(bookmark.id)}
+                    onClick={() => handleResumeBookmark(bookmark)}
                   >
                     {resumingBookmarkId === bookmark.id ? (
                       <Loader2 size={14} className="spin" />
                     ) : (
                       'Reprendre'
                     )}
+                  </button>
+                  <button
+                    onClick={() => handleRenameBookmark(bookmark)}
+                    title="Renommer ce marque-page"
+                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', padding: '6px', flexShrink: 0 }}
+                  >
+                    <Pencil size={15} />
                   </button>
                   <button
                     onClick={() => handleDeleteBookmark(bookmark.id)}

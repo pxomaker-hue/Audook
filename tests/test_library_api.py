@@ -68,6 +68,60 @@ def test_bookmark_create_and_delete(client, seed_book):
     assert client.get(f"/api/books/{book_id}").get_json()["bookmarks"] == []
 
 
+def _bookmarks(client, book_id):
+    return client.get(f"/api/books/{book_id}").get_json()["bookmarks"]
+
+
+def test_a_book_can_hold_several_bookmarks_ordered_by_position(client, seed_book):
+    book_id = seed_book()
+    for chapter, position in ((2, 10.0), (0, 500.0), (0, 30.0)):
+        assert client.post(f"/api/books/{book_id}/bookmarks",
+                           json={"chapter_index": chapter, "position": position}).status_code == 201
+    listed = [(b["chapter_index"], b["position_seconds"]) for b in _bookmarks(client, book_id)]
+    assert listed == [(0, 30.0), (0, 500.0), (2, 10.0)]
+    assert all(b["created_at"] for b in _bookmarks(client, book_id))
+
+
+def test_mobile_payload_with_position_seconds_creates_a_bookmark(client, seed_book):
+    # The Android app sends position_seconds (not position): it used to be ignored -> no bookmark saved.
+    book_id = seed_book()
+    response = client.post(f"/api/books/{book_id}/bookmarks", json={"chapter_index": 1, "position_seconds": 42.5})
+    assert response.status_code == 201
+    assert response.get_json()["position_seconds"] == 42.5
+    assert len(_bookmarks(client, book_id)) == 1
+
+
+def test_double_tap_at_the_same_spot_does_not_stack_bookmarks(client, seed_book):
+    book_id = seed_book()
+    first = client.post(f"/api/books/{book_id}/bookmarks", json={"chapter_index": 1, "position": 100.0})
+    again = client.post(f"/api/books/{book_id}/bookmarks", json={"chapter_index": 1, "position": 101.0})
+    assert again.status_code == 200
+    assert again.get_json()["id"] == first.get_json()["id"]
+    # a different chapter or a clearly different position is a new bookmark
+    client.post(f"/api/books/{book_id}/bookmarks", json={"chapter_index": 1, "position": 130.0})
+    client.post(f"/api/books/{book_id}/bookmarks", json={"chapter_index": 2, "position": 100.0})
+    assert len(_bookmarks(client, book_id)) == 3
+
+
+def test_rename_and_clear_a_bookmark_name(client, seed_book):
+    book_id = seed_book()
+    bookmark_id = client.post(f"/api/books/{book_id}/bookmarks",
+                              json={"chapter_index": 0, "position": 5.0}).get_json()["id"]
+    renamed = client.patch(f"/api/bookmarks/{bookmark_id}", json={"title": "  Passage drôle  "})
+    assert renamed.status_code == 200
+    assert _bookmarks(client, book_id)[0]["title"] == "Passage drôle"
+    client.patch(f"/api/bookmarks/{bookmark_id}", json={"title": "   "})
+    assert _bookmarks(client, book_id)[0]["title"] is None
+
+
+def test_rename_validation(client, seed_book):
+    book_id = seed_book()
+    bookmark_id = client.post(f"/api/books/{book_id}/bookmarks",
+                              json={"chapter_index": 0, "position": 5.0}).get_json()["id"]
+    assert client.patch(f"/api/bookmarks/{bookmark_id}", json={}).status_code == 400
+    assert client.patch("/api/bookmarks/99999", json={"title": "x"}).status_code == 404
+
+
 def test_bookmark_on_unknown_book_is_404(client, db):
     assert client.post("/api/books/nope/bookmarks", json={"chapter_index": 0, "position": 1}).status_code == 404
 

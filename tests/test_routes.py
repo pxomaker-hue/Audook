@@ -5,6 +5,7 @@ EXPECTED_ROUTES = [
     ('/api/authors/<name>', 'PATCH'),
     ('/api/authors/<name>/refresh', 'POST'),
     ('/api/bookmarks/<int:bookmark_id>', 'DELETE'),
+    ('/api/bookmarks/<int:bookmark_id>', 'PATCH'),
     ('/api/bookmarks/<int:bookmark_id>/resume', 'POST'),
     ('/api/books', 'GET'),
     ('/api/books/<book_id>', 'GET'),

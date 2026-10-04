@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { getApiBase } from '../config';
+import { notifyBookmarksChanged } from '../bookmarkEvents';
 import { mobilePlayerStore, MobilePlayerState, EqualizerPreset } from '../native/mobilePlayerStore';
 
 // Mobile (Capacitor/Android) counterpart to usePlayerState.ts. Mirrors its
@@ -156,8 +157,9 @@ export function usePlayerState() {
       setAddingBookmark(true);
       await axios.post(`${getApiBase()}/books/${state.currentBook.id}/bookmarks`, {
         chapter_index: state.currentChapterIndex,
-        position_seconds: state.position
+        position: state.position
       });
+      notifyBookmarksChanged();
       setBookmarkAdded(true);
       setTimeout(() => setBookmarkAdded(false), 1800);
     } catch (error) {
