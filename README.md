@@ -217,6 +217,14 @@ Cet environnement de développement n'a pas de SDK Android/Gradle/JDK installés
 
 Pour une release signée (Play Store ou distribution directe), suivez le flux standard **Build > Generate Signed Bundle / APK** d'Android Studio (nécessite de créer un keystore).
 
+## Tests
+
+- Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : ta bibliothèque n'est jamais touchée.
+- Frontend (Jest) : `npm run test:frontend`.
+- Les deux d'un coup : `npm test`.
+
+Couverture actuelle : table des routes HTTP, progression (pourcentage sur tout le livre), durcissement de `/api/cast/local-audio` et `/api/shutdown`, API bibliothèque (livres, marque-pages, collections, serveurs), minuteur de veille (fondu/annulation côté desktop, câblage côté mobile) et hook `usePolling`. Le code Kotlin n'a pas de tests automatisés.
+
 ## Références API
 
 - [Documentation API Audiobookshelf](https://github.com/advplyr/audiobookshelf/wiki/API-Documentation)

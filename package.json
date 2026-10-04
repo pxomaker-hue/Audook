@@ -9,6 +9,9 @@
     "react-start": "react-scripts start",
     "react-build": "react-scripts build",
     "react-test": "react-scripts test",
+    "test:frontend": "react-scripts test --watchAll=false",
+    "test:backend": "python -m pytest -q",
+    "test": "npm run test:backend && npm run test:frontend",
     "react-eject": "react-scripts eject",
     "electron-start": "electron .",
     "electron-dev": "concurrently \"npm run react-start\" \"wait-on http://localhost:3000 && npm run electron-start\"",
@@ -31,6 +34,8 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.2",
+    "@testing-library/react": "^14.3.1",
+    "@types/jest": "^27.5.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
