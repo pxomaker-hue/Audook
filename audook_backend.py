@@ -80,4 +80,5 @@ if __name__ == '__main__':
     seed_session.close()
 
     host = '0.0.0.0' if os.environ.get('AUDOOK_HEADLESS') == '1' else '127.0.0.1'
-    app.run(host=host, port=5000, debug=False)
+    # AUDOOK_PORT only exists for tests / unusual setups: the apps expect 5000.
+    app.run(host=host, port=int(os.environ.get('AUDOOK_PORT', '5000')), debug=False)
