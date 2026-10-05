@@ -199,7 +199,14 @@ Par défaut l'API du NAS est ouverte à tout le réseau local. Pour la protéger
 2. Mettez-le dans un fichier `.env` à côté de `docker-compose.yml` : `AUDOOK_API_TOKEN=votre-jeton` (ou remplacez la valeur dans le compose), puis redéployez
 3. Dans l'app, saisissez le même jeton dans l'écran de connexion (il s'affiche tout seul avec « Accès refusé ») ou dans Paramètres > Connexion au backend > Jeton d'accès
 
-Toutes les requêtes doivent alors porter `Authorization: Bearer <jeton>` (ou l'en-tête `X-Audook-Token`). Seul `/health` reste public (sonde de vie, sans donnée). Le flux audio `/api/cast/local-audio` accepte aussi `?token=` car ExoPlayer et les Chromecast ne peuvent pas envoyer d'en-têtes ; le jeton est masqué dans les logs. L'app Windows locale n'en a pas besoin (le backend n'écoute que sur 127.0.0.1) : ne définissez pas la variable côté desktop. Sans HTTPS, le jeton circule en clair sur le réseau local : il protège contre les accès non voulus, pas contre quelqu'un qui écoute le réseau.
+Toutes les requêtes doivent alors porter `Authorization: Bearer <jeton>` (ou l'en-tête `X-Audook-Token`). Seul `/health` reste public (sonde de vie, sans donnée). Le flux audio `/api/cast/local-audio` accepte aussi `?token=` car ExoPlayer et les Chromecast ne peuvent pas envoyer d'en-têtes ; le jeton est masqué dans les logs. L'app Windows locale n'en a pas besoin (le backend n'écoute que sur 127.0.0.1) : ne définissez pas la variable côté desktop. Sans HTTPS, le jeton circule en clair sur le réseau local : il protège contre les accès non voulus, pas contre quelqu'un qui écoute le réseau (voir la section VPN ci-dessous pour l'accès distant).
+
+### Accès depuis l'extérieur : un VPN plutôt que HTTPS
+L'app parle en HTTP simple au NAS. Sur ton réseau local c'est acceptable (surtout avec le jeton ci-dessus), mais n'ouvre **jamais** le port 5000 sur Internet. Pour y accéder de l'extérieur, passe par un VPN comme WireGuard : tout le trafic, jeton compris, est alors chiffré dans le tunnel, sans rien changer à l'app, et il n'y a ni certificat ni reverse proxy à gérer.
+
+- **Conseil de configuration :** dans le profil WireGuard du téléphone, route le sous-réseau de ta maison (par exemple `AllowedIPs = 192.168.1.0/24`, à adapter) et utilise toujours l'adresse LAN du NAS dans l'app. Elle fonctionne alors à l'identique chez toi et à l'extérieur, sans rien reconfigurer.
+- **Cast (Chromecast / Google Home) :** le Chromecast va chercher l'audio lui-même, à l'adresse que l'app lui donne, et il est découvert par mDNS sur le réseau local. Il faut donc que le téléphone soit sur le Wi-Fi de la maison : le cast ne fonctionne pas à travers le VPN.
+- Garde le jeton d'API activé même derrière le VPN : il protège aussi contre les autres appareils de ton réseau.
 
 ### Notes
 - Le conteneur tourne en mode headless (`AUDOOK_HEADLESS=1`) : VLC utilise une sortie audio factice, la lecture audio se fait côté client (VLC/Chromecast desktop, ExoPlayer mobile), pas dans le conteneur
