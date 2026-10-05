@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
@@ -55,15 +55,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      # the Capacitor Gradle projects live in node_modules
+      # the Capacitor Gradle projects live in node_modules. No separate Android SDK
+      # setup: the runner image already has one (that is what the earlier APK
+      # workflow relied on), and Gradle fetches any missing component itself.
       - run: npm ci
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
       - name: Run unit tests
         working-directory: android
         run: |
