@@ -251,9 +251,12 @@ Cela met aussi à jour `app/__init__.py`. Le code de version Android vaut `major
 
 - Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : ta bibliothèque n'est jamais touchée.
 - Frontend (Jest) : `npm run test:frontend`.
-- Les deux d'un coup : `npm test`.
+- Kotlin (logique pure du lecteur natif : fondu du minuteur, conversion de gain, type de contenu du cast) : `cd android && ./gradlew :app:testDebugUnitTest`.
+- Backend + frontend d'un coup : `npm test`.
 
-Couverture actuelle : table des routes HTTP, progression (pourcentage sur tout le livre), durcissement de `/api/cast/local-audio` et `/api/shutdown`, API bibliothèque (livres, marque-pages, collections, serveurs), minuteur de veille (fondu/annulation côté desktop, câblage côté mobile) et hook `usePolling`. Le code Kotlin n'a pas de tests automatisés.
+Une CI GitHub Actions (`.github/workflows/ci.yml`) lance les trois à chaque push sur `main` et sur chaque pull request, plus la vérification des types et le build du frontend.
+
+Couverture actuelle : table des routes HTTP, progression (pourcentage sur tout le livre), jeton d'API, CORS, gestion des erreurs, durcissement de `/api/cast/local-audio` et `/api/shutdown`, API bibliothèque (livres, marque-pages, collections, serveurs), versions, configuration de l'installeur, minuteur de veille (fondu et annulation côté desktop et Kotlin, câblage côté mobile), hook `usePolling`. Ce qui touche directement Android (ExoPlayer, MediaSession, Chromecast réel) n'a pas de test automatisé.
 
 ## Références API
 
