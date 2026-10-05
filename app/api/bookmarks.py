@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.api.context import services
+from app.api.errors import internal_error
 from app.database import BookmarkRepository, get_session
 from app.utils import logger
 
@@ -45,7 +46,7 @@ def create_bookmark(book_id):
         return jsonify(_serialize(bookmark)), 201
     except Exception as e:
         logger.error(f"Failed to create bookmark: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 def _serialize(bookmark):
     return {
@@ -69,7 +70,7 @@ def rename_bookmark(bookmark_id):
         return jsonify(_serialize(bookmark))
     except Exception as e:
         logger.error(f"Failed to rename bookmark: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 def delete_bookmark(bookmark_id):
@@ -79,7 +80,7 @@ def delete_bookmark(bookmark_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete bookmark: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/bookmarks/<int:bookmark_id>/resume', methods=['POST'])
 def resume_bookmark(bookmark_id):
@@ -102,4 +103,4 @@ def resume_bookmark(bookmark_id):
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to resume bookmark: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

@@ -2,6 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 
+from app.api.errors import internal_error
 from app.database import CollectionRepository, get_session
 from app.utils import logger
 
@@ -23,7 +24,7 @@ def get_collections():
         ])
     except Exception as e:
         logger.error(f"Failed to get collections: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/collections', methods=['POST'])
 def create_collection():
@@ -38,7 +39,7 @@ def create_collection():
         return jsonify({'id': collection.id, 'name': collection.name, 'book_ids': []})
     except Exception as e:
         logger.error(f"Failed to create collection: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/collections/<collection_id>', methods=['PATCH'])
 def rename_collection(collection_id):
@@ -55,7 +56,7 @@ def rename_collection(collection_id):
         return jsonify({'status': 'updated'})
     except Exception as e:
         logger.error(f"Failed to rename collection: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/collections/<collection_id>', methods=['DELETE'])
 def delete_collection(collection_id):
@@ -67,7 +68,7 @@ def delete_collection(collection_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete collection: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/collections/<collection_id>/books', methods=['POST'])
 def add_book_to_collection(collection_id):
@@ -84,7 +85,7 @@ def add_book_to_collection(collection_id):
         return jsonify({'status': 'added', 'book_ids': collection.book_ids or []})
     except Exception as e:
         logger.error(f"Failed to add book to collection: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/collections/<collection_id>/books/<book_id>', methods=['DELETE'])
 def remove_book_from_collection(collection_id, book_id):
@@ -96,4 +97,4 @@ def remove_book_from_collection(collection_id, book_id):
         return jsonify({'status': 'removed', 'book_ids': collection.book_ids or []})
     except Exception as e:
         logger.error(f"Failed to remove book from collection: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

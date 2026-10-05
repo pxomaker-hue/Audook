@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify
 
 from app.api.context import services
+from app.api.errors import internal_error
 from app.utils import logger
 
 bp = Blueprint('sync', __name__)
@@ -16,7 +17,7 @@ def sync_servers():
         return jsonify({'status': 'syncing'})
     except Exception as e:
         logger.error(f"Failed to sync: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/sync/status', methods=['GET'])
 def sync_status():

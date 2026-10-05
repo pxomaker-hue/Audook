@@ -4,6 +4,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.api.context import services
+from app.api.errors import internal_error
 from app.database import EqualizerPresetRepository, get_session
 from app.utils import logger
 
@@ -27,7 +28,7 @@ def get_equalizer_presets():
         return jsonify(result)
     except Exception as e:
         logger.error(f"Failed to get equalizer presets: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/equalizer/presets', methods=['POST'])
 def create_equalizer_preset():
@@ -50,7 +51,7 @@ def create_equalizer_preset():
         return jsonify(result), 201
     except Exception as e:
         logger.error(f"Failed to create equalizer preset: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/equalizer/presets/<preset_id>', methods=['PUT'])
 def update_equalizer_preset(preset_id):
@@ -91,7 +92,7 @@ def update_equalizer_preset(preset_id):
         return jsonify(result)
     except Exception as e:
         logger.error(f"Failed to update equalizer preset: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/equalizer/presets/<preset_id>', methods=['DELETE'])
 def delete_equalizer_preset(preset_id):
@@ -111,4 +112,4 @@ def delete_equalizer_preset(preset_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete equalizer preset: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

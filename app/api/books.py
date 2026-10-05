@@ -6,6 +6,7 @@ import threading
 from flask import Blueprint, jsonify, request
 
 from app.api.context import services
+from app.api.errors import internal_error
 from app.api.helpers import format_chapter_title
 from app.database import BookRepository, BookmarkRepository, ReadingProgressRepository, ServerRepository, get_session
 from app.database.models import Book as DbBook
@@ -68,7 +69,7 @@ def get_books():
         return jsonify(result)
     except Exception as e:
         logger.error(f"Failed to get books: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>', methods=['GET'])
 def get_book_details(book_id):
@@ -120,7 +121,7 @@ def get_book_details(book_id):
         })
     except Exception as e:
         logger.error(f"Failed to get book details: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/finished', methods=['POST'])
 def set_book_finished(book_id):
@@ -144,7 +145,7 @@ def set_book_finished(book_id):
         return jsonify({'status': 'ok', 'is_finished': finished})
     except Exception as e:
         logger.error(f"Failed to set finished status: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/clean-audio', methods=['POST'])
 def clean_book_audio(book_id):
@@ -163,7 +164,7 @@ def clean_book_audio(book_id):
         return jsonify({'status': 'processing'})
     except Exception as e:
         logger.error(f"Failed to start noise reduction: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/use-cleaned-audio', methods=['POST'])
 def set_book_use_cleaned_audio(book_id):
@@ -178,7 +179,7 @@ def set_book_use_cleaned_audio(book_id):
         return jsonify({'status': 'ok', 'use_cleaned_audio': enabled})
     except Exception as e:
         logger.error(f"Failed to set use_cleaned_audio: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>', methods=['PATCH'])
 def update_book(book_id):
@@ -200,7 +201,7 @@ def update_book(book_id):
         return jsonify({'status': 'updated'})
     except Exception as e:
         logger.error(f"Failed to update book: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/lock', methods=['POST'])
 def lock_book_fields(book_id):
@@ -222,7 +223,7 @@ def lock_book_fields(book_id):
         return jsonify({'status': 'locked', 'fields': fields})
     except Exception as e:
         logger.error(f"Failed to lock book fields: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/unlock', methods=['POST'])
 def unlock_book_fields(book_id):
@@ -243,7 +244,7 @@ def unlock_book_fields(book_id):
         return jsonify({'status': 'unlocked', 'fields': fields})
     except Exception as e:
         logger.error(f"Failed to unlock book fields: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/match-candidates', methods=['GET'])
 def get_book_match_candidates(book_id):
@@ -270,7 +271,7 @@ def get_book_match_candidates(book_id):
         return jsonify(candidates)
     except Exception as e:
         logger.error(f"Failed to get match candidates: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/match', methods=['POST'])
 def apply_book_match(book_id):
@@ -358,7 +359,7 @@ def apply_book_match(book_id):
         return jsonify({'status': 'matched', 'applied': applied})
     except Exception as e:
         logger.error(f"Failed to apply match: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/search', methods=['GET'])
 def search_books():
@@ -374,7 +375,7 @@ def search_books():
         } for book in books])
     except Exception as e:
         logger.error(f"Failed to search books: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/books/<book_id>/loudness-gain', methods=['GET'])
 def get_book_loudness_gain(book_id):
@@ -414,4 +415,4 @@ def get_book_loudness_gain(book_id):
         return jsonify({'gain_db': None})
     except Exception as e:
         logger.error(f"Failed to get loudness gain for {book_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

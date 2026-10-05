@@ -4,6 +4,7 @@ import requests
 from flask import Blueprint, Response, jsonify, send_file
 
 from app import CACHE_DIR
+from app.api.errors import internal_error
 from app.database import BookRepository, get_session
 from app.utils import logger
 
@@ -25,7 +26,7 @@ def get_cover_proxy(book_id):
         cover_url = book.cover_url
     except Exception as e:
         logger.error(f"Failed to proxy cover for {book_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
     finally:
         session.close()
 
@@ -39,7 +40,7 @@ def get_cover_proxy(book_id):
         )
     except Exception as e:
         logger.error(f"Failed to proxy cover for {book_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/local-cover/<book_id>', methods=['GET'])
 def get_local_cover(book_id):
@@ -56,4 +57,4 @@ def get_local_cover(book_id):
         return jsonify({'error': 'Cover not found'}), 404
     except Exception as e:
         logger.error(f"Failed to serve local cover for {book_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

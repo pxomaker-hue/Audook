@@ -4,6 +4,7 @@ import asyncio
 
 from flask import Blueprint, jsonify, request
 
+from app.api.errors import internal_error
 from app.clients import AudiobookshelfClient, PlexClient
 from app.database import ServerRepository, get_session
 from app.local import LocalClient
@@ -58,7 +59,7 @@ def get_servers():
         } for s in servers])
     except Exception as e:
         logger.error(f"Failed to get servers: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers', methods=['POST'])
@@ -109,7 +110,7 @@ def add_server():
         }), 201
     except Exception as e:
         logger.error(f"Failed to add server: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers/<server_id>', methods=['DELETE'])
@@ -121,7 +122,7 @@ def delete_server(server_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete server: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers/<server_id>/remote-access', methods=['POST'])
@@ -162,7 +163,7 @@ def set_server_remote_access(server_id):
         })
     except Exception as e:
         logger.error(f"Failed to set remote access: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers/<server_id>/hidden', methods=['POST'])
@@ -178,7 +179,7 @@ def set_server_hidden(server_id):
         return jsonify({'id': updated.id, 'hidden': updated.hidden})
     except Exception as e:
         logger.error(f"Failed to set server hidden state: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers/<server_id>/test', methods=['POST'])
@@ -196,7 +197,7 @@ def test_server(server_id):
         return jsonify({'connected': ok, 'error': error})
     except Exception as e:
         logger.error(f"Failed to test server: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 @bp.route('/api/servers/<server_id>/scan', methods=['POST'])
@@ -212,4 +213,4 @@ def scan_server(server_id):
         return jsonify({'status': 'scanned' if success else 'failed'})
     except Exception as e:
         logger.error(f"Failed to scan server: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

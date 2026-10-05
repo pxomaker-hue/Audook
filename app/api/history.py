@@ -2,6 +2,7 @@
 
 from flask import Blueprint, jsonify
 
+from app.api.errors import internal_error
 from app.database import BookRepository, ReadingHistoryRepository, get_session
 from app.utils import logger
 
@@ -33,7 +34,7 @@ def get_history():
         return jsonify(results)
     except Exception as e:
         logger.error(f"Failed to get history: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/history/<int:session_id>', methods=['DELETE'])
 def delete_history_entry(session_id):
@@ -45,7 +46,7 @@ def delete_history_entry(session_id):
         return jsonify({'status': 'deleted'})
     except Exception as e:
         logger.error(f"Failed to delete history entry: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/history', methods=['DELETE'])
 def clear_history():
@@ -55,4 +56,4 @@ def clear_history():
         return jsonify({'status': 'cleared', 'deleted': count})
     except Exception as e:
         logger.error(f"Failed to clear history: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

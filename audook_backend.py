@@ -12,12 +12,14 @@ import sys
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.api import register_blueprints
 from app.api.auth import install_log_redaction, require_api_token
+from app.api.errors import internal_error
 from app.api.context import services
 from app.database import init_database, get_session, remove_session, EqualizerPresetRepository
 from app.services import LibraryService, PlayerService, SyncService
@@ -70,6 +72,15 @@ def init_services():
 
 
 register_blueprints(app)
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    # Anything a route didn't catch itself: generic JSON 500 (details go to the
+    # log), instead of Flask's HTML page. HTTP errors (404, 405...) pass through.
+    if isinstance(error, HTTPException):
+        return error
+    return internal_error()
 
 if __name__ == '__main__':
     logger.info("Starting Audook Backend...")

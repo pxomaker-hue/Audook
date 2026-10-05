@@ -7,6 +7,7 @@ from flask import Blueprint, Response, jsonify, request, send_file
 
 from app import DATA_DIR
 from app.api.context import services
+from app.api.errors import internal_error
 from app.database import ServerRepository, get_session
 from app.utils import logger
 
@@ -22,7 +23,7 @@ def get_cast_devices():
         return jsonify(devices)
     except Exception as e:
         logger.error(f"Failed to discover cast devices: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/cast/connect', methods=['POST'])
 def connect_cast_device():
@@ -38,7 +39,7 @@ def connect_cast_device():
         return jsonify({'status': 'connected', 'device_name': device_name})
     except Exception as e:
         logger.error(f"Failed to connect cast device: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/cast/disconnect', methods=['POST'])
 def disconnect_cast_device():
@@ -47,7 +48,7 @@ def disconnect_cast_device():
         return jsonify({'status': 'disconnected'})
     except Exception as e:
         logger.error(f"Failed to disconnect cast device: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 
 def _allowed_audio_sources():
@@ -115,4 +116,4 @@ def stream_local_audio_for_cast():
         return send_file(str(file_path), conditional=True)
     except Exception as e:
         logger.error(f"Failed to stream local audio for cast: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

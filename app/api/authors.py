@@ -2,6 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 
+from app.api.errors import internal_error
 from app.database import BookRepository, get_session
 from app.utils import logger, online_metadata
 
@@ -35,7 +36,7 @@ def update_author(name):
         return jsonify({'status': 'updated', 'books_updated': len(books)})
     except Exception as e:
         logger.error(f"Failed to update author: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/authors/<name>/refresh', methods=['POST'])
 def refresh_author(name):
@@ -65,4 +66,4 @@ def refresh_author(name):
         return jsonify({'status': 'updated', 'bio': info.get('bio'), 'photo': info.get('photo')})
     except Exception as e:
         logger.error(f"Failed to refresh author: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()

@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.api.context import services
+from app.api.errors import internal_error
 from app.api.helpers import format_chapter_title
 from app.database import EqualizerPresetRepository, get_session
 from app.utils import logger
@@ -25,7 +26,7 @@ def play_book():
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to play book: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/pause', methods=['POST'])
 def pause_playback():
@@ -34,7 +35,7 @@ def pause_playback():
         return jsonify({'status': 'paused'})
     except Exception as e:
         logger.error(f"Failed to pause: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/resume', methods=['POST'])
 def resume_playback():
@@ -43,7 +44,7 @@ def resume_playback():
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to resume: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/stop', methods=['POST'])
 def stop_playback():
@@ -52,7 +53,7 @@ def stop_playback():
         return jsonify({'status': 'stopped'})
     except Exception as e:
         logger.error(f"Failed to stop: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/next-chapter', methods=['POST'])
 def next_chapter():
@@ -62,7 +63,7 @@ def next_chapter():
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to go to next chapter: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/previous-chapter', methods=['POST'])
 def previous_chapter():
@@ -72,7 +73,7 @@ def previous_chapter():
         return jsonify({'status': 'playing'})
     except Exception as e:
         logger.error(f"Failed to go to previous chapter: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/seek', methods=['POST'])
 def seek():
@@ -83,7 +84,7 @@ def seek():
         return jsonify({'status': 'seeking'})
     except Exception as e:
         logger.error(f"Failed to seek: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/volume', methods=['POST'])
 def set_volume():
@@ -94,7 +95,7 @@ def set_volume():
         return jsonify({'status': 'volume_set'})
     except Exception as e:
         logger.error(f"Failed to set volume: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/speed', methods=['POST'])
 def set_speed():
@@ -105,7 +106,7 @@ def set_speed():
         return jsonify({'status': 'speed_set'})
     except Exception as e:
         logger.error(f"Failed to set speed: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/equalizer', methods=['POST'])
 def set_player_equalizer():
@@ -126,7 +127,7 @@ def set_player_equalizer():
         return jsonify({'status': 'equalizer_set', 'preset_id': preset.id})
     except Exception as e:
         logger.error(f"Failed to set equalizer: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/equalizer/cycle', methods=['POST'])
 def cycle_player_equalizer():
@@ -135,7 +136,7 @@ def cycle_player_equalizer():
         return jsonify({'status': 'equalizer_cycled', 'preset_id': new_preset_id})
     except Exception as e:
         logger.error(f"Failed to cycle equalizer: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/compression/cycle', methods=['POST'])
 def cycle_player_compression():
@@ -146,7 +147,7 @@ def cycle_player_compression():
         return jsonify({'status': 'compression_cycled', 'preset': new_preset})
     except Exception as e:
         logger.error(f"Failed to cycle compression: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/loudness-normalization', methods=['POST'])
 def set_player_loudness_normalization():
@@ -160,7 +161,7 @@ def set_player_loudness_normalization():
         return jsonify({'status': 'loudness_normalization_set', 'enabled': enabled})
     except Exception as e:
         logger.error(f"Failed to set loudness normalization: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/sleep-timer', methods=['POST'])
 def set_player_sleep_timer():
@@ -177,7 +178,7 @@ def set_player_sleep_timer():
         })
     except Exception as e:
         logger.error(f"Failed to set sleep timer: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
 
 @bp.route('/api/player/state', methods=['GET'])
 def get_player_state():
@@ -215,4 +216,4 @@ def get_player_state():
         return jsonify(state)
     except Exception as e:
         logger.error(f"Failed to get player state: {e}")
-        return jsonify({'error': str(e)}), 500
+        return internal_error()
