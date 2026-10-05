@@ -24,25 +24,25 @@
     "android-open": "npx cap open android"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.2",
-    "@capacitor/core": "^8.4.2",
-    "axios": "^1.6.0",
-    "electron-is-dev": "^2.0.0",
-    "lucide-react": "^0.294.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.18.4"
+    "electron-is-dev": "^2.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.2",
     "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "@testing-library/react": "^14.3.1",
     "@types/jest": "^27.5.2",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "axios": "^1.6.0",
     "concurrently": "^8.2.0",
     "electron": "latest",
     "electron-builder": "^26.15.3",
+    "lucide-react": "^0.294.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.18.4",
     "react-scripts": "5.0.1",
     "typescript": "^4.9.5",
     "wait-on": "^7.0.0"
@@ -53,7 +53,6 @@
     "files": [
       "build/**/*",
       "electron/**/*",
-      "node_modules/**/*",
       "assets/icons/*.ico"
     ],
     "asarUnpack": [
@@ -84,8 +83,23 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "include": "assets/installer.nsh"
+      "include": "assets/installer.nsh",
+      "artifactName": "Audook-Setup-${version}.${ext}",
+      "language": "1036",
+      "installerLanguages": [
+        "fr_FR"
+      ],
+      "installerIcon": "assets/icons/audook.ico",
+      "uninstallerIcon": "assets/icons/audook.ico",
+      "installerSidebar": "assets/installer/installerSidebar.bmp",
+      "uninstallerSidebar": "assets/installer/installerSidebar.bmp",
+      "installerHeader": "assets/installer/installerHeader.bmp",
+      "shortcutName": "Audook",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "uninstallDisplayName": "Audook"
     }
   },
   "eslintConfig": {

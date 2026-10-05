@@ -1,6 +1,21 @@
-; Custom NSIS hooks for the Audook installer/uninstaller (electron-builder:
-; package.json -> build.nsis.include).
+﻿; Custom NSIS hooks for the Audook installer/uninstaller (electron-builder:
+; package.json -> build.nsis.include). UTF-8 WITH BOM on purpose: it contains accents.
 ;
+; --- Texts of the welcome and finish pages ---------------------------------------
+; The pages are declared by electron-builder's template BEFORE the generic customHeader
+; hook, so the MUI texts are defined from inside customWelcomePage, which is expanded
+; right where the welcome page is declared (the finish page comes later and reads the
+; defines that exist by then).
+!macro customWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "Bienvenue dans l'installation d'Audook"
+  !define MUI_WELCOMEPAGE_TEXT "Cet assistant installe Audook, votre lecteur d'audiolivres, sur cet ordinateur.$\r$\n$\r$\nSi Audook est déjà installé, il est simplement mis à jour : votre bibliothèque, votre progression et vos réglages sont conservés.$\r$\n$\r$\nCliquez sur Suivant pour continuer."
+  !define MUI_FINISHPAGE_TITLE "Audook est installé"
+  !define MUI_FINISHPAGE_TEXT "Audook est prêt à l'emploi.$\r$\n$\r$\nAu premier lancement, ajoutez votre serveur (Audiobookshelf, Plex ou un dossier local) dans les Paramètres pour retrouver vos livres."
+  !define MUI_FINISHPAGE_RUN_TEXT "Lancer Audook"
+  !insertmacro MUI_PAGE_WELCOME
+!macroend
+
+; --- Closing the app / not depending on the old uninstaller -------------------------
 ; electron-builder's stock "is the app running?" check decides with
 ;   (Get-CimInstance Win32_Process | ? {...}).Count -gt 0
 ; but for exactly ONE matching process .Count is empty, so the check says
@@ -36,4 +51,29 @@
     StrCpy $R1 0
     Goto audook_close_loop
   ${EndIf}
+
+  ; Don't let electron-builder run the OLD version's uninstaller before installing.
+  ; In an update that uninstaller moves every file of the install folder to %TEMP% and
+  ; gives up if ONE of them is held open - by an antivirus, a backup tool, a terminal
+  ; or an Explorer preview, i.e. by a process outside the install folder that the
+  ; check above cannot see. It then answers "cannot be closed, retry" forever, even with
+  ; no Audook process left. The installer finds the old uninstaller through the
+  ; UninstallString registry value; with it gone it simply installs over the existing
+  ; folder (overwriting tolerates far more locks than moving) and rewrites the value.
+  ; Installer only: the uninstaller itself must keep its own entry.
+  !ifndef BUILD_UNINSTALLER
+    DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
+    DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
+    !ifdef UNINSTALL_REGISTRY_KEY_2
+      DeleteRegValue SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY_2}" "UninstallString"
+      DeleteRegValue HKEY_CURRENT_USER "${UNINSTALL_REGISTRY_KEY_2}" "UninstallString"
+    !endif
+
+    ; Older packages shipped Gradle build artifacts of @capacitor/android inside
+    ; resources\app.asar.unpacked, with paths far beyond Windows' 259-character limit
+    ; (the install failed at ~25% with "cannot be closed"). They are useless and ordinary
+    ; deletion can't remove them: use the \\?\ prefix. The installer recreates this folder.
+    nsExec::Exec '"$SYSDIR\cmd.exe" /C rd /s /q "\\?\$INSTDIR\resources\app.asar.unpacked"'
+    Pop $0
+  !endif
 !macroend
