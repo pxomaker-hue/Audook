@@ -61,9 +61,11 @@ jobs:
       # setup: the runner image already has one (that is what the earlier APK
       # workflow relied on), and Gradle fetches any missing component itself.
       - run: npm ci
-      # android/capacitor-cordova-android-plugins/ is generated and git-ignored, but
-      # settings.gradle includes it: without it Gradle can't even configure the build.
-      - run: npx cap update android
+      # android/capacitor-cordova-android-plugins/ (included by settings.gradle) and
+      # android/app/src/main/assets/ are generated and git-ignored: without them Gradle
+      # can't even configure the build. `cap sync` needs the built web app (webDir), so
+      # this is the same step the earlier APK workflow used (react build + cap sync).
+      - run: npm run android-sync
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
