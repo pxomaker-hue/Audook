@@ -128,8 +128,43 @@ function ensureNativeListeners() {
     pushProgress();
   });
   AudookPlayer.addListener('sleepTimerUpdate', (data) => {
-    setState({ sleepTimerRemainingSeconds: data.remainingSeconds });
+    applySleepTimer(data.remainingSeconds);
   });
+  // Coming back to the app: the final "timer over" event may have been sent
+  // while the WebView was suspended (screen off) and lost - see syncSleepTimer.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncSleepTimer();
+  });
+}
+
+// ---- sleep timer ----------------------------------------------------------
+// The countdown itself runs natively (AudookPlayerPlugin.kt) so it survives the
+// screen being off, and reports its progress with 'sleepTimerUpdate' events. But
+// events sent while the WebView is suspended are lost - including the last one
+// ("timer over", null) - which left the UI stuck on a stale remaining time: the
+// button looked active and the next click continued the 5/10/15... cycle. So the
+// JS side also remembers WHEN the timer ends and re-derives the expiry itself,
+// on a 1 s tick while it runs and as soon as the app is visible again.
+let sleepTimerEndsAt: number | null = null;
+let sleepTimerTick: ReturnType<typeof setInterval> | null = null;
+
+function applySleepTimer(remainingSeconds: number | null) {
+  sleepTimerEndsAt = remainingSeconds === null ? null : Date.now() + remainingSeconds * 1000;
+  if (sleepTimerEndsAt !== null && sleepTimerTick === null) {
+    sleepTimerTick = setInterval(syncSleepTimer, 1000);
+  } else if (sleepTimerEndsAt === null && sleepTimerTick !== null) {
+    clearInterval(sleepTimerTick);
+    sleepTimerTick = null;
+  }
+  setState({ sleepTimerRemainingSeconds: remainingSeconds });
+}
+
+// Only ever turns an overdue timer off; while it is still running the native
+// events remain the source of the displayed time.
+function syncSleepTimer() {
+  if (sleepTimerEndsAt !== null && Date.now() >= sleepTimerEndsAt) {
+    applySleepTimer(null);
+  }
 }
 
 function pushProgress(finished = false) {
@@ -371,7 +406,7 @@ async function disconnectCastDevice() {
 }
 
 async function setSleepTimer(minutes: number | null) {
-  setState({ sleepTimerRemainingSeconds: minutes ? minutes * 60 : null });
+  applySleepTimer(minutes ? minutes * 60 : null);
   await AudookPlayer.setSleepTimer({ minutes });
 }
 
