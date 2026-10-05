@@ -61,6 +61,9 @@ jobs:
       # setup: the runner image already has one (that is what the earlier APK
       # workflow relied on), and Gradle fetches any missing component itself.
       - run: npm ci
+      # android/capacitor-cordova-android-plugins/ is generated and git-ignored, but
+      # settings.gradle includes it: without it Gradle can't even configure the build.
+      - run: npx cap update android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
