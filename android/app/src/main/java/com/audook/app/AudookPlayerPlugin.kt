@@ -22,7 +22,6 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.MoreExecutors
 import kotlin.math.abs
-import kotlin.math.pow
 
 // Standard 10-band ISO graphic EQ center frequencies (Hz) - matches VLC's
 // own AudioEqualizer band layout, which the desktop presets
@@ -421,7 +420,7 @@ class AudookPlayerPlugin : Plugin() {
             positionHandler.post { loudnessBaseVolume = 1f; applyEffectiveVolume() }
         } else {
             try { loudnessEnhancer?.enabled = false } catch (e: Exception) { }
-            val linear = 10.0.pow(gainDb / 20.0).toFloat().coerceIn(0f, 1f)
+            val linear = AudookMath.linearVolumeForGainDb(gainDb)
             positionHandler.post { loudnessBaseVolume = linear; applyEffectiveVolume() }
         }
     }
@@ -523,12 +522,12 @@ class AudookPlayerPlugin : Plugin() {
         val generation = ++sleepTimerGeneration
         sleepTimerEndTimeMs = System.currentTimeMillis() + (minutes * 60_000).toLong()
 
-        val fadeSeconds = 20L
         val runnable = object : Runnable {
             override fun run() {
                 if (generation != sleepTimerGeneration) return
                 val endTime = sleepTimerEndTimeMs ?: return
-                val remainingMs = endTime - System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                val remainingMs = endTime - now
 
                 if (remainingMs <= 0) {
                     // While casting the local player is already paused - the
@@ -543,11 +542,10 @@ class AudookPlayerPlugin : Plugin() {
                     return
                 }
 
-                val remainingSeconds = remainingMs / 1000
+                val remainingSeconds = AudookMath.remainingSeconds(endTime, now)
                 emitSleepTimer(remainingSeconds)
-                if (remainingSeconds <= fadeSeconds) {
-                    val fadeFraction = (remainingSeconds.toFloat() / fadeSeconds.toFloat()).coerceIn(0f, 1f)
-                    sleepFadeFactor = fadeFraction
+                if (remainingSeconds <= AudookMath.SLEEP_TIMER_FADE_SECONDS) {
+                    sleepFadeFactor = AudookMath.sleepFadeFactor(remainingSeconds)
                     applyEffectiveVolume()
                 }
 

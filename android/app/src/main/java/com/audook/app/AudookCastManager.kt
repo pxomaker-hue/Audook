@@ -52,9 +52,26 @@ private val CAST_CONTENT_TYPES = mapOf(
     "aac" to "audio/aac"
 )
 
-private fun guessContentType(url: String): String {
-    val withoutQuery = url.substringBefore('?')
-    val ext = withoutQuery.substringAfterLast('.', "").lowercase()
+// The URLs handed to the cast device are mostly the backend's proxy endpoint
+// (".../cast/local-audio?path=<file>"), where the real file name - and so the
+// extension - is in the `path` query parameter, not in the URL path. Reading only
+// the URL path (as this used to) always fell back to audio/mpeg for NAS books.
+internal fun guessContentType(url: String): String {
+    val pathParam = url.substringAfter('?', "")
+        .split('&')
+        .firstOrNull { it.startsWith("path=") }
+        ?.substringAfter("path=")
+    val source = if (pathParam != null) {
+        try {
+            java.net.URLDecoder.decode(pathParam, "UTF-8")
+        } catch (e: IllegalArgumentException) {
+            pathParam // malformed %-escape: still try the raw value
+        }
+    } else {
+        url
+    }
+    val ext = source.substringBefore('?').substringAfterLast('.', "").lowercase()
+    if (ext.contains('/') || ext.contains('\\')) return "audio/mpeg" // the "extension" was a folder name
     return CAST_CONTENT_TYPES[ext] ?: "audio/mpeg"
 }
 
