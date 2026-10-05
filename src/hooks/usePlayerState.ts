@@ -81,10 +81,16 @@ export function usePlayerState() {
   const [castConnecting, setCastConnecting] = useState<string | null>(null);
   const [castError, setCastError] = useState<string | null>(null);
   const previousClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped whenever the sleep timer is changed from here. A state poll that
+  // started before the change but is answered after it carries the OLD timer
+  // state - applying it would show the timer as off and reset the step index.
+  const sleepTimerEpoch = useRef(0);
 
   const fetchState = async () => {
     try {
+      const epoch = sleepTimerEpoch.current;
       const response = await axios.get(`${getApiBase()}/player/state`);
+      if (epoch !== sleepTimerEpoch.current) return; // stale: the next poll (1 s) will be fresh
       // Backend uses snake_case (is_playing); explicitly map it instead of
       // relying on the spread, otherwise `isPlaying` never actually updates.
       setState(prev => {
@@ -297,8 +303,10 @@ export function usePlayerState() {
     const nextIndex = (sleepTimerStepIndex + 1) % SLEEP_TIMER_STEPS.length;
     const minutes = SLEEP_TIMER_STEPS[nextIndex];
     setSleepTimerStepIndex(nextIndex);
+    sleepTimerEpoch.current += 1; // polls already in flight are now stale
     try {
       const response = await axios.post(`${getApiBase()}/player/sleep-timer`, { minutes });
+      sleepTimerEpoch.current += 1; // ...and so are those started while the POST was running
       setState(prev => ({ ...prev, sleepTimerRemainingSeconds: response.data.sleep_timer_remaining_seconds ?? null }));
     } catch (error) {
       console.error('Failed to set sleep timer:', error);
