@@ -325,5 +325,5 @@
 .more-menu-volume-slider input[type='range'] {
   width: 100px;
   cursor: pointer;
-  accent-color: var(--accent-ink);
+  accent-color: var(--focus-ring);
 }

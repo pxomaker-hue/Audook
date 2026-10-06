@@ -32,7 +32,7 @@
 }
 
 .category-pill.active {
-  background-color: var(--accent-ink);
+  background-color: var(--inverse-surface);
   color: var(--accent);
 }
 
@@ -89,7 +89,7 @@
 }
 
 .top-bar-icon-button.dark {
-  background-color: var(--accent-ink);
+  background-color: var(--inverse-surface);
   color: var(--accent);
 }
 
@@ -126,5 +126,5 @@
   height: 8px;
   border-radius: 50%;
   background-color: var(--accent);
-  border: 2px solid var(--accent-ink);
+  border: 2px solid var(--inverse-surface);
 }

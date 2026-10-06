@@ -1,3 +1,4 @@
+import SeekBar from './SeekBar';
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Minimize2, Bookmark, Loader2, Check } from 'lucide-react';
 import { usePlayerState, formatTime } from '../hooks/usePlayerState';
@@ -36,7 +37,6 @@ const MiniPlayerView: React.FC = () => {
     SEEK_STEP_SECONDS
   } = usePlayerState();
 
-  const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
   const coverSrc = useCoverBlobUrl(state.currentBook?.id ?? '', state.currentBook?.cover_url);
 
   return (
@@ -77,9 +77,7 @@ const MiniPlayerView: React.FC = () => {
             </div>
           </div>
 
-          <div className="progress-bar" onClick={handleSeek}>
-            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
-          </div>
+          <SeekBar position={state.position} duration={state.duration} onSeek={handleSeek} onStep={handleSeekStep} />
           <div className="player-time-row">
             <span className="player-time">{formatTime(state.position)}</span>
             <span className="player-time">{formatTime(state.duration)}</span>

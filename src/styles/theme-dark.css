@@ -1,0 +1,17 @@
+/* Dark theme: only the tokens change, everything else reads them. The theme
+   is chosen in Settings and applied by src/theme.ts (data-theme on <html>;
+   "auto" is resolved there from the OS setting). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #111015;
+  --surface: #1c1b21;
+  --surface-muted: #26252d;
+  --text-primary: #f2f1f4;
+  --text-secondary: #a5a4ad;
+  --text-tertiary: #85848d;
+  --border: #2e2d35;
+  --inverse-surface: #34333c;
+  --focus-ring: #ffc629;
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 8px 20px rgba(0, 0, 0, 0.45);
+}

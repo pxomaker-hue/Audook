@@ -79,7 +79,7 @@
 }
 
 .nav-item.active {
-  color: var(--accent-ink);
+  color: var(--text-primary);
   background-color: var(--background);
   box-shadow: var(--shadow-pop);
 }

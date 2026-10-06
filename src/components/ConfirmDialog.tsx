@@ -1,4 +1,5 @@
 import React from 'react';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,13 +22,23 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, onCancel);
+
   if (!open) return null;
 
   return (
     <div className="confirm-dialog-backdrop" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3 className="confirm-dialog-title">{title}</h3>
-        <p className="confirm-dialog-message">{message}</p>
+      <div
+        className="confirm-dialog"
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="confirm-dialog-title" className="confirm-dialog-title">{title}</h3>
+        <p id="confirm-dialog-message" className="confirm-dialog-message">{message}</p>
         <div className="confirm-dialog-actions">
           <button className="confirm-dialog-cancel" onClick={onCancel}>
             {cancelLabel}

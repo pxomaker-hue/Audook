@@ -14,3 +14,5 @@
 @import './styles/book-detail.css'; /* BookDetailPage header actions */
 @import './styles/player-responsive.css'; /* Responsive breakpoints: compact/mobile/full-screen player, phone layouts */
 @import './styles/mini-player.css'; /* Detached mini-player window */
+@import './styles/accessibility.css'; /* Keyboard focus rings */
+@import './styles/theme-dark.css'; /* Dark theme tokens */

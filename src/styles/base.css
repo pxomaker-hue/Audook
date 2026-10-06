@@ -21,10 +21,15 @@
 
   /* Text */
   --text-primary: #17161b;
-  --text-secondary: #96959e;
-  --text-tertiary: #c3c2c9;
+  --text-secondary: #6b6a73; /* was #96959e (2.9:1) - now ~5.2:1 on white */
+  --text-tertiary: #85848d;  /* was #c3c2c9 (1.7:1) - now ~3.7:1, for non-essential text only */
 
   --border: #eeeeec;
+
+  /* Dark pill/button fill used with yellow text (active tabs, main play
+     button). Separate from --accent-ink, which is dark text ON yellow. */
+  --inverse-surface: #17161b;
+  --focus-ring: #17161b;
   --success: #4ade80;
   --error: #ff6b6b;
 
@@ -46,11 +51,11 @@ body {
 }
 
 input[type="range"] {
-  accent-color: var(--accent-ink);
+  accent-color: var(--focus-ring);
 }
 
 input[type="checkbox"] {
-  accent-color: var(--accent-ink);
+  accent-color: var(--focus-ring);
 }
 
 .app-shell {

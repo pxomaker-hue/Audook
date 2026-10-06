@@ -245,7 +245,7 @@
 .player-button.main {
   width: 52px;
   height: 52px;
-  background-color: var(--accent-ink);
+  background-color: var(--inverse-surface);
   color: var(--accent);
 }
 

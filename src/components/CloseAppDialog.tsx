@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CloseBehavior } from '../electron';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 interface CloseAppDialogProps {
   open: boolean;
@@ -13,12 +14,21 @@ interface CloseAppDialogProps {
 const CloseAppDialog: React.FC<CloseAppDialogProps> = ({ open, onChoice }) => {
   const [remember, setRemember] = useState(false);
 
+  const dialogRef = useDialogA11y<HTMLDivElement>(open);
+
   if (!open) return null;
 
   return (
     <div className="confirm-dialog-backdrop">
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3 className="confirm-dialog-title">Fermer Audook ?</h3>
+      <div
+        className="confirm-dialog"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="close-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="close-dialog-title" className="confirm-dialog-title">Fermer Audook ?</h3>
         <p className="confirm-dialog-message">
           Vous pouvez fermer complètement l'application, ou la réduire dans la barre système - la lecture continuera en arrière-plan.
         </p>

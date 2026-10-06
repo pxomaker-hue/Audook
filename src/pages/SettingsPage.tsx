@@ -1,3 +1,4 @@
+import { ThemePreference, getThemePreference, setThemePreference } from '../theme';
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
@@ -86,7 +87,7 @@ const iconButtonStyle: React.CSSProperties = {
 };
 
 const SettingsPage: React.FC = () => {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference());
   const [volume, setVolume] = useState(80);
   const [autoSync, setAutoSync] = useState(true);
   const [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior>('ask');
@@ -140,7 +141,6 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSave = () => {
-    localStorage.setItem('theme', theme);
     localStorage.setItem('volume', volume.toString());
     localStorage.setItem('autoSync', autoSync.toString());
     alert('Paramètres sauvegardés');
@@ -331,7 +331,11 @@ const SettingsPage: React.FC = () => {
           <label style={labelStyle}>Thème</label>
           <select
             value={theme}
-            onChange={(e) => setTheme(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value as ThemePreference;
+              setTheme(next);
+              setThemePreference(next);
+            }}
             style={inputStyle}
           >
             <option value="dark">Sombre</option>

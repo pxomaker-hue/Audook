@@ -1,3 +1,4 @@
+import SeekBar from './SeekBar';
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, ListMusic, Bookmark, Loader2, Check, PictureInPicture2, MoreHorizontal, ArrowLeft, Gauge, SlidersHorizontal, AudioLines, Activity, Cast, RefreshCw, X, Moon } from 'lucide-react';
@@ -120,7 +121,6 @@ const Player: React.FC = () => {
     );
   }
 
-  const percentage = state.duration ? (state.position / state.duration) * 100 : 0;
 
   const moreMenu = (buttonSize?: number) => (
     <PlayerMoreMenu
@@ -352,9 +352,7 @@ const Player: React.FC = () => {
         </div>
 
         <div className="player-progress">
-          <div className="progress-bar" onClick={handleSeek}>
-            <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
-          </div>
+          <SeekBar position={state.position} duration={state.duration} onSeek={handleSeek} onStep={handleSeekStep} />
           <div className="player-time-row">
             <span className="player-time">{formatTime(state.position)}</span>
             <span className="player-time">{formatTime(state.duration)}</span>
@@ -481,9 +479,7 @@ const Player: React.FC = () => {
               </div>
 
               <div className="player-compact-progress">
-                <div className="progress-bar" onClick={handleSeek}>
-                  <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
-                </div>
+                <SeekBar position={state.position} duration={state.duration} onSeek={handleSeek} onStep={handleSeekStep} />
                 <div className="player-time-row compact">
                   <span className="player-time">{formatTime(state.position)}</span>
                   <span className="player-time">{formatTime(state.duration)}</span>
@@ -567,9 +563,7 @@ const Player: React.FC = () => {
                 {state.currentChapterTitle || state.currentBook.title}
               </div>
               <div className="player-compact-subtitle">{state.currentBook.author}</div>
-              <div className="progress-bar" onClick={handleSeek}>
-                <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
-              </div>
+              <SeekBar position={state.position} duration={state.duration} onSeek={handleSeek} onStep={handleSeekStep} />
             </div>
 
             <div className="player-controls">
