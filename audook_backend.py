@@ -26,7 +26,15 @@ from app.services import LibraryService, PlayerService, SyncService
 from app.utils import logger
 
 app = Flask(__name__)
-CORS(app)
+# Only the app's own front-ends need cross-origin access: the CRA dev server
+# and Capacitor's WebView (http(s)://localhost), plus Electron's file:// pages
+# which send the literal origin "null". Any other website a user visits could
+# otherwise drive this local API from their browser.
+CORS(app, origins=[
+    r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$',
+    r'^capacitor://localhost$',
+    'null',
+])
 install_log_redaction()
 
 
