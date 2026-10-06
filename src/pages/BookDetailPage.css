@@ -1,0 +1,468 @@
+/* Book detail page. Everything is built from the tokens in App.css so the
+   dark theme applies without per-component overrides. Yellow (--primary) is
+   kept for fills and accents, never for text on a light surface (1.6:1). */
+
+.bd-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bd-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* Hero */
+.bd-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.book-hero-cover {
+  width: 200px;
+  height: 300px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.bd-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 48px;
+}
+
+.bd-hero-info {
+  flex: 1;
+  min-width: 260px;
+}
+
+.bd-hero-info .page-title {
+  margin-bottom: 10px;
+}
+
+.bd-author {
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+}
+
+.bd-author.has-series {
+  margin-bottom: 4px;
+}
+
+.bd-series {
+  margin-bottom: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bd-fact {
+  margin-bottom: 20px;
+}
+
+.bd-fact-label {
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.bd-fact-value {
+  font-size: 16px;
+}
+
+.bd-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: var(--border);
+}
+
+.bd-progress-fill {
+  height: 100%;
+  background-color: var(--primary);
+}
+
+.bd-progress-caption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bd-locked-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Panels (Associer / Modifier) */
+.bd-panel {
+  max-width: 520px;
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.bd-panel-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bd-row {
+  display: flex;
+  gap: 10px;
+}
+
+.bd-row-spaced {
+  margin-bottom: 14px;
+}
+
+.bd-row-start {
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.bd-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.bd-no-shrink {
+  flex-shrink: 0;
+}
+
+.bd-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--surface-muted);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.bd-input-multiline {
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.bd-radios {
+  gap: 14px;
+  font-size: 13px;
+}
+
+.bd-radios label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.bd-muted {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.bd-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bd-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bd-button-muted {
+  padding: 9px 16px;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.bd-button-compact {
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.bd-link-button {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bd-icon-button {
+  display: flex;
+  flex-shrink: 0;
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bd-icon-button:hover {
+  color: var(--text-primary);
+}
+
+.bd-lock-button {
+  display: flex;
+  align-items: center;
+  padding: 10px 4px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bd-lock-button.locked {
+  color: var(--text-primary);
+}
+
+.bd-lock-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Match candidates */
+.bd-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.bd-candidate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-muted);
+}
+
+.bd-candidate-cover {
+  width: 40px;
+  height: 56px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background-color: var(--background);
+}
+
+.bd-candidate-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bd-candidate-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bd-candidate-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.bd-candidate-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.bd-badge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Sections */
+.bd-section {
+  margin-bottom: 30px;
+}
+
+.bd-heading {
+  margin: 0 0 15px;
+  color: var(--text-primary);
+}
+
+.bd-description {
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.bd-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.bd-list-bordered {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.bd-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.bd-list-item + .bd-list-item {
+  border-top: 1px solid var(--border);
+}
+
+.bd-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.bd-item-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Chapters */
+.bd-chapters-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 15px 8px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bd-chapter-wrap + .bd-chapter-wrap {
+  border-top: 1px solid var(--border);
+}
+
+.bd-chapter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 15px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bd-chapter:hover {
+  background-color: var(--surface-muted);
+}
+
+.bd-chapter.active {
+  background-color: var(--surface-muted);
+  font-weight: 700;
+}
+
+.bd-chapter-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: var(--primary);
+}
+
+.bd-chapter-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.bd-chapter-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.bd-chapter.active .bd-chapter-icon {
+  background-color: var(--inverse-surface);
+  color: var(--accent);
+}
+
+.bd-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bd-chapter-duration {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
