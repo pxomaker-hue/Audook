@@ -42,11 +42,17 @@ contextBridge.exposeInMainWorld('electron', {
   },
 
   // Listen for player events
+  // Both return an unsubscribe function so React effects can clean up
+  // instead of stacking a new listener on every mount.
   onPlayerState: (callback) => {
-    ipcRenderer.on('player:stateChange', (event, state) => callback(state));
+    const handler = (event, state) => callback(state);
+    ipcRenderer.on('player:stateChange', handler);
+    return () => ipcRenderer.removeListener('player:stateChange', handler);
   },
   onPlayerPosition: (callback) => {
-    ipcRenderer.on('player:position', (event, data) => callback(data));
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('player:position', handler);
+    return () => ipcRenderer.removeListener('player:position', handler);
   },
 
   // Detached mini-player window

@@ -121,22 +121,23 @@ export function usePlayerState() {
   useEffect(() => {
     fetchState();
 
-    if (window.electron?.onPlayerState) {
-      window.electron.onPlayerState((newState: any) => {
-        setState(prev => ({ ...prev, ...newState }));
-      });
-    }
+    const offState = window.electron?.onPlayerState?.((newState: any) => {
+      setState(prev => ({ ...prev, ...newState }));
+    });
 
-    if (window.electron?.onPlayerPosition) {
-      window.electron.onPlayerPosition((data: any) => {
-        setState(prev => ({ ...prev, position: data.position }));
-      });
-    }
+    const offPosition = window.electron?.onPlayerPosition?.((data: any) => {
+      setState(prev => ({ ...prev, position: data.position }));
+    });
 
     axios.get(`${getApiBase()}/equalizer/presets`)
       .then(res => setEqualizerPresets(res.data))
       .catch(error => console.error('Failed to load equalizer presets:', error));
 
+    return () => {
+      offState?.();
+      offPosition?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   usePolling(fetchState, 1000);

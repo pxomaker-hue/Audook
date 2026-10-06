@@ -17,8 +17,8 @@ export interface IElectronAPI {
   closeWindow: () => void;
   isWindowMaximized: () => Promise<boolean>;
   onWindowMaximizedChange: (callback: (isMaximized: boolean) => void) => void;
-  onPlayerState: (callback: (state: any) => void) => void;
-  onPlayerPosition: (callback: (data: any) => void) => void;
+  onPlayerState: (callback: (state: any) => void) => () => void;
+  onPlayerPosition: (callback: (data: any) => void) => () => void;
   miniPlayer: {
     activate: () => void;
     deactivate: () => void;
