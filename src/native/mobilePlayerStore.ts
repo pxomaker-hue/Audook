@@ -128,7 +128,11 @@ function ensureNativeListeners() {
     pushProgress();
   });
   AudookPlayer.addListener('sleepTimerUpdate', (data) => {
-    applySleepTimer(data.remainingSeconds);
+    // "Timer over" has to be read as null. Android sends it as an event WITHOUT the
+    // remainingSeconds key (org.json drops a key put with null), i.e. undefined here:
+    // anything that is not a real number means "no timer".
+    const remaining = data?.remainingSeconds;
+    applySleepTimer(typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : null);
   });
   // Coming back to the app: the final "timer over" event may have been sent
   // while the WebView was suspended (screen off) and lost - see syncSleepTimer.

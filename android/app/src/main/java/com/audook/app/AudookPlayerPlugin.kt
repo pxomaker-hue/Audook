@@ -21,6 +21,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.google.common.util.concurrent.MoreExecutors
+import org.json.JSONObject
 import kotlin.math.abs
 
 // Standard 10-band ISO graphic EQ center frequencies (Hz) - matches VLC's
@@ -500,7 +501,9 @@ class AudookPlayerPlugin : Plugin() {
 
     private fun emitSleepTimer(remainingSeconds: Long?) {
         val data = JSObject()
-        data.put("remainingSeconds", remainingSeconds)
+        // put(key, null) would REMOVE the key (org.json), so the JS side received {} for
+        // "timer over"; JSONObject.NULL is serialized as a real null.
+        data.put("remainingSeconds", remainingSeconds ?: JSONObject.NULL)
         notifyListeners("sleepTimerUpdate", data)
     }
 

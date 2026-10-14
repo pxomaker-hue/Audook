@@ -100,3 +100,33 @@ it('also expires on its own while the app stays in the foreground', async () => 
   await act(async () => { jest.advanceTimersByTime(5 * 60 * 1000 + 2000); }); // no native event at all
   expect(result.current.state.sleepTimerRemainingSeconds).toBeNull();
 });
+
+// What Android REALLY sends when the timer is over: the Kotlin side does
+// JSObject.put("remainingSeconds", null), and org.json's put(key, null) REMOVES the key -
+// so the event arrives as {} and remainingSeconds is undefined, not null. The sleep button
+// stayed "active" (undefined !== null) and the step index never reset (the phone bug).
+describe('the real "timer over" event from Android (no remainingSeconds key)', () => {
+  it('turns the timer off and restarts the cycle at 5 minutes', async () => {
+    const { result } = renderHook(() => usePlayerState());
+    await act(async () => { await mobilePlayerStore.play(book); });
+    const click = () => act(async () => { await result.current.handleCycleSleepTimer(); });
+    await click(); // 5
+    await click(); // 10
+    expect(minutesSent()).toBe(10);
+
+    act(() => handlers.sleepTimerUpdate({ remainingSeconds: 3 }));
+    act(() => handlers.sleepTimerUpdate({}));   // <- what the phone actually sends at the end
+
+    expect(result.current.state.sleepTimerRemainingSeconds).toBeNull();
+    await click();
+    expect(minutesSent()).toBe(5);
+  });
+
+  it.each([undefined, NaN, 'soon'])('ignores a non-numeric remainingSeconds (%p) instead of keeping a stale timer', async (bad) => {
+    const { result } = renderHook(() => usePlayerState());
+    await act(async () => { await mobilePlayerStore.play(book); });
+    await act(async () => { await result.current.handleCycleSleepTimer(); });
+    act(() => handlers.sleepTimerUpdate({ remainingSeconds: bad }));
+    expect(result.current.state.sleepTimerRemainingSeconds).toBeNull();
+  });
+});
