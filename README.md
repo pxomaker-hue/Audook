@@ -1,177 +1,113 @@
-# Audook - Client Audiobook pour Windows
+# Audook — lecteur d'audiolivres pour Windows et Android
 
-Un lecteur de livres audio moderne et riche en fonctionnalités pour Windows qui prend en charge les serveurs **Audiobookshelf** et **Plex**.
+Audook est un lecteur d'audiolivres moderne qui se connecte à vos serveurs **Audiobookshelf** et **Plex**, ou lit simplement un **dossier local**. Il existe en trois versions qui partagent la même interface :
+
+- **Windows** — application de bureau (Electron + React), avec son propre serveur local.
+- **Android** — application mobile (Capacitor) avec un lecteur natif qui continue de jouer écran éteint.
+- **NAS** — le même serveur, déployable en conteneur Docker pour être utilisé par l'application mobile.
 
 ## Fonctionnalités
 
-### Fonctionnalités principales
-- ✅ Connexion aux serveurs **Audiobookshelf**
-- ✅ Connexion aux serveurs **Plex**
-- ✅ Parcourir les bibliothèques de livres audio
-- ✅ Lire les livres audio avec prise en charge des chapitres
-- ✅ Interface moderne avec thèmes sombre et clair
+### Sources et bibliothèque
+- Serveurs **Audiobookshelf**, **Plex** et **dossiers locaux**, plusieurs à la fois (chacun peut être masqué sans perdre ses données)
+- Grille de la bibliothèque triable par série, ordre alphabétique, auteur, genre, collection, progression ou marque-page, avec recherche
+- Rubrique **Reprendre l'écoute**, **Collections**, **Historique** d'écoute et page **Découvrir** (parcourir la bibliothèque par auteur)
+- Pages **auteur** (biographie et photo, rafraîchissables depuis le web) et page **livre** (chapitres, progression, séries, genres)
+- **Édition des métadonnées** avec verrouillage des champs modifiés (un re-scan ne les écrase pas) et **association à une fiche en ligne** (Open Library, Google Books, Audible)
+- Marquer un livre comme lu, retirer un livre de « Reprendre l'écoute »
 
-### Fonctionnalités de lecture
-- ✅ Contrôles Lecture/Pause/Arrêt
-- ✅ Navigation entre chapitres (Précédent/Suivant)
-- ✅ **Reculer/Avancer de 10s et 30s**
-- ✅ Vitesse de lecture ajustable (0,5x - 2,0x)
-- ✅ Contrôle du volume
-- ✅ **Mémorisation de la position de lecture entre les sessions**
-- ✅ Barre de progression avec affichage du temps
+### Lecture
+- Lecture/pause, chapitre précédent/suivant, retour/avance de 30 s, barre de progression utilisable au clavier
+- Vitesse de lecture (0,75× à 2×), volume (version Windows), **reprise automatique de la position**
+- **Minuteur de veille** (5, 10, 15, 20, 30 ou 60 min) avec fondu sur les 20 dernières secondes
+- **Égaliseur** (préréglages et préréglages personnalisés), **normalisation du volume** par livre (EBU R128, cible −18 LUFS) et **compression dynamique** (légère, modérée, forte)
+- **Réduction du souffle** par livre (ffmpeg), avec choix d'écouter la version nettoyée
+- **Marque-pages multiples** par livre, nommables, avec date et reprise en un clic
+- **Chromecast / Google Home** (Windows et Android)
+- Windows : **mini-lecteur** détachable, touches multimédia du clavier, réduction dans la zone de notification
+- Android : lecture en arrière-plan avec contrôles sur l'écran verrouillé (ExoPlayer + MediaSession), minuteur et cast natifs
 
-### Fonctionnalités de bibliothèque
-- ✅ Parcourir les livres audio par bibliothèque
-- ✅ Rechercher des livres audio
-- ✅ Afficher les métadonnées des livres (titre, auteur, narrateur, durée)
-- ✅ **Marque-pages** pour sauvegarder les positions
-- ✅ **Téléchargement des livres audio pour écoute hors ligne**
+### Synchronisation
+- La progression de lecture est synchronisée avec le serveur d'origine (Audiobookshelf et Plex), donc entre vos appareils
+- Les livres d'un dossier local ne se synchronisent qu'avec l'instance qui les contient
 
-### Fonctionnalités de synchronisation
-- ✅ **Synchronisation de la position de lecture avec le serveur** (Audiobookshelf & Plex)
-- ✅ **Synchronisation multi-appareils** (via la synchronisation serveur)
+### Interface
+- Thème **clair, sombre ou automatique** (suit le système), accessibilité clavier (focus visible, boîtes de dialogue, barre de lecture)
 
-### Paramètres
-- ✅ Ajouter/Modifier/Supprimer plusieurs serveurs
-- ✅ Basculer entre Audiobookshelf et Plex
-- ✅ Thèmes sombre et clair
-- ✅ Configurer les paramètres de lecture par défaut
+## Architecture
 
-## Captures d'écran
+| Élément | Technologie | Dossier |
+|---|---|---|
+| Interface | React + TypeScript (partagée Windows / Android) | `src/` |
+| Application Windows | Electron | `electron/` |
+| Serveur | Flask + SQLAlchemy (SQLite), routes en blueprints | `audook_backend.py`, `app/` (`app/api/`) |
+| Lecture sur PC | VLC (`python-vlc`), Chromecast (`pychromecast`) | `app/player/`, `app/cast/` |
+| Application Android | Capacitor + plugin natif Kotlin | `android/` |
+| Déploiement NAS | Docker | `Dockerfile`, `docker-compose.yml` |
+| Tests | pytest, Jest, JUnit | `tests/`, `src/**/*.test.ts`, `android/app/src/test/` |
 
-*(Les captures d'écran seront ajoutées dans les versions futures)*
+Sur Windows, l'application lance son serveur local (`audook_backend.exe`, qui n'écoute que sur `127.0.0.1:5000`). Sur Android, il n'y a pas de serveur local : l'application se connecte à celui du NAS.
 
 ## Installation
 
-### Prérequis
-- Windows 10 ou 11
-- Python 3.10 ou supérieur (pour le développement)
+### Application Windows
+Aucune version n'est publiée sur GitHub pour l'instant : l'installeur se construit soi-même (voir [Build de release](#build-de-release)) et se trouve ensuite dans `release/Audook-Setup-<version>.exe`. Lancez-le et suivez l'assistant ; une nouvelle version s'installe **par-dessus** l'ancienne, sans désinstallation préalable. Vos livres, votre progression et vos réglages sont conservés.
 
-### Installation rapide (via l'installateur)
-1. Téléchargez le dernier installateur depuis la page [Releases](https://github.com/pxomaker-hue/Audook/releases)
-2. Exécutez l'installateur et suivez les instructions
-3. Lancez Audook depuis le menu Démarrer ou le raccourci bureau
+### Application Android
+Une fois l'APK construit (`release/Audook-<version>.apk`), installez-le sur le téléphone :
 
-### Configuration pour le développement
-1. Clonez ce dépôt :
- ```bash
- git clone https://github.com/pxomaker-hue/Audook.git
- cd Audook
- ```
+```bash
+adb install -r release/Audook-<version>.apk
+```
 
-2. Créez un environnement virtuel :
- ```bash
- python -m venv venv
- source venv/bin/activate # Sur Windows : venv\Scripts\activate
- ```
+ou copiez le fichier sur l'appareil et ouvrez-le (autoriser les sources inconnues). Certains téléphones (Xiaomi) demandent de confirmer l'installation sur l'écran quand elle vient de l'ordinateur.
 
-3. Installez les dépendances :
- ```bash
- pip install -r requirements.txt
- ```
+Au premier lancement, saisissez l'adresse du serveur du NAS : `http://<ip-du-nas>:5000/api` (et le jeton d'accès si vous en avez activé un, voir plus bas). Elle se modifie ensuite dans **Paramètres > Connexion au backend**.
 
-4. Lancez l'application :
- ```bash
- python main.py
- ```
+L'APK est signé avec une clé de release. **Gardez cette clé** (voir [Build de release](#build-de-release)) : si vous la perdez, Android refusera toute mise à jour et il faudra désinstaller l'application.
 
-### Création de l'exécutable
+### Pour le développement
+Prérequis : **Node.js 22+**, **Python 3.11+** et **VLC** 64 bits installé (nécessaire à `python-vlc`). `ffmpeg.exe` est fourni dans `assets/bin/`.
 
-Pour créer un exécutable Windows autonome :
+```bash
+git clone https://github.com/pxomaker-hue/Audook.git
+cd Audook
+npm install
+pip install -r requirements-dev.txt
+npm start        # interface React + Electron ; Electron lance lui-même le backend Python
+```
 
-1. Installez PyInstaller :
- ```bash
- pip install pyinstaller
- ```
-
-2. Exécutez le script de build :
- ```bash
- python build_spec.py
- ```
- ou double-cliquez sur `build.bat`
-
-3. L'exécutable sera créé dans le dossier `dist/`
-
-### Création d'un installateur
-
-Pour créer un installateur Windows professionnel :
-
-1. Installez [Inno Setup](https://jrsoftware.org/isinfo.php)
-2. Exécutez le script de build (il créera automatiquement l'installateur si Inno Setup est installé)
-3. L'installateur sera dans le dossier `dist/` sous le nom `Audook_Setup.exe`
+Pour travailler dans un navigateur plutôt que dans Electron, `dev.bat` (ou `dev.ps1`) démarre le backend Flask puis le serveur de développement React.
 
 ## Utilisation
 
 ### Ajouter un serveur
+1. Ouvrez **Paramètres** (barre latérale) puis la section **Serveurs**
+2. Cliquez sur **Ajouter un serveur** et choisissez le type :
+   - **Audiobookshelf** : URL du serveur (ex. `http://votre-nas:13378`), nom d'utilisateur et mot de passe ; une URL distante facultative permet de basculer entre adresse locale et adresse externe
+   - **Plex** : URL du serveur (ex. `http://192.168.1.100:32400`) et clé API (token Plex)
+   - **Dossier local** : le dossier qui contient vos livres. Chaque dossier qui contient directement des fichiers audio est un livre, à n'importe quelle profondeur ; titre, auteur et pochette sont lus dans les étiquettes des fichiers (ou dans une image `cover.jpg` à côté)
+3. Enregistrez, puis lancez la synchronisation : les livres apparaissent dans la bibliothèque
 
-1. Cliquez sur le bouton **Paramètres** (⚙️) en haut à droite
-2. Allez dans l'onglet **Serveurs**
-3. Cliquez sur **Ajouter un serveur**
-4. Entrez les détails du serveur :
- - **Nom** : Un nom convivial pour le serveur
- - **Type** : Audiobookshelf ou Plex
- - **URL** : L'URL du serveur (ex: `http://votre-nas:13378` pour Audiobookshelf)
- - **Clé API** : Pour Audiobookshelf (à trouver dans Paramètres > Utilisateurs > Votre utilisateur > Clé API)
- - **Nom d'utilisateur/Mot de passe** : Pour Plex
-5. Cliquez sur **Enregistrer**
+### Parcourir et écouter
+- La **Bibliothèque** liste tous les livres ; cliquez sur un livre pour ouvrir sa page, puis sur **Lire** (ou **Reprendre**)
+- Le lecteur est dans le panneau de droite (en bas de l'écran sur petit écran et sur mobile) ; le bouton **…** ouvre vitesse, égaliseur, normalisation, compression, minuteur de veille, volume et Chromecast
+- Le bouton marque-page du lecteur enregistre la position courante ; les marque-pages d'un livre sont listés sur sa page (renommer, reprendre, supprimer)
 
-### Parcourir les livres audio
+### Touches du clavier
+- Touches multimédia (Windows, même application en arrière-plan) : **Lecture/Pause**, **Piste suivante** (avance de 30 s) et **Piste précédente** (recule de 30 s)
+- Sur la barre de progression : **← / →** ±10 s, **Page précédente / suivante** ±60 s, **Début / Fin**
 
-1. Sélectionnez un serveur dans la liste déroulante de la vue bibliothèque
-2. Sélectionnez une bibliothèque
-3. Parcourez ou recherchez des livres audio
-4. Double-cliquez sur un livre audio pour commencer la lecture
-
-### Contrôles de lecture
-
-- **Espace** : Lecture/Pause
-- **Flèche gauche** : Reculer de 10 secondes
-- **Flèche droite** : Avancer de 10 secondes
-- **Ctrl+Flèche gauche** : Reculer de 30 secondes
-- **Ctrl+Flèche droite** : Avancer de 30 secondes
-- **Flèche haut** : Chapitre précédent
-- **Flèche bas** : Chapitre suivant
-
-### Raccourcis clavier
-
-| Raccourci | Action |
-|-----------|--------|
-| Espace | Lecture/Pause |
-| ← | Reculer de 10s |
-| → | Avancer de 10s |
-| Ctrl+← | Reculer de 30s |
-| Ctrl+→ | Avancer de 30s |
-| ↑ | Chapitre précédent |
-| ↓ | Chapitre suivant |
-| Ctrl+↑ | Augmenter le volume |
-| Ctrl+↓ | Diminuer le volume |
-| Ctrl+F | Rechercher |
-| Ctrl+, | Paramètres |
-
-## Configuration
-
-Toute la configuration est stockée dans :
-- `%USERPROFILE%\.Audook\config.json` - Configuration principale
-- `%USERPROFILE%\.Audook\playback_state.json` - État de lecture
-- `%USERPROFILE%\.Audook\bookmarks.json` - Marque-pages
-- `%USERPROFILE%\.Audook\cache\` - Fichiers audio en cache
+### Données
+Windows stocke tout dans `%USERPROFILE%\.Audook\` : `audook.db` (base SQLite : bibliothèque, progression, marque-pages, collections, réglages) et `cache\` (pochettes, audio nettoyé). Les réglages propres à l'application Electron (comportement de la fermeture) et le journal du serveur `backend.log` sont dans `%APPDATA%\audook\`.
 
 ## Résolution des problèmes
 
-### Problèmes de connexion
-- **Audiobookshelf** : Vérifiez que l'URL du serveur est correcte et que la clé API est valide
-- **Plex** : Vérifiez que l'URL du serveur est correcte et que vous avez les identifiants corrects
-- Vérifiez que votre NAS/serveur est accessible depuis votre machine Windows
-
-### Problèmes de lecture
-- Assurez-vous d'avoir une connexion Internet active (pour le streaming)
-- Pour l'écoute hors ligne, téléchargez d'abord le livre audio
-- Vérifiez que votre périphérique audio fonctionne correctement
-
-### Problèmes de performance
-- Réduisez le nombre de livres audio chargés en même temps
-- Effacez le cache s'il prend trop de place
-- Utilisez un paramètre de qualité plus faible pour les téléchargements
+- **Connexion à un serveur** : Plex demande l'URL et le token, Audiobookshelf l'URL, l'utilisateur et le mot de passe ; vérifiez que le serveur est joignable depuis la machine
+- **« Serveur non disponible » sur Android** : l'adresse est fausse ou le NAS est injoignable ; **« Accès refusé »** : le NAS exige un jeton d'accès (voir plus bas)
+- **Le serveur local ne démarre pas (Windows)** : un autre programme utilise le port 5000 ; consultez `%APPDATA%\audook\backend.log`
+- **Pas de son / pas de cast** : vérifiez la sortie audio ; pour le cast, le téléphone et le Chromecast doivent être sur le même réseau
+- **Installation Windows bloquée** : quittez Audook par le menu de son icône près de l'horloge, puis relancez l'installeur
 
 ## Déploiement Docker sur NAS (OpenMediaVault)
 
@@ -186,7 +122,7 @@ En plus de l'application Windows, une instance backend séparée peut tourner su
 1. Copiez ce dépôt (ou au minimum `Dockerfile`, `docker-compose.yml`, `requirements.txt`, `audook_backend.py`, le dossier `app/`) sur le NAS
 2. Éditez `docker-compose.yml` : remplacez les deux chemins d'exemple sous `volumes:` par les chemins réels du NAS (dossier de données + dossier des livres audio)
 3. Dans OMV, ouvrez le plugin **Compose**, créez un nouveau fichier pointant vers ce `docker-compose.yml`, puis cliquez sur **Up**
-4. Vérifiez que le service tourne : `http://<ip-du-nas>:5000/api/health` (ou testez `/api/books`)
+4. Vérifiez que le service tourne : `http://<ip-du-nas>:5000/health` (ou testez `/api/books`)
 5. Dans l'app mobile (ou tout client web), configurez l'URL du serveur sur `http://<ip-du-nas>:5000/api`
 
 ### Déploiement via Portainer
@@ -202,11 +138,11 @@ Par défaut l'API du NAS est ouverte à tout le réseau local. Pour la protéger
 Toutes les requêtes doivent alors porter `Authorization: Bearer <jeton>` (ou l'en-tête `X-Audook-Token`). Seul `/health` reste public (sonde de vie, sans donnée). Le flux audio `/api/cast/local-audio` accepte aussi `?token=` car ExoPlayer et les Chromecast ne peuvent pas envoyer d'en-têtes ; le jeton est masqué dans les logs. L'app Windows locale n'en a pas besoin (le backend n'écoute que sur 127.0.0.1) : ne définissez pas la variable côté desktop. Sans HTTPS, le jeton circule en clair sur le réseau local : il protège contre les accès non voulus, pas contre quelqu'un qui écoute le réseau (voir la section VPN ci-dessous pour l'accès distant).
 
 ### Accès depuis l'extérieur : un VPN plutôt que HTTPS
-L'app parle en HTTP simple au NAS. Sur ton réseau local c'est acceptable (surtout avec le jeton ci-dessus), mais n'ouvre **jamais** le port 5000 sur Internet. Pour y accéder de l'extérieur, passe par un VPN comme WireGuard : tout le trafic, jeton compris, est alors chiffré dans le tunnel, sans rien changer à l'app, et il n'y a ni certificat ni reverse proxy à gérer.
+L'app parle en HTTP simple au NAS. Sur votre réseau local c'est acceptable (surtout avec le jeton ci-dessus), mais n'ouvrez **jamais** le port 5000 sur Internet. Pour y accéder de l'extérieur, passez par un VPN comme WireGuard : tout le trafic, jeton compris, est alors chiffré dans le tunnel, sans rien changer à l'app, et il n'y a ni certificat ni reverse proxy à gérer.
 
-- **Conseil de configuration :** dans le profil WireGuard du téléphone, route le sous-réseau de ta maison (par exemple `AllowedIPs = 192.168.1.0/24`, à adapter) et utilise toujours l'adresse LAN du NAS dans l'app. Elle fonctionne alors à l'identique chez toi et à l'extérieur, sans rien reconfigurer.
+- **Conseil de configuration :** dans le profil WireGuard du téléphone, routez le sous-réseau de votre maison (par exemple `AllowedIPs = 192.168.1.0/24`, à adapter) et utilisez toujours l'adresse LAN du NAS dans l'app. Elle fonctionne alors à l'identique chez vous et à l'extérieur, sans rien reconfigurer.
 - **Cast (Chromecast / Google Home) :** le Chromecast va chercher l'audio lui-même, à l'adresse que l'app lui donne, et il est découvert par mDNS sur le réseau local. Il faut donc que le téléphone soit sur le Wi-Fi de la maison : le cast ne fonctionne pas à travers le VPN.
-- Garde le jeton d'API activé même derrière le VPN : il protège aussi contre les autres appareils de ton réseau.
+- Gardez le jeton d'API activé même derrière le VPN : il protège aussi contre les autres appareils de votre réseau.
 
 ### Notes
 - Le conteneur tourne en mode headless (`AUDOOK_HEADLESS=1`) : VLC utilise une sortie audio factice, la lecture audio se fait côté client (VLC/Chromecast desktop, ExoPlayer mobile), pas dans le conteneur
@@ -215,34 +151,23 @@ L'app parle en HTTP simple au NAS. Sur ton réseau local c'est acceptable (surto
 
 ## Application mobile Android (Capacitor)
 
-Une app Android (APK) installable existe dans `android/`, générée via [Capacitor](https://capacitorjs.com/). Elle réutilise l'interface React existante (bibliothèque, collections, découvrir, historique, paramètres) et se connecte au backend NAS ci-dessus via l'adresse configurée dans **Paramètres > Connexion au backend**.
+L'application Android vit dans `android/` et est générée avec [Capacitor](https://capacitorjs.com/). Elle réutilise l'interface React (bibliothèque, collections, découvrir, historique, paramètres) et se connecte au backend du NAS (section précédente) via l'adresse configurée.
 
-La lecture audio en arrière-plan (contrôles à l'écran de verrouillage, lecture continue app fermée/écran éteint) passe par un plugin natif Kotlin (`android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt` + `AudookPlaybackService.kt`) basé sur ExoPlayer + MediaSession — un `<audio>` de WebView ne survit pas de façon fiable à la mise en veille de l'écran sur Android.
+La lecture audio en arrière-plan (contrôles à l'écran de verrouillage, lecture continue application fermée ou écran éteint) passe par un plugin natif Kotlin (`android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt` et `AudookPlaybackService.kt`) basé sur ExoPlayer + MediaSession : un `<audio>` de WebView ne survit pas de façon fiable à la mise en veille de l'écran. Pour la même raison, le minuteur de veille et le Chromecast (Cast Sender SDK) sont implémentés côté natif.
 
-### Générer l'APK
-
-Cet environnement de développement n'a pas de SDK Android/Gradle/JDK installés — le code natif (plugin Kotlin, projet Gradle sous `android/`) et le code JS (hook `useMobilePlayerState`, wrapper de plugin) sont prêts et committés, mais la compilation de l'APK doit se faire manuellement :
-
-1. Installez [Android Studio](https://developer.android.com/studio) (gratuit) — il installe le SDK Android et Gradle nécessaires
-2. `npm run react-build` puis `npm run android-sync` (build web React + `cap sync android`)
-3. `npm run android-open` (ou ouvrez directement le dossier `android/` dans Android Studio)
-4. Dans Android Studio : **Build > Build Bundle(s) / APK(s) > Build APK(s)**
-5. L'APK signé (debug) se trouve dans `android/app/build/outputs/apk/debug/`
-6. Installez-le sur le téléphone (`adb install ...` ou transfert manuel + activation des sources inconnues), puis réglez l'adresse du serveur dans Paramètres vers l'IP LAN du NAS (ex: `http://192.168.1.50:5000/api`)
-
-Pour une release signée (Play Store ou distribution directe), suivez le flux standard **Build > Generate Signed Bundle / APK** d'Android Studio (nécessite de créer un keystore).
+Les APK de release se construisent avec `build-release.bat` (section suivante). Pour travailler dans Android Studio : `npm run android-sync` (build web + `cap sync android`) puis `npm run android-open`.
 
 ## Build de release
 
-Double-clique sur `build-release.bat` (ou lance-le depuis un terminal) : il construit l'installeur Windows (NSIS) et l'APK Android signé, puis les place dans le dossier `release/` (`Audook-Setup-<version>.exe` et `Audook-<version>.apk`).
+Double-cliquez sur `build-release.bat` (ou lancez-le depuis un terminal) : il construit l'installeur Windows (NSIS) et l'APK Android signé, puis les place dans le dossier `release/` (`Audook-Setup-<version>.exe` et `Audook-<version>.apk`).
 
 - `build-release.bat -SkipAndroid` : seulement l'installeur Windows.
 - `build-release.bat -SkipWindows` : seulement l'APK.
 - `build-release.bat -RunTests` : lance les tests avant de construire.
 
-Prérequis : Node.js, Python avec les dépendances de `requirements.txt` et PyInstaller, et pour l'APK le SDK Android, un JDK (celui d'Android Studio convient) et le fichier `android/keystore.properties` de la clé de signature (jamais commité).
+Prérequis : Node.js, Python avec les dépendances de `requirements.txt` et PyInstaller, et pour l'APK le SDK Android, un JDK (celui d'Android Studio convient) et le fichier `android/keystore.properties` de la clé de signature (jamais commité, ainsi que le fichier `.jks` qu'il désigne : **sauvegardez-les hors du projet**).
 
-L'installeur Windows se met à jour par-dessus l'ancienne version, sans désinstallation préalable : il ferme lui-même Audook et son backend s'ils tournent encore (`assets/installer.nsh`).
+L'installeur Windows (`assets/installer.nsh`, images dans `assets/installer/`) est en français, aux couleurs d'Audook, et se met à jour par-dessus l'ancienne version sans désinstallation préalable : il ferme lui-même Audook et son backend s'ils tournent encore, et ne dépend pas du désinstalleur de la version précédente.
 
 ### Changer de version
 
@@ -256,7 +181,7 @@ Cela met aussi à jour `app/__init__.py`. Le code de version Android vaut `major
 
 ## Tests
 
-- Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : ta bibliothèque n'est jamais touchée.
+- Backend (pytest) : `pip install -r requirements-dev.txt` puis `npm run test:backend`. Les tests utilisent une base SQLite et un dossier de données temporaires : votre bibliothèque n'est jamais touchée.
 - Frontend (Jest) : `npm run test:frontend`.
 - Kotlin (logique pure du lecteur natif : fondu du minuteur, conversion de gain, type de contenu du cast) : `cd android && ./gradlew :app:testDebugUnitTest`.
 - Backend + frontend d'un coup : `npm test`.
@@ -275,21 +200,23 @@ Couverture actuelle : table des routes HTTP, progression (pourcentage sur tout l
 Les contributions sont les bienvenues ! N'hésitez pas à soumettre des issues ou des pull requests.
 
 ### Directives de développement
-- Respectez le guide de style PEP 8
-- Utilisez les annotations de type
-- Écrivez des docstrings pour toutes les méthodes publiques
-- Gardez le code propre et bien organisé
+- Python : respectez PEP 8, utilisez les annotations de type et écrivez des docstrings pour les méthodes publiques
+- TypeScript : le projet est compilé en mode strict (`npx tsc --noEmit`)
+- Ajoutez ou adaptez des tests pour tout comportement modifié, et vérifiez que `npm test` passe avant de proposer un changement
 
 ## Licence
 
-Ce projet est sous licence MIT - voir le fichier [LICENCE](LICENSE) pour plus de détails.
+Ce projet est sous licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de détails.
 
 ## Remerciements
 
 - [Audiobookshelf](https://github.com/advplyr/audiobookshelf) - Le meilleur serveur auto-hébergé pour livres audio
 - [Plex](https://www.plex.tv/) - Plateforme de serveur multimédia
-- [PyQt6](https://www.riverbankcomputing.com/static/Docs/PyQt6/) - Liaisons Python pour Qt
-- [PyInstaller](https://www.pyinstaller.org/) - Empaquetage d'applications Python
+- [VLC](https://www.videolan.org/) - Lecteur multimédia utilisé pour la lecture sur PC
+- [Electron](https://www.electronjs.org/), [React](https://react.dev/) et [Capacitor](https://capacitorjs.com/) - Socle de l'application
+- [ExoPlayer / Media3](https://developer.android.com/media/media3) - Lecture native sur Android
+- [PyChromecast](https://github.com/home-assistant-libs/pychromecast) - Diffusion vers Chromecast et Google Home
+- [PyInstaller](https://www.pyinstaller.org/) et [electron-builder](https://www.electron.build/) - Empaquetage
 
 ## Support
 
@@ -297,4 +224,4 @@ Pour obtenir de l'aide, veuillez ouvrir une issue sur le [dépôt GitHub](https:
 
 ---
 
-**Audook** - Votre compagnon parfait pour les livres audio sur Windows ! 📚🎧
+**Audook** - Votre compagnon pour les livres audio sur Windows et Android 📚🎧
