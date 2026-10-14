@@ -62,7 +62,7 @@ adb install -r release/Audook-<version>.apk
 
 ou copiez le fichier sur l'appareil et ouvrez-le (autoriser les sources inconnues). Certains téléphones (Xiaomi) demandent de confirmer l'installation sur l'écran quand elle vient de l'ordinateur.
 
-Au premier lancement, saisissez l'adresse du serveur du NAS : `http://<ip-du-nas>:5000/api` (et le jeton d'accès si vous en avez activé un, voir plus bas). Elle se modifie ensuite dans **Paramètres > Connexion au backend**.
+Au premier lancement, l'application essaie l'adresse du NAS préremplie, `http://192.168.1.200:5000/api` (définie dans `src/config.ts`, modifiable à la compilation avec la variable `REACT_APP_MOBILE_API_BASE`). Si votre NAS a une autre adresse, saisissez-la dans l'écran de connexion ; elle se modifie ensuite dans **Paramètres > Connexion au backend**. Si le NAS exige un jeton d'accès, l'application l'indique et le demande (voir plus bas). L'adresse que vous enregistrez remplace toujours celle par défaut.
 
 L'APK est signé avec une clé de release. **Gardez cette clé** (voir [Build de release](#build-de-release)) : si vous la perdez, Android refusera toute mise à jour et il faudra désinstaller l'application.
 

@@ -1,16 +1,28 @@
 // Configuration centralisée pour l'application
+import { isCapacitorPlatform } from './native/platform';
 
 const STORAGE_KEY = 'audook_api_base';
-const DEFAULT_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+
+// Windows : Electron démarre son propre backend en local.
+const DESKTOP_DEFAULT_BASE_URL = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+// Android : pas de backend local, l'app parle toujours au NAS. Son adresse est
+// préremplie pour ne pas avoir à la retaper à chaque (ré)installation ; une
+// adresse enregistrée par l'utilisateur reste prioritaire (voir getApiBase).
+const MOBILE_DEFAULT_BASE_URL = process.env.REACT_APP_MOBILE_API_BASE || 'http://192.168.1.200:5000/api';
 
 function normalizeBase(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
+// Adresse proposée tant que rien n'est enregistré, selon la plateforme.
+export function getDefaultApiBase(): string {
+  return normalizeBase(isCapacitorPlatform ? MOBILE_DEFAULT_BASE_URL : DESKTOP_DEFAULT_BASE_URL);
+}
+
 // L'URL du backend est modifiable à l'exécution (localStorage) sans
 // rebuild - indispensable pour l'app mobile qui doit pointer vers l'IP
-// LAN du NAS de l'utilisateur. Retombe sur la variable d'env de build
-// (comportement Electron inchangé) si rien n'est enregistré.
+// LAN du NAS de l'utilisateur. Retombe sur l'adresse par défaut de la
+// plateforme (getDefaultApiBase) si rien n'est enregistré.
 export function getApiBase(): string {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -18,7 +30,7 @@ export function getApiBase(): string {
   } catch {
     // localStorage indisponible (SSR, contexte restreint) - ignorer
   }
-  return normalizeBase(DEFAULT_BASE_URL);
+  return getDefaultApiBase();
 }
 
 export function setApiBase(url: string): void {

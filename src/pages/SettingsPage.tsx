@@ -4,7 +4,7 @@ import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
 import EqualizerSettings from '../components/EqualizerSettings';
-import { getApiBase, setApiBase, resetApiBase, getApiToken, setApiToken } from '../config';
+import { getApiBase, getDefaultApiBase, setApiBase, resetApiBase, getApiToken, setApiToken } from '../config';
 
 type ServerType = 'plex' | 'audiobookshelf' | 'local';
 
@@ -407,7 +407,7 @@ const SettingsPage: React.FC = () => {
             type="text"
             value={serverUrlDraft}
             onChange={(e) => setServerUrlDraft(e.target.value)}
-            placeholder="http://localhost:5000/api"
+            placeholder={getDefaultApiBase()}
             style={{ ...inputStyle, flex: 1, minWidth: '260px' }}
           />
           <button type="button" className="cta-button" onClick={handleSaveServerUrl} style={buttonStyle}>
