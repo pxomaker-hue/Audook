@@ -176,12 +176,26 @@ if (-not $SkipAndroid) {
     Check 'cap sync'
 
     Step 'APK release (Gradle)'
+    # Sur ce poste, le JDK echoue avec "Unable to establish loopback connection"
+    # (Gradle daemon) tant que TEMP/TMP pointent sous %AppData% : sa socket
+    # interne y est refusee. On les redirige hors d'AppData le temps du build.
+    $previousTemp = @{ TEMP = $env:TEMP; TMP = $env:TMP }
+    # (-match 'AppData' : TEMP peut etre en forme courte 8.3, ex. C:\Users\ATELIE~1\AppData\...)
+    if ($env:TEMP -match 'AppData') {
+        $buildTmp = 'C:\BuildTmp'
+        New-Item -ItemType Directory -Force $buildTmp | Out-Null
+        $env:TEMP = $buildTmp
+        $env:TMP = $buildTmp
+        Write-Host "TEMP/TMP -> $buildTmp (contournement du bug AF_UNIX sous AppData)"
+    }
     Push-Location (Join-Path $root 'android')
     try {
         .\gradlew.bat :app:assembleRelease --console=plain
         Check 'Gradle assembleRelease'
     } finally {
         Pop-Location
+        $env:TEMP = $previousTemp.TEMP
+        $env:TMP = $previousTemp.TMP
     }
 
     $apk = Join-Path $root 'android\app\build\outputs\apk\release\app-release.apk'
