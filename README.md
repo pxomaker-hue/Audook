@@ -125,6 +125,9 @@ En plus de l'application Windows, une instance backend séparée peut tourner su
 4. Vérifiez que le service tourne : `http://<ip-du-nas>:5000/health` (ou testez `/api/books`)
 5. Dans l'app mobile (ou tout client web), configurez l'URL du serveur sur `http://<ip-du-nas>:5000/api`
 
+### Mettre à jour le NAS sans git
+Lancez `make-nas-package.bat` sur le PC : il crée `release\Audook-NAS-<version>.zip` (sources du conteneur uniquement, sans `node_modules` ni clés). Dézippez-le par-dessus le dossier Audook du NAS **sans écraser votre `docker-compose.yml` ni votre `.env`**, puis reconstruisez (`docker compose up -d --build`, ou « Update the stack » avec reconstruction dans Portainer). Les données (volume) sont conservées. `LISEZMOI-NAS.txt` dans le zip rappelle les étapes.
+
 ### Déploiement via Portainer
 1. Créez une nouvelle **Stack**, collez le contenu de `docker-compose.yml` (adapté avec vos chemins réels)
 2. Déployez la stack ; le conteneur `audook-nas` écoute sur le port `5000`
