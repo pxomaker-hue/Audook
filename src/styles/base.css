@@ -22,7 +22,7 @@
   /* Text */
   --text-primary: #17161b;
   --text-secondary: #6b6a73; /* was #96959e (2.9:1) - now ~5.2:1 on white */
-  --text-tertiary: #85848d;  /* was #c3c2c9 (1.7:1) - now ~3.7:1, for non-essential text only */
+  --text-tertiary: #74737c;  /* ~4.7:1 on white (AA) */
 
   --border: #eeeeec;
 
@@ -121,6 +121,8 @@ input[type="checkbox"] {
   height: 100%;
   border: none;
   background: none;
+  /* --text-primary follows the theme; --accent-ink is always dark and was
+     nearly invisible on the dark background. */
   color: var(--text-primary);
   display: flex;
   align-items: center;
@@ -131,6 +133,10 @@ input[type="checkbox"] {
 
 .title-bar-controls button:hover {
   background-color: var(--surface-muted);
+}
+
+.title-bar-controls button:focus-visible {
+  outline-offset: -3px;
 }
 
 .title-bar-controls button.title-bar-close:hover {
