@@ -1,6 +1,14 @@
 package com.audook.app
 
 import android.content.ComponentName
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
@@ -756,6 +764,68 @@ class AudookPlayerPlugin : Plugin() {
     // on their own background thread by default, which was silently
     // swallowed by AudookCastManager's broad try/catch, so scanning/
     // connecting never actually did anything.
+    // Self-update: the URL/SHA-256/size come from the backend's *signed* manifest. The file is
+    // only handed to the system installer if both size and SHA-256 match; Android itself then
+    // refuses it unless it is signed with the same key as the installed app.
+    @PluginMethod
+    fun installUpdate(call: PluginCall) {
+        val url = call.getString("url")
+        val sha256 = call.getString("sha256")
+        val size = call.getInt("size")?.toLong()
+        if (url == null || sha256 == null || size == null || !url.startsWith("http")) {
+            call.reject("url, sha256 and size are required")
+            return
+        }
+        val ctx = context
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.packageManager.canRequestPackageInstalls()) {
+            ctx.startActivity(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.packageName))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            call.reject("Autorisez Audook à installer des applications, puis relancez la mise à jour")
+            return
+        }
+        Thread {
+            try {
+                val dir = File(ctx.cacheDir, "updates").apply { deleteRecursively(); mkdirs() }
+                val apk = File(dir, "Audook-update.apk")
+                val digest = MessageDigest.getInstance("SHA-256")
+                var total = 0L
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15000
+                conn.readTimeout = 30000
+                conn.inputStream.use { input ->
+                    apk.outputStream().use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            total += n
+                            if (total > size) throw IllegalStateException("File larger than expected")
+                            digest.update(buf, 0, n)
+                            out.write(buf, 0, n)
+                        }
+                    }
+                }
+                val actual = digest.digest().joinToString("") { "%02x".format(it) }
+                if (total != size || !actual.equals(sha256, ignoreCase = true)) {
+                    apk.delete()
+                    call.reject("Intégrité du fichier non vérifiée (SHA-256)")
+                    return@Thread
+                }
+                val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", apk)
+                val intent = Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(intent)
+                call.resolve()
+            } catch (e: Exception) {
+                Log.e("AudookPlayer", "installUpdate failed", e)
+                call.reject("Téléchargement impossible : " + (e.message ?: "erreur"))
+            }
+        }.start()
+    }
+
     @PluginMethod
     fun scanCastDevices(call: PluginCall) {
         positionHandler.post { castManager.startDiscovery() }

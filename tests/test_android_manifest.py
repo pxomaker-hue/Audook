@@ -22,3 +22,10 @@ def test_sleep_timer_over_event_sends_a_real_null():
     plugin = (Path(__file__).resolve().parent.parent
               / "android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt").read_text(encoding="utf-8")
     assert 'data.put("remainingSeconds", remainingSeconds ?: JSONObject.NULL)' in plugin
+
+
+def test_update_install_permission_and_plugin_method():
+    assert "android.permission.REQUEST_INSTALL_PACKAGES" in MANIFEST
+    plugin = (Path(__file__).resolve().parent.parent
+              / "android/app/src/main/java/com/audook/app/AudookPlayerPlugin.kt").read_text(encoding="utf-8")
+    assert "fun installUpdate" in plugin and "MessageDigest.getInstance(\"SHA-256\")" in plugin

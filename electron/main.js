@@ -545,6 +545,8 @@ ipcMain.on('app-ready', (event) => {
   });
 });
 
+ipcMain.on('app:quit-for-update', () => app.quit());
+
 ipcMain.handle('dialog:selectFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory']

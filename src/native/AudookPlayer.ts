@@ -30,6 +30,8 @@ export interface AudookPlayerPlugin {
   // algorithm than VLC's own "compressor" filter, tuned to land in the same
   // ballpark rather than reproduce it exactly.
   setCompression(options: { preset: string | null }): Promise<void>;
+  // Downloads the APK, checks size + SHA-256 (from the signed manifest) and opens the system installer.
+  installUpdate(options: { url: string; sha256: string; size: number }): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   seek(options: { ms: number }): Promise<void>;
