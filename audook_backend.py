@@ -75,8 +75,9 @@ def init_services():
             services.sync.sync_all_servers(background=True)
         except Exception as e:
             logger.error(f"Failed to initialize services: {e}")
-            # Continue anyway - services will be retried on next request
-            pass
+            # Services are retried on the next request; meanwhile answer 503
+            # instead of letting routes crash on `services.library is None`.
+            return jsonify({'error': 'Service indisponible, réessayez'}), 503
 
 
 register_blueprints(app)
@@ -98,6 +99,20 @@ if __name__ == '__main__':
     EqualizerPresetRepository(seed_session).ensure_builtins()
     seed_session.close()
 
-    host = '0.0.0.0' if os.environ.get('AUDOOK_HEADLESS') == '1' else '127.0.0.1'
+    headless = os.environ.get('AUDOOK_HEADLESS') == '1'
+    if headless and not os.environ.get('AUDOOK_API_TOKEN', '').strip() \
+            and os.environ.get('AUDOOK_ALLOW_NO_AUTH') != '1':
+        # Listening on 0.0.0.0 without a token lets anyone on the network
+        # manage servers and read audio: make that an explicit choice.
+        sys.exit("Refusing to start: set AUDOOK_API_TOKEN (recommended), or "
+                 "AUDOOK_ALLOW_NO_AUTH=1 to knowingly run the NAS API without authentication.")
+    host = '0.0.0.0' if headless else '127.0.0.1'
     # AUDOOK_PORT only exists for tests / unusual setups: the apps expect 5000.
-    app.run(host=host, port=int(os.environ.get('AUDOOK_PORT', '5000')), debug=False)
+    port = int(os.environ.get('AUDOOK_PORT', '5000'))
+    if headless:
+        # Production WSGI server for the NAS container (Flask's dev server is
+        # not meant to face a network).
+        from waitress import serve
+        serve(app, host=host, port=port, threads=8)
+    else:
+        app.run(host=host, port=port, debug=False)

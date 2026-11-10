@@ -17,7 +17,9 @@ def shutdown_backend():
     """Best-effort cleanup called by Electron right before it force-kills this
     process on quit, so an in-progress reading session gets a final, accurate
     end time instead of relying solely on the periodic checkpoint."""
-    if request.remote_addr not in ('127.0.0.1', '::1'):
+    # Loopback only, and never through a reverse proxy (which would make every
+    # remote caller look local) 
+    if (request.remote_addr not in ('127.0.0.1', '::1') or request.headers.get('X-Forwarded-For')):
         return jsonify({'error': 'Forbidden'}), 403
     try:
         services.player.stop()

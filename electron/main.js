@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, Tray, screen, globalShortcut, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
@@ -180,6 +180,16 @@ function createWindow() {
   });
 
   mainWindow.loadURL(resolveAppUrl());
+
+  // Never let the app window navigate away or open new windows: external
+  // links go to the system browser (http/https only).
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) event.preventDefault();
+  });
 
   if (isDev) {
     mainWindow.webContents.openDevTools();

@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from app.api.context import services
 from app.api.errors import internal_error
+from app.api.sources import public_cover_url
 from app.api.helpers import format_chapter_title
 from app.database import EqualizerPresetRepository, get_session
 from app.utils import logger
@@ -11,12 +12,25 @@ from app.utils import logger
 bp = Blueprint('player', __name__)
 
 
+def _number(data, key, low, high, required=True):
+    """(value, error_response): a finite number within [low, high]."""
+    value = data.get(key)
+    if value is None and not required:
+        return None, None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value \
+            or not low <= value <= high:
+        return None, (jsonify({'error': f'{key} doit être un nombre entre {low} et {high}'}), 400)
+    return value, None
+
+
 # Player endpoints
 @bp.route('/api/player/play', methods=['POST'])
 def play_book():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         book_id = data.get('book_id')
+        if not isinstance(book_id, str) or not book_id:
+            return jsonify({'error': 'book_id requis'}), 400
         chapter_index = data.get('chapter_index')
         audiobook = services.library.get_book_by_id(book_id)
         if not audiobook:
@@ -78,8 +92,10 @@ def previous_chapter():
 @bp.route('/api/player/seek', methods=['POST'])
 def seek():
     try:
-        data = request.json
-        position = data.get('position')
+        data = request.get_json(silent=True) or {}
+        position, err = _number(data, 'position', 0, 10**7)
+        if err:
+            return err
         services.player.seek(position)
         return jsonify({'status': 'seeking'})
     except Exception as e:
@@ -89,8 +105,10 @@ def seek():
 @bp.route('/api/player/volume', methods=['POST'])
 def set_volume():
     try:
-        data = request.json
-        volume = data.get('volume')
+        data = request.get_json(silent=True) or {}
+        volume, err = _number(data, 'volume', 0, 100)
+        if err:
+            return err
         services.player.set_volume(volume)
         return jsonify({'status': 'volume_set'})
     except Exception as e:
@@ -100,8 +118,10 @@ def set_volume():
 @bp.route('/api/player/speed', methods=['POST'])
 def set_speed():
     try:
-        data = request.json
-        speed = data.get('speed')
+        data = request.get_json(silent=True) or {}
+        speed, err = _number(data, 'speed', 0.5, 3)
+        if err:
+            return err
         services.player.set_speed(speed)
         return jsonify({'status': 'speed_set'})
     except Exception as e:
@@ -170,7 +190,9 @@ def set_player_sleep_timer():
     PlayerService.set_sleep_timer."""
     try:
         data = request.json or {}
-        minutes = data.get('minutes')
+        minutes, err = _number(data, 'minutes', 0, 24 * 60, required=False)
+        if err:
+            return err
         services.player.set_sleep_timer(minutes)
         return jsonify({
             'status': 'ok',
@@ -209,7 +231,7 @@ def get_player_state():
                 'title': book.title,
                 'author': book.author,
                 'narrator': book.narrator,
-                'cover_url': book.cover,
+                'cover_url': public_cover_url(book.id, book.cover),
                 'description': book.description
             } if book else None
         }

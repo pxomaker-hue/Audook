@@ -37,7 +37,7 @@
     "@types/react-dom": "^18.2.0",
     "axios": "^1.6.0",
     "concurrently": "^8.2.0",
-    "electron": "latest",
+    "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",

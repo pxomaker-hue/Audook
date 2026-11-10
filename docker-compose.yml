@@ -15,6 +15,8 @@ services:
       # value below; leave empty to keep the API open on the LAN. Enter the same
       # value in the app (connection screen / Settings > Jeton d'accès).
       - AUDOOK_API_TOKEN=${AUDOOK_API_TOKEN:-}
+      # Required unless you set AUDOOK_ALLOW_NO_AUTH=1 (the API refuses to start open).
+      - AUDOOK_LIBRARY_ROOT=/audiobooks
     volumes:
       # Persists the NAS instance's own SQLite DB + cache (separate from the
       # desktop app's local DB). Point this at a real path on the OMV host.

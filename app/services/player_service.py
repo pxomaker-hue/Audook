@@ -2,6 +2,7 @@
 Player service - manages playback and progress
 """
 
+import functools
 import threading
 import time
 from typing import Optional, Callable, List, Dict
@@ -22,10 +23,21 @@ AUTO_FINISH_THRESHOLD_SECONDS = 2.0
 SLEEP_TIMER_FADE_SECONDS = 20
 
 
+def _locked(method):
+    """Serialize playback state transitions (HTTP requests, sleep timer, VLC
+    end-of-chapter callbacks and sync all run on different threads)."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._state_lock:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class PlayerService:
     """Service for managing audio playback"""
 
     def __init__(self):
+        self._state_lock = threading.RLock()
         self.current_audiobook: Optional[Audiobook] = None
         self.current_chapter_index: int = 0
         self._on_position_changed: Optional[Callable] = None
@@ -36,6 +48,7 @@ class PlayerService:
         self._sleep_timer_end_time: Optional[float] = None
         self._sleep_timer_generation: int = 0
 
+    @_locked
     def start_playbook(
         self,
         audiobook: Audiobook,
@@ -119,6 +132,7 @@ class PlayerService:
 
         return chapter_idx, position
 
+    @_locked
     def pause(self) -> bool:
         """Pause playback"""
         try:
@@ -131,6 +145,7 @@ class PlayerService:
             logger.error(f"Failed to pause: {e}")
         return False
 
+    @_locked
     def resume(self) -> bool:
         """Resume playback"""
         try:
@@ -153,6 +168,7 @@ class PlayerService:
             logger.error(f"Failed to resume: {e}")
         return False
 
+    @_locked
     def stop(self) -> bool:
         """Stop playback and clear the loaded book, so the player goes back
         to its empty state instead of showing a book that can no longer be
@@ -190,6 +206,7 @@ class PlayerService:
             logger.error(f"Failed to seek relative: {e}")
         return False
 
+    @_locked
     def next_chapter(self) -> bool:
         """Play next chapter"""
         try:
@@ -202,6 +219,7 @@ class PlayerService:
             logger.error(f"Failed to go to next chapter: {e}")
         return False
 
+    @_locked
     def previous_chapter(self) -> bool:
         """Play previous chapter"""
         try:

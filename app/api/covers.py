@@ -5,6 +5,7 @@ from flask import Blueprint, Response, jsonify, send_file
 
 from app import CACHE_DIR
 from app.api.errors import internal_error
+from app.api.sources import MAX_COVER_BYTES, configured_sources, is_public_address, with_server_token
 from app.database import BookRepository, get_session
 from app.utils import logger
 
@@ -31,13 +32,28 @@ def get_cover_proxy(book_id):
         session.close()
 
     try:
-        upstream = requests.get(cover_url, timeout=10, stream=True)
-        if upstream.status_code != 200:
+        from urllib.parse import urlparse
+        servers_by_host, _ = configured_sources()
+        host = urlparse(cover_url).netloc.lower()
+        server = servers_by_host.get(host)
+        if server is None and (urlparse(cover_url).scheme not in ('http', 'https')
+                               or not is_public_address(host)):
             return jsonify({'error': 'Cover not found'}), 404
-        return Response(
-            upstream.content,
-            content_type=upstream.headers.get('Content-Type', 'image/jpeg')
-        )
+        if server is not None:
+            cover_url = with_server_token(cover_url, server)
+        upstream = requests.get(cover_url, timeout=10, stream=True, allow_redirects=False)
+        try:
+            content_type = upstream.headers.get('Content-Type', '')
+            if upstream.status_code != 200 or not content_type.startswith('image/'):
+                return jsonify({'error': 'Cover not found'}), 404
+            data = b''
+            for chunk in upstream.iter_content(chunk_size=65536):
+                data += chunk
+                if len(data) > MAX_COVER_BYTES:
+                    return jsonify({'error': 'Cover not found'}), 404
+        finally:
+            upstream.close()
+        return Response(data, content_type=content_type)
     except Exception as e:
         logger.error(f"Failed to proxy cover for {book_id}: {e}")
         return internal_error()
