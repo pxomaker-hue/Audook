@@ -5,10 +5,11 @@ function Find-Python {
     $candidates = @()
     foreach ($name in @('python', 'python3')) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if ($cmd) { $candidates += , @($cmd.Source) }
+        # Source est vide si la commande n'est pas une application (alias, fonction) : on l'ignore
+        foreach ($found in @($cmd)) { if ($found -and $found.Source) { $candidates += , @($found.Source) } }
     }
     $launcher = Get-Command py -ErrorAction SilentlyContinue
-    if ($launcher) { $candidates += , @($launcher.Source, '-3') }
+    if ($launcher -and $launcher.Source) { $candidates += , @($launcher.Source, '-3') }
     $roots = @("$env:LOCALAPPDATA\Programs\Python", $env:ProgramFiles, "${env:ProgramFiles(x86)}")
     foreach ($r in $roots) {
         if ($r -and (Test-Path $r)) {
@@ -19,9 +20,13 @@ function Find-Python {
     }
     foreach ($c in $candidates) {
         $exe = $c[0]; $extra = @($c | Select-Object -Skip 1)
+        if (-not $exe) { continue }
         $ErrorActionPreference = 'Continue'
-        $out = & $exe @extra --version 2>&1
-        $ok = ($LASTEXITCODE -eq 0) -and ("$out" -match 'Python 3')
+        $ok = $false
+        try {
+            $out = & $exe @extra --version 2>&1
+            $ok = ($LASTEXITCODE -eq 0) -and ("$out" -match 'Python 3')
+        } catch { $ok = $false }
         $ErrorActionPreference = 'Stop'
         if ($ok) { return , $c }
     }
