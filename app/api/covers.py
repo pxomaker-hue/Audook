@@ -5,6 +5,7 @@ from flask import Blueprint, Response, jsonify, send_file
 
 from app import CACHE_DIR
 from app.api.errors import internal_error
+from app.api.sources import MAX_COVER_BYTES, configured_sources, is_public_address, with_server_token
 from app.database import BookRepository, get_session
 from app.utils import logger
 
@@ -30,17 +31,55 @@ def get_cover_proxy(book_id):
     finally:
         session.close()
 
+    return _fetch_image(cover_url, f"cover for {book_id}")
+
+
+@bp.route('/api/books/<book_id>/author-photo-proxy', methods=['GET'])
+def get_author_photo_proxy(book_id):
+    """Same as cover-proxy for the author photo stored in the book metadata
+    (Audiobookshelf photo URLs embed the server token)."""
+    session = get_session()
     try:
-        upstream = requests.get(cover_url, timeout=10, stream=True)
-        if upstream.status_code != 200:
-            return jsonify({'error': 'Cover not found'}), 404
-        return Response(
-            upstream.content,
-            content_type=upstream.headers.get('Content-Type', 'image/jpeg')
-        )
+        book = BookRepository(session).get_by_id(book_id)
+        photo = (book.extra_metadata or {}).get('author_photo') if book else None
     except Exception as e:
-        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        logger.error(f"Failed to read author photo for {book_id}: {e}")
         return internal_error()
+    finally:
+        session.close()
+    if not photo:
+        return jsonify({'error': 'Photo not found'}), 404
+    return _fetch_image(photo, f"author photo for {book_id}")
+
+
+def _fetch_image(url, what):
+    try:
+        from urllib.parse import urlparse
+        servers_by_host, _ = configured_sources()
+        host = urlparse(url).netloc.lower()
+        server = servers_by_host.get(host)
+        if server is None and (urlparse(url).scheme not in ('http', 'https')
+                               or not is_public_address(host)):
+            return jsonify({'error': 'Cover not found'}), 404
+        if server is not None:
+            url = with_server_token(url, server)
+        upstream = requests.get(url, timeout=10, stream=True, allow_redirects=False)
+        try:
+            content_type = upstream.headers.get('Content-Type', '')
+            if upstream.status_code != 200 or not content_type.startswith('image/'):
+                return jsonify({'error': 'Cover not found'}), 404
+            data = b''
+            for chunk in upstream.iter_content(chunk_size=65536):
+                data += chunk
+                if len(data) > MAX_COVER_BYTES:
+                    return jsonify({'error': 'Cover not found'}), 404
+        finally:
+            upstream.close()
+        return Response(data, content_type=content_type)
+    except Exception as e:
+        logger.error(f"Failed to proxy {what}: {e}")
+        return internal_error()
+
 
 @bp.route('/api/local-cover/<book_id>', methods=['GET'])
 def get_local_cover(book_id):

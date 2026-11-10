@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, useNavigate } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
@@ -7,7 +7,8 @@ import MiniPlayerView from './components/MiniPlayerView';
 import CloseAppDialog from './components/CloseAppDialog';
 import AnimatedRoutes from './components/AnimatedRoutes';
 import { CloseBehavior } from './electron';
-import { authHeaders, getApiBase, getApiToken, setApiBase, setApiToken } from './config';
+import { getApiBase, getApiToken, setApiBase, setApiToken } from './config';
+import { useBackendConnection } from './hooks/useBackendConnection';
 import { isCapacitorPlatform } from './native/platform';
 import { useExpandedPlayer } from './native/expandedPlayerStore';
 import './App.css';
@@ -102,16 +103,14 @@ const NavigateToBookListener: React.FC = () => {
 // the backend is expected to take a moment to start up. On mobile there's
 // no local backend to wait for, so surface the config form immediately
 // instead of making the user stare at a spinner for a minute first.
-const ERROR_THRESHOLD_MS = isCapacitorPlatform ? 0 : 60000;
-const CHECK_INTERVAL_MS = 1500;
+const ERROR_THRESHOLD_MS = isCapacitorPlatform ? 8000 : 60000;
 
 const App: React.FC = () => {
-  const [backendOnline, setBackendOnline] = useState(false);
-  const [showError, setShowError] = useState(false);
-  const [authRequired, setAuthRequired] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const firstFailureRef = useRef<number | null>(null);
+  const { backendOnline, authRequired, showError, reconnecting, resetFailures } = useBackendConnection(ERROR_THRESHOLD_MS);
+  const error = authRequired
+    ? "Accès refusé : jeton d'accès manquant ou invalide."
+    : `Impossible de se connecter au serveur (${getApiBase().split('/').slice(-3).join('/')})`;
   const expandedPlayer = useExpandedPlayer();
 
   useEffect(() => {
@@ -123,68 +122,6 @@ const App: React.FC = () => {
     setShowCloseDialog(false);
     window.electron?.respondToClose(action, remember);
   };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const checkBackend = async () => {
-      const apiBase = getApiBase();
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-
-        const response = await fetch(apiBase.replace('/api', '/health'), {
-          signal: controller.signal
-        });
-        clearTimeout(timeout);
-
-        if (cancelled) return;
-
-        if (response.ok) {
-          // /health is public (liveness); /api/health needs the API token when
-          // the backend has one - this is what tells "unreachable" apart from
-          // "reachable but token missing/wrong".
-          const authCheck = await fetch(`${apiBase}/health`, { headers: authHeaders() });
-          if (cancelled) return;
-          if (authCheck.status === 401) {
-            firstFailureRef.current = null;
-            setBackendOnline(false);
-            setAuthRequired(true);
-            setError("Accès refusé : jeton d'accès manquant ou invalide.");
-            setShowError(true);
-            return;
-          }
-          firstFailureRef.current = null;
-          setBackendOnline(true);
-          setAuthRequired(false);
-          setShowError(false);
-          setError(null);
-        } else {
-          throw new Error('Backend non disponible');
-        }
-      } catch (err) {
-        if (cancelled) return;
-
-        if (firstFailureRef.current === null) {
-          firstFailureRef.current = Date.now();
-        }
-
-        setBackendOnline(false);
-        if (Date.now() - firstFailureRef.current >= ERROR_THRESHOLD_MS) {
-          setError(`Impossible de se connecter au serveur (${apiBase.split('/').slice(-3).join('/')})`);
-          setShowError(true);
-        }
-      }
-    };
-
-    checkBackend();
-    const interval = setInterval(checkBackend, CHECK_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
 
   const renderBody = () => {
     if (!backendOnline) {
@@ -204,10 +141,7 @@ const App: React.FC = () => {
             <h1>{authRequired ? 'Accès refusé' : 'Serveur non disponible'}</h1>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{error}</p>
             {isCapacitorPlatform || authRequired ? (
-              <ServerConfigForm onSaved={() => {
-                firstFailureRef.current = null;
-                setShowError(false);
-              }} />
+              <ServerConfigForm onSaved={resetFailures} />
             ) : (
               <>
                 <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Vérifiez que:</p>
@@ -253,6 +187,11 @@ const App: React.FC = () => {
             <AnimatedRoutes />
           </main>
           <Player />
+          {reconnecting && (
+            <div role="status" style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, padding: '4px 8px', textAlign: 'center', fontSize: '12px', backgroundColor: 'var(--primary)', color: '#fff' }}>
+              Connexion au serveur instable, nouvelle tentative…
+            </div>
+          )}
         </div>
       </HashRouter>
     );

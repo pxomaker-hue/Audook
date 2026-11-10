@@ -1,6 +1,8 @@
 """Servers endpoints."""
 
 import asyncio
+import os
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
@@ -20,6 +22,16 @@ def _normalize_server_url(server_type, url):
     if server_type in ('plex', 'audiobookshelf') and not url.lower().startswith(('http://', 'https://')):
         return f"http://{url}"
     return url
+
+
+def _local_path_allowed(path):
+    """On the headless NAS instance, local folders must live under
+    AUDOOK_LIBRARY_ROOT (default /audiobooks); on desktop any folder is fine."""
+    if os.environ.get('AUDOOK_HEADLESS') != '1':
+        return True
+    root = Path(os.environ.get('AUDOOK_LIBRARY_ROOT', '/audiobooks')).resolve()
+    target = Path(path).resolve()
+    return target == root or root in target.parents
 
 
 def _test_server_connection(server_type, url, api_key=None, username=None, password=None):
@@ -76,6 +88,8 @@ def add_server():
             return jsonify({'error': 'Nom et URL/chemin requis'}), 400
 
         url = _normalize_server_url(server_type, url)
+        if server_type == 'local' and not _local_path_allowed(url):
+            return jsonify({'error': 'Dossier non autorisé (hors du dossier de bibliothèque)'}), 400
         api_key = data.get('api_key')
         username = data.get('username')
         password = data.get('password')

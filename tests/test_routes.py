@@ -12,6 +12,7 @@ EXPECTED_ROUTES = [
     ('/api/books/<book_id>', 'PATCH'),
     ('/api/books/<book_id>/bookmarks', 'POST'),
     ('/api/books/<book_id>/clean-audio', 'POST'),
+    ('/api/books/<book_id>/author-photo-proxy', 'GET'),
     ('/api/books/<book_id>/cover-proxy', 'GET'),
     ('/api/books/<book_id>/finished', 'POST'),
     ('/api/books/<book_id>/lock', 'POST'),

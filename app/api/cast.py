@@ -5,10 +5,9 @@ from pathlib import Path
 import requests
 from flask import Blueprint, Response, jsonify, request, send_file
 
-from app import DATA_DIR
 from app.api.context import services
 from app.api.errors import internal_error
-from app.database import ServerRepository, get_session
+from app.api.sources import configured_sources, with_server_token
 from app.utils import logger
 
 bp = Blueprint('cast', __name__)
@@ -51,27 +50,6 @@ def disconnect_cast_device():
         return internal_error()
 
 
-def _allowed_audio_sources():
-    """Hosts and folders /api/cast/local-audio is allowed to serve from: only
-    what the user configured as a server (Plex/Audiobookshelf hosts, local
-    library folders) plus Audook's own data dir (cleaned audio copies).
-    Without this the endpoint was an open proxy (any URL) and an arbitrary
-    audio-file reader (any path on the machine)."""
-    from urllib.parse import urlparse
-    hosts, roots = set(), [DATA_DIR.resolve()]
-    session = get_session()
-    for server in ServerRepository(session).get_all():
-        if server.type == 'local':
-            if server.url:
-                roots.append(Path(server.url).resolve())
-            continue
-        for candidate in (server.url, server.remote_url):
-            if candidate:
-                host = urlparse(candidate if '://' in candidate else f'http://{candidate}').netloc.lower()
-                if host:
-                    hosts.add(host)
-    return hosts, roots
-
 @bp.route('/api/cast/local-audio', methods=['GET'])
 def stream_local_audio_for_cast():
     """Streams an audio chapter over HTTP (with Range support) so a
@@ -86,12 +64,14 @@ def stream_local_audio_for_cast():
         if not path:
             return jsonify({'error': 'Fichier audio introuvable'}), 404
 
-        allowed_hosts, allowed_roots = _allowed_audio_sources()
+        servers_by_host, allowed_roots = configured_sources()
 
         if path.startswith('http://') or path.startswith('https://'):
             from urllib.parse import urlparse
-            if urlparse(path).netloc.lower() not in allowed_hosts:
+            server = servers_by_host.get(urlparse(path).netloc.lower())
+            if server is None:
                 return jsonify({'error': 'Source non autorisée'}), 403
+            path = with_server_token(path, server)
             headers = {}
             if 'Range' in request.headers:
                 headers['Range'] = request.headers['Range']

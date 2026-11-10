@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify
 
 from app.api.errors import internal_error
+from app.api.sources import public_cover_url
 from app.database import BookRepository, ReadingHistoryRepository, get_session
 from app.utils import logger
 
@@ -27,7 +28,7 @@ def get_history():
                 'book_id': book.id,
                 'title': book.title,
                 'author': book.author,
-                'cover_url': book.cover_url,
+                'cover_url': public_cover_url(book.id, book.cover_url),
                 'session_start': entry.session_start.isoformat() if entry.session_start else None,
                 'duration_seconds': entry.duration_seconds
             })

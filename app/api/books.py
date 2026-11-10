@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from app.api.context import services
 from app.api.errors import internal_error
+from app.api.sources import public_cover_url, public_photo_url, redact_chapters
 from app.api.helpers import format_chapter_title
 from app.database import BookRepository, BookmarkRepository, ReadingProgressRepository, ServerRepository, get_session
 from app.database.models import Book as DbBook
@@ -52,7 +53,7 @@ def get_books():
                 'title': book.title,
                 'author': book.author,
                 'narrator': book.narrator,
-                'cover_url': book.cover,
+                'cover_url': public_cover_url(book.id, book.cover),
                 'duration': book.duration,
                 'description': book.description,
                 'source': book.source,
@@ -64,7 +65,7 @@ def get_books():
                 'is_finished': book.id in finished_ids,
                 'has_bookmark': book.id in bookmarked_ids,
                 'author_bio': book.metadata.get('author_bio'),
-                'author_photo': book.metadata.get('author_photo')
+                'author_photo': public_photo_url(book.id, book.metadata.get('author_photo'))
             })
         return jsonify(result)
     except Exception as e:
@@ -93,15 +94,15 @@ def get_book_details(book_id):
             'title': book.title,
             'author': book.author,
             'narrator': book.narrator,
-            'cover_url': book.cover,
+            'cover_url': public_cover_url(book.id, book.cover),
             'duration': book.duration,
             'description': book.description,
-            'chapters': book.chapters,
+            'chapters': redact_chapters(book.chapters),
             'series': book.metadata.get('series'),
             'series_sequence': book.metadata.get('series_sequence'),
             'genre': book.metadata.get('genre') or [],
             'author_bio': book.metadata.get('author_bio'),
-            'author_photo': book.metadata.get('author_photo'),
+            'author_photo': public_photo_url(book.id, book.metadata.get('author_photo')),
             'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,
@@ -191,6 +192,9 @@ def update_book(book_id):
         fields = {k: v for k, v in data.items() if k in allowed_fields}
         if not fields:
             return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
+        cover = fields.get('cover_url')
+        if cover is not None and not (isinstance(cover, str) and (cover == '' or cover.lower().startswith(('http://', 'https://')))):
+            return jsonify({'error': 'cover_url doit être une URL http(s)'}), 400
 
         session = get_session()
         book_repo = BookRepository(session)
@@ -371,7 +375,7 @@ def search_books():
             'title': book.title,
             'author': book.author,
             'narrator': book.narrator,
-            'cover_url': book.cover
+            'cover_url': public_cover_url(book.id, book.cover)
         } for book in books])
     except Exception as e:
         logger.error(f"Failed to search books: {e}")
