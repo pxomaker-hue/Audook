@@ -4,6 +4,7 @@ import { RefreshCw, RotateCcw, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { CloseBehavior } from '../electron';
 import EqualizerSettings from '../components/EqualizerSettings';
+import UpdateCard from '../components/UpdateCard';
 import { getApiBase, getDefaultApiBase, setApiBase, resetApiBase, getApiToken, setApiToken } from '../config';
 
 type ServerType = 'plex' | 'audiobookshelf' | 'local';
@@ -722,6 +723,8 @@ const SettingsPage: React.FC = () => {
           <RotateCcw size={14} /> Réinitialiser toutes les progressions
         </button>
       </div>
+
+      <UpdateCard style={cardStyle} />
 
       <div style={cardStyle}>
         <h2 style={{ color: 'var(--primary)', marginBottom: '15px' }}>À propos</h2>

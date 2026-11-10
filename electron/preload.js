@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose IPC to renderer process
 contextBridge.exposeInMainWorld('electron', {
+  // Quit so the freshly launched installer can replace the app files
+  quitForUpdate: () => ipcRenderer.send('app:quit-for-update'),
+
   // App communication
   getAppConfig: () => {
     return new Promise((resolve) => {

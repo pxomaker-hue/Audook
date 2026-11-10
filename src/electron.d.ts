@@ -29,6 +29,7 @@ export interface IElectronAPI {
   respondToClose: (action: CloseBehavior, remember: boolean) => void;
   getCloseBehavior: () => Promise<CloseBehavior>;
   setCloseBehavior: (action: CloseBehavior) => void;
+  quitForUpdate: () => void;
 }
 
 export type CloseBehavior = 'ask' | 'quit' | 'tray';

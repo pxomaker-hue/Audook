@@ -39,6 +39,8 @@ EXPECTED_ROUTES = [
     ('/api/equalizer/presets/<preset_id>', 'DELETE'),
     ('/api/equalizer/presets/<preset_id>', 'PUT'),
     ('/api/health', 'GET'),
+    ('/api/update/check', 'GET'),
+    ('/api/update/install', 'POST'),
     ('/api/history', 'DELETE'),
     ('/api/history', 'GET'),
     ('/api/history/<int:session_id>', 'DELETE'),

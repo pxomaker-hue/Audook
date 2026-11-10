@@ -229,3 +229,19 @@ Pour obtenir de l'aide, veuillez ouvrir une issue sur le [dépôt GitHub](https:
 ---
 
 **Audook** - Votre compagnon pour les livres audio sur Windows et Android 📚🎧
+
+## Mises à jour
+
+La version (`package.json`, source unique) s'affiche dans **Paramètres > Mise à jour**. L'application vérifie au démarrage, et à la demande, le dépôt `https://easywork.kairos-app.website/audook/` (modifiable avec `AUDOOK_UPDATE_URL`). Le dépôt contient les installeurs, plus `latest.json` (version, notes, SHA-256 et taille de chaque fichier) et `latest.json.sig` (signature Ed25519 du manifeste). Rien n'est téléchargé ni installé si la signature ou le SHA-256 ne correspondent pas, et l'installation demande toujours une confirmation.
+
+- **Windows** : télécharge, vérifie, lance l'installeur et ferme l'application.
+- **Android** : télécharge l'APK, vérifie, ouvre l'installeur système (à la première fois, autoriser Audook à installer des applications).
+- **NAS (Docker)** : l'application signale la mise à jour, mais le conteneur se met à jour à la main : sur le NAS, `git pull && docker compose up -d --build` (le dossier de données est un volume, il est conservé).
+
+### Publier une version
+Raccourci : `build-all.bat` enchaîne les étapes 1 à 3 ci-dessous (clé si absente, builds, manifeste) et s'arrête à la première erreur ; il ne publie rien.
+
+1. Une seule fois : `python scripts/release_update.py keygen` crée `release-signing.key` (**à sauvegarder, jamais dans git**) et écrit la clé publique dans `app/update_key.py` (à committer).
+2. `npm version <x.y.z> --no-git-tag-version`, puis `build-release.bat`.
+3. `python scripts/release_update.py manifest --notes-file notes.txt` génère `release/latest.json` et `latest.json.sig`.
+4. Envoyer `Audook-Setup-<v>.exe`, `Audook-<v>.apk`, `latest.json` et `latest.json.sig` dans le dépôt (le manifeste en dernier).

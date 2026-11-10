@@ -11,6 +11,7 @@ import { getApiBase, getApiToken, setApiBase, setApiToken } from './config';
 import { useBackendConnection } from './hooks/useBackendConnection';
 import { isCapacitorPlatform } from './native/platform';
 import { useExpandedPlayer } from './native/expandedPlayerStore';
+import { checkForUpdate } from './updates';
 import './App.css';
 
 // The detached mini-player (electron/main.js createMiniWindow) loads this
@@ -90,6 +91,22 @@ const ServerConfigForm: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
 // mini-player:open-book) - has to live inside <HashRouter> to get a router
 // to navigate with, which is why it's a separate component rather than
 // just an effect in App itself.
+const UpdateBanner: React.FC = () => {
+  const [latest, setLatest] = useState('');
+  const navigate = useNavigate();
+  useEffect(() => {
+    checkForUpdate().then((u) => u.available && setLatest(u.latest)).catch(() => {});
+  }, []);
+  if (!latest) return null;
+  return (
+    <div role="status" style={{ position: 'fixed', bottom: 8, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, padding: '6px 14px', borderRadius: '999px', fontSize: '12px', backgroundColor: 'var(--primary)', color: '#fff', display: 'flex', gap: '10px', alignItems: 'center' }}>
+      Audook v{latest} est disponible
+      <button onClick={() => { navigate('/settings'); setLatest(''); }} style={{ background: 'rgba(255,255,255,.25)', color: '#fff', border: 'none', borderRadius: '999px', padding: '2px 10px', cursor: 'pointer' }}>Voir</button>
+      <button aria-label="Fermer" onClick={() => setLatest('')} style={{ background: 'none', color: '#fff', border: 'none', cursor: 'pointer' }}>×</button>
+    </div>
+  );
+};
+
 const NavigateToBookListener: React.FC = () => {
   const navigate = useNavigate();
   useEffect(() => {
@@ -181,6 +198,7 @@ const App: React.FC = () => {
     return (
       <HashRouter>
         <NavigateToBookListener />
+        <UpdateBanner />
         <div className={`app ${isCapacitorPlatform && expandedPlayer ? 'mobile-player-expanded' : ''}`}>
           <Sidebar />
           <main className="main-content">
