@@ -27,7 +27,7 @@ def generate_cover(title: str, author: str, output_path: Path, size: int = 300) 
         # Try to use a decent font, fall back to default
         font_size = int(size * 0.08)
         font = ImageFont.truetype("arial.ttf", font_size)
-    except Exception:
+    except OSError:
         font = ImageFont.load_default()
 
     # Draw semi-transparent overlay
@@ -50,7 +50,7 @@ def generate_cover(title: str, author: str, output_path: Path, size: int = 300) 
     author_text = author[:20] + "..." if len(author) > 20 else author
     try:
         small_font = ImageFont.truetype("arial.ttf", int(font_size * 0.7))
-    except Exception:
+    except OSError:
         small_font = font
 
     bbox = draw.textbbox((0, 0), author_text, font=small_font)

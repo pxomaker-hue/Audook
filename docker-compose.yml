@@ -20,7 +20,10 @@ services:
     volumes:
       # Persists the NAS instance's own SQLite DB + cache (separate from the
       # desktop app's local DB). Point this at a real path on the OMV host.
-      - /path/to/omv/appdata/audook/data:/root/.audook
+      # The container runs as uid 1000 (not root): the host folder must be writable by
+      # it (chown -R 1000:1000 <folder>). Migrating from an older image: it used to be
+      # mounted on /root/.audook, same content, just chown it once.
+      - /path/to/omv/appdata/audook/data:/home/audook/.audook
       # Read-only mount of the real audiobook folder on the NAS, scanned the
       # same way the desktop app scans local folders (app/local/scanner.py).
       - /path/to/omv/shares/Audiobooks:/audiobooks:ro

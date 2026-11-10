@@ -34,7 +34,7 @@ def get_history():
             })
         return jsonify(results)
     except Exception as e:
-        logger.error(f"Failed to get history: {e}")
+        logger.exception(f"Failed to get history: {e}")
         return internal_error()
 
 @bp.route('/api/history/<int:session_id>', methods=['DELETE'])
@@ -46,7 +46,7 @@ def delete_history_entry(session_id):
             return jsonify({'error': 'Session introuvable'}), 404
         return jsonify({'status': 'deleted'})
     except Exception as e:
-        logger.error(f"Failed to delete history entry: {e}")
+        logger.exception(f"Failed to delete history entry: {e}")
         return internal_error()
 
 @bp.route('/api/history', methods=['DELETE'])
@@ -56,5 +56,5 @@ def clear_history():
         count = ReadingHistoryRepository(session).delete_all()
         return jsonify({'status': 'cleared', 'deleted': count})
     except Exception as e:
-        logger.error(f"Failed to clear history: {e}")
+        logger.exception(f"Failed to clear history: {e}")
         return internal_error()

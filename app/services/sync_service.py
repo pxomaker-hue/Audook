@@ -61,7 +61,7 @@ class SyncService:
                         self._notify_progress(f"✗ Failed to sync {server.name}", False)
 
                 except Exception as e:
-                    logger.error(f"Failed to sync server {server.name}: {e}")
+                    logger.exception(f"Failed to sync server {server.name}: {e}")
                     self._notify_progress(f"✗ {server.name}: {str(e)}", False)
 
             self._notify_progress(
@@ -72,7 +72,7 @@ class SyncService:
             return success_count == len(servers)
 
         except Exception as e:
-            logger.error(f"Sync failed: {e}")
+            logger.exception(f"Sync failed: {e}")
             self._notify_progress(f"Sync failed: {str(e)}", True)
             return False
 
@@ -94,7 +94,7 @@ class SyncService:
             return scanner.scan_server(server)
 
         except Exception as e:
-            logger.error(f"Failed to sync server: {e}")
+            logger.exception(f"Failed to sync server: {e}")
             return False
 
     def start_auto_sync(self, interval: int = 3600) -> bool:
@@ -104,7 +104,7 @@ class SyncService:
             scanner.start_background_scan(interval)
             return True
         except Exception as e:
-            logger.error(f"Failed to start auto-sync: {e}")
+            logger.exception(f"Failed to start auto-sync: {e}")
             return False
 
     def stop_auto_sync(self) -> bool:
@@ -114,7 +114,7 @@ class SyncService:
             scanner.stop_background_scan()
             return True
         except Exception as e:
-            logger.error(f"Failed to stop auto-sync: {e}")
+            logger.exception(f"Failed to stop auto-sync: {e}")
             return False
 
     def is_syncing(self) -> bool:
@@ -141,7 +141,7 @@ class SyncService:
             try:
                 self._on_sync_progress(message, is_complete)
             except Exception as e:
-                logger.error(f"Progress callback error: {e}")
+                logger.exception(f"Progress callback error: {e}")
 
 
 # Global instance

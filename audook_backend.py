@@ -74,7 +74,7 @@ def init_services():
             # never delays the app becoming usable.
             services.sync.sync_all_servers(background=True)
         except Exception as e:
-            logger.error(f"Failed to initialize services: {e}")
+            logger.exception(f"Failed to initialize services: {e}")
             # Services are retried on the next request; meanwhile answer 503
             # instead of letting routes crash on `services.library is None`.
             return jsonify({'error': 'Service indisponible, réessayez'}), 503

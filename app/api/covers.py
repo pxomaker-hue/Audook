@@ -26,7 +26,7 @@ def get_cover_proxy(book_id):
             return jsonify({'error': 'Cover not found'}), 404
         cover_url = book.cover_url
     except Exception as e:
-        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        logger.exception(f"Failed to proxy cover for {book_id}: {e}")
         return internal_error()
     finally:
         session.close()
@@ -43,7 +43,7 @@ def get_author_photo_proxy(book_id):
         book = BookRepository(session).get_by_id(book_id)
         photo = (book.extra_metadata or {}).get('author_photo') if book else None
     except Exception as e:
-        logger.error(f"Failed to read author photo for {book_id}: {e}")
+        logger.exception(f"Failed to read author photo for {book_id}: {e}")
         return internal_error()
     finally:
         session.close()
@@ -77,7 +77,7 @@ def _fetch_image(url, what):
             upstream.close()
         return Response(data, content_type=content_type)
     except Exception as e:
-        logger.error(f"Failed to proxy {what}: {e}")
+        logger.exception(f"Failed to proxy {what}: {e}")
         return internal_error()
 
 
@@ -95,5 +95,5 @@ def get_local_cover(book_id):
                 return send_file(candidate)
         return jsonify({'error': 'Cover not found'}), 404
     except Exception as e:
-        logger.error(f"Failed to serve local cover for {book_id}: {e}")
+        logger.exception(f"Failed to serve local cover for {book_id}: {e}")
         return internal_error()

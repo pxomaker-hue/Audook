@@ -53,7 +53,7 @@ class AudiobookshelfClient:
                 raise Exception("No auth token received")
 
         except Exception as e:
-            logger.error(f"Failed to authenticate with Audiobookshelf: {e}")
+            logger.exception(f"Failed to authenticate with Audiobookshelf: {e}")
             raise
 
     def get_libraries(self) -> List[Dict[str, Any]]:
@@ -75,7 +75,7 @@ class AudiobookshelfClient:
             return libraries
 
         except Exception as e:
-            logger.error(f"Failed to get libraries: {e}")
+            logger.exception(f"Failed to get libraries: {e}")
             return []
 
     def get_audiobooks(self, library_id: str) -> List[Dict[str, Any]]:
@@ -107,7 +107,7 @@ class AudiobookshelfClient:
             return audiobooks
 
         except Exception as e:
-            logger.error(f"Failed to get audiobooks: {e}")
+            logger.exception(f"Failed to get audiobooks: {e}")
             return []
 
     def get_audiobook_details(self, library_id: str, book_id: str) -> Optional[Dict[str, Any]]:
@@ -119,7 +119,7 @@ class AudiobookshelfClient:
             return self._parse_audiobook(response.json(), library_id)
 
         except Exception as e:
-            logger.error(f"Failed to get audiobook details: {e}")
+            logger.exception(f"Failed to get audiobook details: {e}")
             return None
 
     @staticmethod
@@ -227,7 +227,7 @@ class AudiobookshelfClient:
             return audiobook
 
         except Exception as e:
-            logger.error(f"Failed to parse audiobook: {e}")
+            logger.exception(f"Failed to parse audiobook: {e}")
             return None
 
     def _get_author_info(self, author_id: str) -> Dict[str, Optional[str]]:
@@ -254,7 +254,7 @@ class AudiobookshelfClient:
         try:
             return f"{self.url}/api/items/{book_id}/file/{file_ino}?token={self.auth_token}"
         except Exception as e:
-            logger.error(f"Failed to get streaming URL: {e}")
+            logger.exception(f"Failed to get streaming URL: {e}")
             return None
 
     def _get_cover_url(self, library_id: str, book_id: str) -> Optional[str]:
@@ -262,7 +262,7 @@ class AudiobookshelfClient:
         try:
             return f"{self.url}/api/items/{book_id}/cover?token={self.auth_token}"
         except Exception as e:
-            logger.error(f"Failed to get cover URL: {e}")
+            logger.exception(f"Failed to get cover URL: {e}")
             return None
 
     def get_user_progress(self, item_id: str) -> Optional[Dict[str, Any]]:
@@ -288,7 +288,7 @@ class AudiobookshelfClient:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get user progress: {e}")
+            logger.exception(f"Failed to get user progress: {e}")
             return None
 
     def set_user_progress(self, item_id: str, position_seconds: float, duration_seconds: float, finished: bool = False):
@@ -318,5 +318,5 @@ class AudiobookshelfClient:
             logger.info("Audiobookshelf connection test successful")
             return True
         except Exception as e:
-            logger.error(f"Audiobookshelf connection test failed: {e}")
+            logger.exception(f"Audiobookshelf connection test failed: {e}")
             return False

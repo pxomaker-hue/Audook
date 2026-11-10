@@ -70,7 +70,7 @@ def get_servers():
             'last_sync': s.last_sync.isoformat() if s.last_sync else None
         } for s in servers])
     except Exception as e:
-        logger.error(f"Failed to get servers: {e}")
+        logger.exception(f"Failed to get servers: {e}")
         return internal_error()
 
 
@@ -123,7 +123,7 @@ def add_server():
             'use_remote': server.use_remote
         }), 201
     except Exception as e:
-        logger.error(f"Failed to add server: {e}")
+        logger.exception(f"Failed to add server: {e}")
         return internal_error()
 
 
@@ -135,7 +135,7 @@ def delete_server(server_id):
         server_repo.delete(server_id)
         return jsonify({'status': 'deleted'})
     except Exception as e:
-        logger.error(f"Failed to delete server: {e}")
+        logger.exception(f"Failed to delete server: {e}")
         return internal_error()
 
 
@@ -176,7 +176,7 @@ def set_server_remote_access(server_id):
             'use_remote': updated.use_remote
         })
     except Exception as e:
-        logger.error(f"Failed to set remote access: {e}")
+        logger.exception(f"Failed to set remote access: {e}")
         return internal_error()
 
 
@@ -192,7 +192,7 @@ def set_server_hidden(server_id):
             return jsonify({'error': 'Serveur introuvable'}), 404
         return jsonify({'id': updated.id, 'hidden': updated.hidden})
     except Exception as e:
-        logger.error(f"Failed to set server hidden state: {e}")
+        logger.exception(f"Failed to set server hidden state: {e}")
         return internal_error()
 
 
@@ -210,7 +210,7 @@ def test_server(server_id):
         )
         return jsonify({'connected': ok, 'error': error})
     except Exception as e:
-        logger.error(f"Failed to test server: {e}")
+        logger.exception(f"Failed to test server: {e}")
         return internal_error()
 
 
@@ -226,5 +226,5 @@ def scan_server(server_id):
         success = scanner.scan_server(server)
         return jsonify({'status': 'scanned' if success else 'failed'})
     except Exception as e:
-        logger.error(f"Failed to scan server: {e}")
+        logger.exception(f"Failed to scan server: {e}")
         return internal_error()

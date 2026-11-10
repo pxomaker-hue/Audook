@@ -134,7 +134,7 @@ class VLCPlayer:
                             try:
                                 self._on_position_change(self._position)
                             except Exception as e:
-                                logger.error(f"Position callback error: {e}")
+                                logger.exception(f"Position callback error: {e}")
 
                     elif not is_playing and state == vlc.State.Ended:
                         # Reset before notifying: if the callback starts the
@@ -145,10 +145,10 @@ class VLCPlayer:
                             try:
                                 self._on_playback_end()
                             except Exception as e:
-                                logger.error(f"Playback end callback error: {e}")
+                                logger.exception(f"Playback end callback error: {e}")
 
                 except Exception as e:
-                    logger.error(f"Error updating position: {e}")
+                    logger.exception(f"Error updating position: {e}")
 
             time.sleep(0.5)
 
@@ -297,12 +297,12 @@ class VLCPlayer:
                 try:
                     self._on_playback_start()
                 except Exception as e:
-                    logger.error(f"Playback start callback error: {e}")
+                    logger.exception(f"Playback start callback error: {e}")
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to play: {e}")
+            logger.exception(f"Failed to play: {e}")
             return False
 
     def pause(self) -> bool:
@@ -319,11 +319,11 @@ class VLCPlayer:
                 try:
                     self._on_playback_pause()
                 except Exception as e:
-                    logger.error(f"Pause callback error: {e}")
+                    logger.exception(f"Pause callback error: {e}")
 
             return True
         except Exception as e:
-            logger.error(f"Pause error: {e}")
+            logger.exception(f"Pause error: {e}")
 
         return False
 
@@ -342,11 +342,11 @@ class VLCPlayer:
                 try:
                     self._on_playback_resume()
                 except Exception as e:
-                    logger.error(f"Resume callback error: {e}")
+                    logger.exception(f"Resume callback error: {e}")
 
             return True
         except Exception as e:
-            logger.error(f"Resume error: {e}")
+            logger.exception(f"Resume error: {e}")
 
         return False
 
@@ -366,11 +366,11 @@ class VLCPlayer:
                 try:
                     self._on_playback_stop()
                 except Exception as e:
-                    logger.error(f"Stop callback error: {e}")
+                    logger.exception(f"Stop callback error: {e}")
 
             return True
         except Exception as e:
-            logger.error(f"Stop error: {e}")
+            logger.exception(f"Stop error: {e}")
 
         return False
 
@@ -385,7 +385,7 @@ class VLCPlayer:
                     self._position = position
                     return True
         except Exception as e:
-            logger.error(f"Seek error: {e}")
+            logger.exception(f"Seek error: {e}")
 
         return False
 
@@ -402,7 +402,7 @@ class VLCPlayer:
                 self.player.get_media_player().audio_set_volume(self._volume)
             return True
         except Exception as e:
-            logger.error(f"Set volume error: {e}")
+            logger.exception(f"Set volume error: {e}")
             return False
 
     def set_speed(self, speed: float) -> bool:
@@ -415,7 +415,7 @@ class VLCPlayer:
                 self.player.get_media_player().set_rate(speed)
             return True
         except Exception as e:
-            logger.error(f"Set speed error: {e}")
+            logger.exception(f"Set speed error: {e}")
             return False
 
     def _apply_equalizer(self, media_player) -> None:
@@ -446,7 +446,7 @@ class VLCPlayer:
                     self._apply_equalizer(self.player.get_media_player())
             return True
         except Exception as e:
-            logger.error(f"Set equalizer error: {e}")
+            logger.exception(f"Set equalizer error: {e}")
             return False
 
     def get_equalizer(self) -> tuple:
@@ -463,7 +463,7 @@ class VLCPlayer:
                     self._apply_equalizer(self.player.get_media_player())
             return True
         except Exception as e:
-            logger.error(f"Set loudness gain error: {e}")
+            logger.exception(f"Set loudness gain error: {e}")
             return False
 
     def set_compression(self, preset: Optional[str]) -> bool:
@@ -482,7 +482,7 @@ class VLCPlayer:
                     self.pause()
             return True
         except Exception as e:
-            logger.error(f"Set compression error: {e}")
+            logger.exception(f"Set compression error: {e}")
             return False
 
     def get_compression(self) -> Optional[str]:

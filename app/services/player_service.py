@@ -99,7 +99,7 @@ class PlayerService:
             return False
 
         except Exception as e:
-            logger.error(f"Failed to start playbook: {e}")
+            logger.exception(f"Failed to start playbook: {e}")
             return False
 
     def _merge_remote_progress(self, audiobook: Audiobook, chapter_idx: int, position: float):
@@ -142,7 +142,7 @@ class PlayerService:
                 logger.info("Playback paused")
                 return True
         except Exception as e:
-            logger.error(f"Failed to pause: {e}")
+            logger.exception(f"Failed to pause: {e}")
         return False
 
     @_locked
@@ -165,7 +165,7 @@ class PlayerService:
                 logger.info("Playback resumed")
                 return True
         except Exception as e:
-            logger.error(f"Failed to resume: {e}")
+            logger.exception(f"Failed to resume: {e}")
         return False
 
     @_locked
@@ -182,7 +182,7 @@ class PlayerService:
             logger.info("Playback stopped")
             return True
         except Exception as e:
-            logger.error(f"Failed to stop: {e}")
+            logger.exception(f"Failed to stop: {e}")
             return False
 
     def seek(self, position_seconds: float) -> bool:
@@ -192,7 +192,7 @@ class PlayerService:
                 progress_manager.update_progress(self.current_chapter_index, position_seconds)
                 return True
         except Exception as e:
-            logger.error(f"Failed to seek: {e}")
+            logger.exception(f"Failed to seek: {e}")
         return False
 
     def seek_relative(self, seconds: float) -> bool:
@@ -203,7 +203,7 @@ class PlayerService:
                 progress_manager.update_progress(self.current_chapter_index, current_pos)
                 return True
         except Exception as e:
-            logger.error(f"Failed to seek relative: {e}")
+            logger.exception(f"Failed to seek relative: {e}")
         return False
 
     @_locked
@@ -216,7 +216,7 @@ class PlayerService:
                 logger.info(f"Playing chapter {self.current_chapter_index}")
                 return True
         except Exception as e:
-            logger.error(f"Failed to go to next chapter: {e}")
+            logger.exception(f"Failed to go to next chapter: {e}")
         return False
 
     @_locked
@@ -229,7 +229,7 @@ class PlayerService:
                 logger.info(f"Playing chapter {self.current_chapter_index}")
                 return True
         except Exception as e:
-            logger.error(f"Failed to go to previous chapter: {e}")
+            logger.exception(f"Failed to go to previous chapter: {e}")
         return False
 
     def set_sleep_timer(self, minutes: Optional[float]) -> bool:
@@ -271,7 +271,7 @@ class PlayerService:
 
             self._fade_out_and_pause(generation)
         except Exception as e:
-            logger.error(f"Sleep timer error: {e}")
+            logger.exception(f"Sleep timer error: {e}")
         finally:
             if generation == self._sleep_timer_generation:
                 self._sleep_timer_end_time = None
@@ -303,7 +303,7 @@ class PlayerService:
         try:
             return player.set_volume(volume)
         except Exception as e:
-            logger.error(f"Failed to set volume: {e}")
+            logger.exception(f"Failed to set volume: {e}")
             return False
 
     def set_speed(self, speed: float) -> bool:
@@ -311,7 +311,7 @@ class PlayerService:
         try:
             return player.set_speed(speed)
         except Exception as e:
-            logger.error(f"Failed to set speed: {e}")
+            logger.exception(f"Failed to set speed: {e}")
             return False
 
     def set_equalizer_preset(self, preset_id: Optional[str], bands: Optional[list] = None,
@@ -325,7 +325,7 @@ class PlayerService:
             self._save_setting('equalizer_preset_id', preset_id or '')
             return True
         except Exception as e:
-            logger.error(f"Failed to set equalizer preset: {e}")
+            logger.exception(f"Failed to set equalizer preset: {e}")
             return False
 
     def cycle_equalizer_preset(self) -> Optional[str]:
@@ -383,7 +383,7 @@ class PlayerService:
                 player.set_loudness_gain(0.0)
             return True
         except Exception as e:
-            logger.error(f"Failed to set loudness normalization: {e}")
+            logger.exception(f"Failed to set loudness normalization: {e}")
             return False
 
     def _apply_loudness_gain_for_current_book(self):
@@ -485,7 +485,7 @@ class PlayerService:
                 finally:
                     done_session.close()
             except Exception as e:
-                logger.error(f"Noise reduction failed for book {book_id}: {e}")
+                logger.exception(f"Noise reduction failed for book {book_id}: {e}")
                 error_session = get_session()
                 try:
                     BookRepository(error_session).set_noise_reduction_status(book_id, 'error')
@@ -514,7 +514,7 @@ class PlayerService:
                 player.set_compression(compression_preset)
                 self.compression_preset = compression_preset
         except Exception as e:
-            logger.error(f"Failed to restore audio settings: {e}")
+            logger.exception(f"Failed to restore audio settings: {e}")
         finally:
             session.close()
 
@@ -578,7 +578,7 @@ class PlayerService:
             try:
                 self._on_position_changed(position, duration)
             except Exception as e:
-                logger.error(f"Position callback error: {e}")
+                logger.exception(f"Position callback error: {e}")
 
     def _on_chapter_ended(self):
         """A chapter finished playing on its own (end of media, not a user
@@ -595,7 +595,7 @@ class PlayerService:
 
             self.next_chapter()
         except Exception as e:
-            logger.error(f"Failed to auto-advance after chapter end: {e}")
+            logger.exception(f"Failed to auto-advance after chapter end: {e}")
 
     # --- Casting (Chromecast/Google Home) ---
 

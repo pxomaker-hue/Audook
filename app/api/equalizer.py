@@ -27,7 +27,7 @@ def get_equalizer_presets():
         session.close()
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Failed to get equalizer presets: {e}")
+        logger.exception(f"Failed to get equalizer presets: {e}")
         return internal_error()
 
 @bp.route('/api/equalizer/presets', methods=['POST'])
@@ -50,7 +50,7 @@ def create_equalizer_preset():
         session.close()
         return jsonify(result), 201
     except Exception as e:
-        logger.error(f"Failed to create equalizer preset: {e}")
+        logger.exception(f"Failed to create equalizer preset: {e}")
         return internal_error()
 
 @bp.route('/api/equalizer/presets/<preset_id>', methods=['PUT'])
@@ -91,7 +91,7 @@ def update_equalizer_preset(preset_id):
 
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Failed to update equalizer preset: {e}")
+        logger.exception(f"Failed to update equalizer preset: {e}")
         return internal_error()
 
 @bp.route('/api/equalizer/presets/<preset_id>', methods=['DELETE'])
@@ -111,5 +111,5 @@ def delete_equalizer_preset(preset_id):
 
         return jsonify({'status': 'deleted'})
     except Exception as e:
-        logger.error(f"Failed to delete equalizer preset: {e}")
+        logger.exception(f"Failed to delete equalizer preset: {e}")
         return internal_error()

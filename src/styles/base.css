@@ -121,7 +121,7 @@ input[type="checkbox"] {
   height: 100%;
   border: none;
   background: none;
-  color: var(--accent-ink);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;

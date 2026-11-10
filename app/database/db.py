@@ -86,7 +86,7 @@ class Database:
                             logger.info(f"Migrated: encrypted servers.{col} for {row[0]}")
                 conn.commit()
         except Exception as e:
-            logger.error(f"Lightweight migration failed: {e}")
+            logger.exception(f"Lightweight migration failed: {e}")
 
     def get_session(self) -> Session:
         """Get a new database session"""
@@ -100,7 +100,7 @@ class Database:
             yield session
             session.commit()
         except Exception as e:
-            logger.error(f"Database error: {e}")
+            logger.exception(f"Database error: {e}")
             session.rollback()
             raise
         finally:

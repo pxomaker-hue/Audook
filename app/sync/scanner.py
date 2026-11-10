@@ -40,7 +40,7 @@ class ServerScanner:
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to scan server {server.name}: {e}")
+            logger.exception(f"Failed to scan server {server.name}: {e}")
             return False
 
     def _enrich_with_online_metadata(self, title, author, description, cover_url, extra_metadata):
@@ -121,7 +121,7 @@ class ServerScanner:
             return True
 
         except Exception as e:
-            logger.error(f"Plex scan failed: {e}")
+            logger.exception(f"Plex scan failed: {e}")
             return False
 
     def _scan_audiobookshelf(self, server: Server) -> bool:
@@ -181,7 +181,7 @@ class ServerScanner:
             return True
 
         except Exception as e:
-            logger.error(f"Audiobookshelf scan failed: {e}")
+            logger.exception(f"Audiobookshelf scan failed: {e}")
             return False
 
     def _seed_remote_progress_if_new(self, session, server: Server, client, book_id: str):
@@ -379,7 +379,7 @@ class ServerScanner:
             return True
 
         except Exception as e:
-            logger.error(f"Local scan failed: {e}")
+            logger.exception(f"Local scan failed: {e}")
             return False
 
     def scan_all_servers(self) -> bool:
@@ -405,7 +405,7 @@ class ServerScanner:
             return success_count == len(servers)
 
         except Exception as e:
-            logger.error(f"Failed to scan all servers: {e}")
+            logger.exception(f"Failed to scan all servers: {e}")
             return False
 
     def start_background_scan(self, interval: int = 3600):
@@ -429,7 +429,7 @@ class ServerScanner:
             try:
                 self.scan_all_servers()
             except Exception as e:
-                logger.error(f"Background scan error: {e}")
+                logger.exception(f"Background scan error: {e}")
 
             time.sleep(interval)
 

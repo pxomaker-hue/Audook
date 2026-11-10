@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from app import DATA_DIR
 from app.database import ServerRepository, get_session
+from app.utils import logger
 
 SECRET_PARAMS = {'token', 'x-plex-token'}
 MAX_COVER_BYTES = 10 * 1024 * 1024
@@ -83,7 +84,8 @@ def with_server_token(url, server):
             from app.clients import AudiobookshelfClient
             try:
                 token = AudiobookshelfClient(server.url, server.username, server.password).auth_token
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Audiobookshelf login failed while signing cover URL: {e}")
                 return url
             _abs_tokens[server.id] = token
     if not token:

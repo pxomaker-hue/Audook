@@ -2,10 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
-import { installApiAuth } from './apiAuth';
+import { installApiAuth, installApiRetry } from './apiAuth';
 import { applyTheme } from './theme';
 
 installApiAuth();
+installApiRetry();
 applyTheme();
 
 // Temporary diagnostic aid for the mobile build: the WebView has no console

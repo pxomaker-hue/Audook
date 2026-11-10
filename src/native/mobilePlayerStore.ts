@@ -178,7 +178,7 @@ function pushProgress(finished = false) {
     .post(`${getApiBase()}/books/${book.id}/progress`, {
       chapter_index: state.currentChapterIndex,
       position_seconds: state.position
-    })
+    }, { retryable: true } as any)
     .catch(error => console.error('Failed to push mobile progress:', error));
   if (finished) {
     // Best effort: let the backend's own >=99% threshold handle "finished",

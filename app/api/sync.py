@@ -16,7 +16,7 @@ def sync_servers():
         services.sync.sync_all_servers(background=True)
         return jsonify({'status': 'syncing'})
     except Exception as e:
-        logger.error(f"Failed to sync: {e}")
+        logger.exception(f"Failed to sync: {e}")
         return internal_error()
 
 @bp.route('/api/sync/status', methods=['GET'])

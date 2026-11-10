@@ -12,6 +12,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Run as an unprivileged user (data lives in /home/audook/.audook, see docker-compose.yml)
+RUN useradd --create-home --uid 1000 audook \
+    && mkdir -p /home/audook/.audook \
+    && chown -R audook:audook /home/audook /app
+USER audook
+ENV HOME=/home/audook
+
 ENV AUDOOK_HEADLESS=1
 
 EXPOSE 5000

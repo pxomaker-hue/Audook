@@ -45,7 +45,7 @@ def create_bookmark(book_id):
         bookmark = repo.create(book_id, chapter_index, position, title)
         return jsonify(_serialize(bookmark)), 201
     except Exception as e:
-        logger.error(f"Failed to create bookmark: {e}")
+        logger.exception(f"Failed to create bookmark: {e}")
         return internal_error()
 
 def _serialize(bookmark):
@@ -69,7 +69,7 @@ def rename_bookmark(bookmark_id):
             return jsonify({'error': 'Bookmark introuvable'}), 404
         return jsonify(_serialize(bookmark))
     except Exception as e:
-        logger.error(f"Failed to rename bookmark: {e}")
+        logger.exception(f"Failed to rename bookmark: {e}")
         return internal_error()
 
 @bp.route('/api/bookmarks/<int:bookmark_id>', methods=['DELETE'])
@@ -79,7 +79,7 @@ def delete_bookmark(bookmark_id):
         BookmarkRepository(session).delete(bookmark_id)
         return jsonify({'status': 'deleted'})
     except Exception as e:
-        logger.error(f"Failed to delete bookmark: {e}")
+        logger.exception(f"Failed to delete bookmark: {e}")
         return internal_error()
 
 @bp.route('/api/bookmarks/<int:bookmark_id>/resume', methods=['POST'])
@@ -102,5 +102,5 @@ def resume_bookmark(bookmark_id):
 
         return jsonify({'status': 'playing'})
     except Exception as e:
-        logger.error(f"Failed to resume bookmark: {e}")
+        logger.exception(f"Failed to resume bookmark: {e}")
         return internal_error()

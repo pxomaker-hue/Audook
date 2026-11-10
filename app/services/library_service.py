@@ -29,7 +29,7 @@ class LibraryService:
             return audiobooks
 
         except Exception as e:
-            logger.error(f"Failed to get all books: {e}")
+            logger.exception(f"Failed to get all books: {e}")
             return []
 
     @staticmethod
@@ -49,7 +49,7 @@ class LibraryService:
             return audiobooks
 
         except Exception as e:
-            logger.error(f"Failed to get books by server: {e}")
+            logger.exception(f"Failed to get books by server: {e}")
             return []
 
     @staticmethod
@@ -73,7 +73,7 @@ class LibraryService:
             return audiobooks
 
         except Exception as e:
-            logger.error(f"Failed to search books: {e}")
+            logger.exception(f"Failed to search books: {e}")
             return []
 
     @staticmethod
@@ -92,7 +92,7 @@ class LibraryService:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get book: {e}")
+            logger.exception(f"Failed to get book: {e}")
             return None
 
     @staticmethod
@@ -116,7 +116,7 @@ class LibraryService:
             return None
 
         except Exception as e:
-            logger.error(f"Failed to get reading progress: {e}")
+            logger.exception(f"Failed to get reading progress: {e}")
             return None
 
     @staticmethod
@@ -140,7 +140,7 @@ class LibraryService:
             return server_list
 
         except Exception as e:
-            logger.error(f"Failed to get servers: {e}")
+            logger.exception(f"Failed to get servers: {e}")
             return []
 
     @staticmethod

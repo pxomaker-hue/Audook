@@ -23,7 +23,7 @@ def get_collections():
             for c in collections
         ])
     except Exception as e:
-        logger.error(f"Failed to get collections: {e}")
+        logger.exception(f"Failed to get collections: {e}")
         return internal_error()
 
 @bp.route('/api/collections', methods=['POST'])
@@ -38,7 +38,7 @@ def create_collection():
         collection = CollectionRepository(session).create(name)
         return jsonify({'id': collection.id, 'name': collection.name, 'book_ids': []})
     except Exception as e:
-        logger.error(f"Failed to create collection: {e}")
+        logger.exception(f"Failed to create collection: {e}")
         return internal_error()
 
 @bp.route('/api/collections/<collection_id>', methods=['PATCH'])
@@ -55,7 +55,7 @@ def rename_collection(collection_id):
             return jsonify({'error': 'Collection introuvable'}), 404
         return jsonify({'status': 'updated'})
     except Exception as e:
-        logger.error(f"Failed to rename collection: {e}")
+        logger.exception(f"Failed to rename collection: {e}")
         return internal_error()
 
 @bp.route('/api/collections/<collection_id>', methods=['DELETE'])
@@ -67,7 +67,7 @@ def delete_collection(collection_id):
             return jsonify({'error': 'Collection introuvable'}), 404
         return jsonify({'status': 'deleted'})
     except Exception as e:
-        logger.error(f"Failed to delete collection: {e}")
+        logger.exception(f"Failed to delete collection: {e}")
         return internal_error()
 
 @bp.route('/api/collections/<collection_id>/books', methods=['POST'])
@@ -84,7 +84,7 @@ def add_book_to_collection(collection_id):
             return jsonify({'error': 'Collection introuvable'}), 404
         return jsonify({'status': 'added', 'book_ids': collection.book_ids or []})
     except Exception as e:
-        logger.error(f"Failed to add book to collection: {e}")
+        logger.exception(f"Failed to add book to collection: {e}")
         return internal_error()
 
 @bp.route('/api/collections/<collection_id>/books/<book_id>', methods=['DELETE'])
@@ -96,5 +96,5 @@ def remove_book_from_collection(collection_id, book_id):
             return jsonify({'error': 'Collection introuvable'}), 404
         return jsonify({'status': 'removed', 'book_ids': collection.book_ids or []})
     except Exception as e:
-        logger.error(f"Failed to remove book from collection: {e}")
+        logger.exception(f"Failed to remove book from collection: {e}")
         return internal_error()

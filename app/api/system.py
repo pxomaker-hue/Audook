@@ -24,5 +24,5 @@ def shutdown_backend():
     try:
         services.player.stop()
     except Exception as e:
-        logger.error(f"Failed to stop cleanly during shutdown: {e}")
+        logger.exception(f"Failed to stop cleanly during shutdown: {e}")
     return jsonify({'status': 'ok'})
