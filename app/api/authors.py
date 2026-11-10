@@ -38,7 +38,7 @@ def update_author(name):
 
         return jsonify({'status': 'updated', 'books_updated': len(books)})
     except Exception as e:
-        logger.error(f"Failed to update author: {e}")
+        logger.exception(f"Failed to update author: {e}")
         return internal_error()
 
 @bp.route('/api/authors/<name>/refresh', methods=['POST'])
@@ -68,5 +68,5 @@ def refresh_author(name):
 
         return jsonify({'status': 'updated', 'bio': info.get('bio'), 'photo': strip_secret_params(info.get('photo'))})
     except Exception as e:
-        logger.error(f"Failed to refresh author: {e}")
+        logger.exception(f"Failed to refresh author: {e}")
         return internal_error()

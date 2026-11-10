@@ -106,7 +106,8 @@ def push_progress(book_id: str, chapter_index: int, position_seconds: float, fin
             try:
                 client = _get_abs_client(server)
                 remote = None if finished else client.get_user_progress(item_id)
-            except Exception:
+            except Exception as e:
+                logger.info(f"ABS progress fetch failed ({e}); retrying with a fresh login")
                 # Cached client's token may have gone stale - one retry with
                 # a fresh login before giving up on this push.
                 client = _get_abs_client(server, force_new=True)

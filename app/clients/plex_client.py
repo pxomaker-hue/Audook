@@ -66,7 +66,7 @@ class PlexClient:
             self.server = PlexServer(self.url, self.token)
             logger.info(f"Connected to Plex server: {self.server.friendlyName}")
         except Exception as e:
-            logger.error(f"Failed to connect to Plex server: {e}")
+            logger.exception(f"Failed to connect to Plex server: {e}")
             raise
 
     def _connect_via_account(self) -> Optional["PlexServer"]:
@@ -105,7 +105,7 @@ class PlexClient:
             logger.info(f"Found {len(libraries)} audiobook libraries")
             return libraries
         except Exception as e:
-            logger.error(f"Failed to get audiobook libraries: {e}")
+            logger.exception(f"Failed to get audiobook libraries: {e}")
             return []
 
     def get_audiobooks(self, library_id: str) -> List[Dict[str, Any]]:
@@ -130,7 +130,7 @@ class PlexClient:
             return audiobooks
 
         except Exception as e:
-            logger.error(f"Failed to get audiobooks: {e}")
+            logger.exception(f"Failed to get audiobooks: {e}")
             return []
 
     def _parse_audiobook(
@@ -191,7 +191,7 @@ class PlexClient:
             }
 
         except Exception as e:
-            logger.error(f"Failed to parse audiobook: {e}")
+            logger.exception(f"Failed to parse audiobook: {e}")
             return None
 
     def _get_image_url(self, thumb_path: Optional[str]) -> Optional[str]:
@@ -211,7 +211,7 @@ class PlexClient:
                 # reconstruct it manually, it has more segments than just the id.
                 return f"{self.url}{part.key}?X-Plex-Token={self.token}"
         except Exception as e:
-            logger.error(f"Failed to get streaming URL: {e}")
+            logger.exception(f"Failed to get streaming URL: {e}")
 
         return None
 
@@ -281,6 +281,6 @@ class PlexClient:
                 logger.info("Plex connection test successful")
                 return True
         except Exception as e:
-            logger.error(f"Plex connection test failed: {e}")
+            logger.exception(f"Plex connection test failed: {e}")
 
         return False

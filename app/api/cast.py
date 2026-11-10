@@ -21,7 +21,7 @@ def get_cast_devices():
         devices = services.player.list_cast_devices()
         return jsonify(devices)
     except Exception as e:
-        logger.error(f"Failed to discover cast devices: {e}")
+        logger.exception(f"Failed to discover cast devices: {e}")
         return internal_error()
 
 @bp.route('/api/cast/connect', methods=['POST'])
@@ -37,7 +37,7 @@ def connect_cast_device():
 
         return jsonify({'status': 'connected', 'device_name': device_name})
     except Exception as e:
-        logger.error(f"Failed to connect cast device: {e}")
+        logger.exception(f"Failed to connect cast device: {e}")
         return internal_error()
 
 @bp.route('/api/cast/disconnect', methods=['POST'])
@@ -46,7 +46,7 @@ def disconnect_cast_device():
         services.player.disconnect_cast_device()
         return jsonify({'status': 'disconnected'})
     except Exception as e:
-        logger.error(f"Failed to disconnect cast device: {e}")
+        logger.exception(f"Failed to disconnect cast device: {e}")
         return internal_error()
 
 
@@ -95,5 +95,5 @@ def stream_local_audio_for_cast():
 
         return send_file(str(file_path), conditional=True)
     except Exception as e:
-        logger.error(f"Failed to stream local audio for cast: {e}")
+        logger.exception(f"Failed to stream local audio for cast: {e}")
         return internal_error()

@@ -98,7 +98,7 @@ def save_json(filepath: Path, data: Any) -> bool:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
         return True
     except Exception as e:
-        logger.error(f"Failed to save JSON: {e}")
+        logger.exception(f"Failed to save JSON: {e}")
         return False
 
 
@@ -110,7 +110,7 @@ def load_json(filepath: Path) -> Optional[Dict[str, Any]]:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        logger.error(f"Failed to load JSON: {e}")
+        logger.exception(f"Failed to load JSON: {e}")
         return None
 
 
@@ -156,6 +156,6 @@ def clear_old_cache(max_age_days: int = 30) -> int:
                 cache_file.unlink()
                 deleted += 1
             except Exception as e:
-                logger.error(f"Failed to delete cache file: {e}")
+                logger.exception(f"Failed to delete cache file: {e}")
     
     return deleted

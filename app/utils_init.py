@@ -101,4 +101,4 @@ def ensure_test_data():
         logger.info("Test data created successfully")
 
     except Exception as e:
-        logger.error(f"Failed to create test data: {e}")
+        logger.exception(f"Failed to create test data: {e}")

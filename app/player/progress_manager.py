@@ -106,7 +106,7 @@ class ProgressManager:
 
             return history.id
         except Exception as e:
-            logger.error(f"Failed to start session: {e}")
+            logger.exception(f"Failed to start session: {e}")
             return -1
 
     def update_progress(self, chapter_index: int, position: float):
@@ -139,7 +139,7 @@ class ProgressManager:
             repo.end_session(self._current_session_id, self._current_position, self._current_chapter_index)
             session.close()
         except Exception as e:
-            logger.error(f"Failed to checkpoint history: {e}")
+            logger.exception(f"Failed to checkpoint history: {e}")
 
     def end_session(self):
         """End current reading session"""
@@ -168,7 +168,7 @@ class ProgressManager:
 
             logger.info(f"Session ended: {self._current_session_id}")
         except Exception as e:
-            logger.error(f"Failed to end session: {e}")
+            logger.exception(f"Failed to end session: {e}")
 
     def _cumulative_position(self, chapter_index: int, position: float) -> float:
         """Seconds elapsed across the whole book up to the given chapter/position -
@@ -214,7 +214,7 @@ class ProgressManager:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to save progress: {e}")
+            logger.exception(f"Failed to save progress: {e}")
             return False
 
     def _push_remote(self, book_id: str, chapter_index: int, position: float, finished: bool = False):
@@ -262,7 +262,7 @@ class ProgressManager:
             return (chapter_index, position)
 
         except Exception as e:
-            logger.error(f"Failed to load progress: {e}")
+            logger.exception(f"Failed to load progress: {e}")
             return (0, 0.0)
 
     def _start_auto_save(self):
@@ -292,7 +292,7 @@ class ProgressManager:
 
                 self._checkpoint_history()
             except Exception as e:
-                logger.error(f"Auto-save error: {e}")
+                logger.exception(f"Auto-save error: {e}")
 
             time.sleep(self.save_interval)
 
@@ -305,7 +305,7 @@ class ProgressManager:
             session.close()
             return history
         except Exception as e:
-            logger.error(f"Failed to get reading history: {e}")
+            logger.exception(f"Failed to get reading history: {e}")
             return []
 
     def mark_as_finished(self, audiobook: Audiobook):
@@ -318,7 +318,7 @@ class ProgressManager:
 
             logger.info(f"Marked as finished: {audiobook.title}")
         except Exception as e:
-            logger.error(f"Failed to mark as finished: {e}")
+            logger.exception(f"Failed to mark as finished: {e}")
 
 
 # Global progress manager instance

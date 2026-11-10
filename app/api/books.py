@@ -69,7 +69,7 @@ def get_books():
             })
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Failed to get books: {e}")
+        logger.exception(f"Failed to get books: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>', methods=['GET'])
@@ -121,7 +121,7 @@ def get_book_details(book_id):
             } for b in bookmarks]
         })
     except Exception as e:
-        logger.error(f"Failed to get book details: {e}")
+        logger.exception(f"Failed to get book details: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/finished', methods=['POST'])
@@ -145,7 +145,7 @@ def set_book_finished(book_id):
 
         return jsonify({'status': 'ok', 'is_finished': finished})
     except Exception as e:
-        logger.error(f"Failed to set finished status: {e}")
+        logger.exception(f"Failed to set finished status: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/clean-audio', methods=['POST'])
@@ -164,7 +164,7 @@ def clean_book_audio(book_id):
             return jsonify({'status': 'already_processing'})
         return jsonify({'status': 'processing'})
     except Exception as e:
-        logger.error(f"Failed to start noise reduction: {e}")
+        logger.exception(f"Failed to start noise reduction: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/use-cleaned-audio', methods=['POST'])
@@ -179,7 +179,7 @@ def set_book_use_cleaned_audio(book_id):
         BookRepository(session).set_use_cleaned_audio(book_id, enabled)
         return jsonify({'status': 'ok', 'use_cleaned_audio': enabled})
     except Exception as e:
-        logger.error(f"Failed to set use_cleaned_audio: {e}")
+        logger.exception(f"Failed to set use_cleaned_audio: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>', methods=['PATCH'])
@@ -204,7 +204,7 @@ def update_book(book_id):
 
         return jsonify({'status': 'updated'})
     except Exception as e:
-        logger.error(f"Failed to update book: {e}")
+        logger.exception(f"Failed to update book: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/lock', methods=['POST'])
@@ -226,7 +226,7 @@ def lock_book_fields(book_id):
 
         return jsonify({'status': 'locked', 'fields': fields})
     except Exception as e:
-        logger.error(f"Failed to lock book fields: {e}")
+        logger.exception(f"Failed to lock book fields: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/unlock', methods=['POST'])
@@ -247,7 +247,7 @@ def unlock_book_fields(book_id):
 
         return jsonify({'status': 'unlocked', 'fields': fields})
     except Exception as e:
-        logger.error(f"Failed to unlock book fields: {e}")
+        logger.exception(f"Failed to unlock book fields: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/match-candidates', methods=['GET'])
@@ -274,7 +274,7 @@ def get_book_match_candidates(book_id):
         candidates = online_metadata.search_book_candidates(title, author, limit=12)
         return jsonify(candidates)
     except Exception as e:
-        logger.error(f"Failed to get match candidates: {e}")
+        logger.exception(f"Failed to get match candidates: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/match', methods=['POST'])
@@ -362,7 +362,7 @@ def apply_book_match(book_id):
 
         return jsonify({'status': 'matched', 'applied': applied})
     except Exception as e:
-        logger.error(f"Failed to apply match: {e}")
+        logger.exception(f"Failed to apply match: {e}")
         return internal_error()
 
 @bp.route('/api/books/search', methods=['GET'])
@@ -378,7 +378,7 @@ def search_books():
             'cover_url': public_cover_url(book.id, book.cover)
         } for book in books])
     except Exception as e:
-        logger.error(f"Failed to search books: {e}")
+        logger.exception(f"Failed to search books: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/loudness-gain', methods=['GET'])
@@ -418,5 +418,5 @@ def get_book_loudness_gain(book_id):
         threading.Thread(target=measure_and_cache, daemon=True).start()
         return jsonify({'gain_db': None})
     except Exception as e:
-        logger.error(f"Failed to get loudness gain for {book_id}: {e}")
+        logger.exception(f"Failed to get loudness gain for {book_id}: {e}")
         return internal_error()

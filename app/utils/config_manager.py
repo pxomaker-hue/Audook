@@ -33,7 +33,7 @@ class ConfigManager:
             try:
                 self.config = AppConfig(**data)
             except Exception as e:
-                logger.error(f"Failed to load config: {e}")
+                logger.exception(f"Failed to load config: {e}")
                 self.config = AppConfig()
     
     def _load_playback_state(self):
@@ -44,7 +44,7 @@ class ConfigManager:
             try:
                 self.playback_state = PlaybackState(**data)
             except Exception as e:
-                logger.error(f"Failed to load playback state: {e}")
+                logger.exception(f"Failed to load playback state: {e}")
     
     def _load_bookmarks(self):
         """Load bookmarks"""
@@ -55,7 +55,7 @@ class ConfigManager:
                 for book_id, bookmark_data in data.items():
                     self.bookmarks[book_id] = Bookmark(**bookmark_data)
             except Exception as e:
-                logger.error(f"Failed to load bookmarks: {e}")
+                logger.exception(f"Failed to load bookmarks: {e}")
     
     def save_config(self) -> bool:
         """Save main configuration"""

@@ -61,8 +61,8 @@ def discover_devices() -> List[Dict[str, str]]:
         if browser:
             try:
                 pychromecast.discovery.stop_discovery(browser)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Chromecast discovery stop failed: {e}")
     return devices
 
 
@@ -105,7 +105,7 @@ class CastPlayer:
             finally:
                 pychromecast.discovery.stop_discovery(browser)
         except Exception as e:
-            logger.error(f"Failed to connect to Chromecast '{device_name}': {e}")
+            logger.exception(f"Failed to connect to Chromecast '{device_name}': {e}")
             return False
 
     def disconnect(self):
@@ -168,7 +168,7 @@ class CastPlayer:
             logger.info(f"Casting: {audiobook.title} - {chapter.get('title')} -> {self._device_name}")
             return True
         except Exception as e:
-            logger.error(f"Failed to cast media: {e}")
+            logger.exception(f"Failed to cast media: {e}")
             return False
 
     def _resolve_media_url(self, audio_file: str) -> str:
@@ -201,7 +201,7 @@ class CastPlayer:
             self._cast.media_controller.pause()
             return True
         except Exception as e:
-            logger.error(f"Failed to pause cast: {e}")
+            logger.exception(f"Failed to pause cast: {e}")
             return False
 
     def resume(self) -> bool:
@@ -211,7 +211,7 @@ class CastPlayer:
             self._cast.media_controller.play()
             return True
         except Exception as e:
-            logger.error(f"Failed to resume cast: {e}")
+            logger.exception(f"Failed to resume cast: {e}")
             return False
 
     def stop(self) -> bool:
@@ -223,7 +223,7 @@ class CastPlayer:
             self._current_chapter = None
             return True
         except Exception as e:
-            logger.error(f"Failed to stop cast: {e}")
+            logger.exception(f"Failed to stop cast: {e}")
             return False
 
     def seek(self, position: float) -> bool:
@@ -234,7 +234,7 @@ class CastPlayer:
             self._position = position
             return True
         except Exception as e:
-            logger.error(f"Failed to seek cast: {e}")
+            logger.exception(f"Failed to seek cast: {e}")
             return False
 
     def seek_relative(self, seconds: float) -> bool:
@@ -248,7 +248,7 @@ class CastPlayer:
             self._cast.set_volume(max(0.0, min(1.0, volume / 100.0)))
             return True
         except Exception as e:
-            logger.error(f"Failed to set cast volume: {e}")
+            logger.exception(f"Failed to set cast volume: {e}")
             return False
 
     # No Chromecast equivalent - VLC-only audio processing.
@@ -342,16 +342,16 @@ class CastPlayer:
                             try:
                                 self._on_position_change(self._position)
                             except Exception as e:
-                                logger.error(f"Cast position callback error: {e}")
+                                logger.exception(f"Cast position callback error: {e}")
                     elif status and status.player_is_idle and status.idle_reason == "FINISHED" and not self._ended_notified:
                         self._ended_notified = True
                         if self._on_playback_end:
                             try:
                                 self._on_playback_end()
                             except Exception as e:
-                                logger.error(f"Cast playback end callback error: {e}")
+                                logger.exception(f"Cast playback end callback error: {e}")
             except Exception as e:
-                logger.error(f"Error updating cast position: {e}")
+                logger.exception(f"Error updating cast position: {e}")
 
             time.sleep(1.0)
 

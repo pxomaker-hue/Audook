@@ -29,13 +29,13 @@ const TitleBar: React.FC = () => {
         <span className="title-bar-title">Audook</span>
       </div>
       <div className="title-bar-side title-bar-controls">
-        <button onClick={() => window.electron!.minimizeWindow()} title="Réduire">
+        <button onClick={() => window.electron!.minimizeWindow()} title="Réduire" aria-label="Réduire">
           <Minus size={15} />
         </button>
-        <button onClick={() => window.electron!.toggleMaximizeWindow()} title={isMaximized ? 'Restaurer' : 'Agrandir'}>
+        <button onClick={() => window.electron!.toggleMaximizeWindow()} title={isMaximized ? 'Restaurer' : 'Agrandir'} aria-label={isMaximized ? 'Restaurer' : 'Agrandir'}>
           {isMaximized ? <Copy size={13} /> : <Square size={13} />}
         </button>
-        <button className="title-bar-close" onClick={() => window.electron!.closeWindow()} title="Fermer">
+        <button className="title-bar-close" onClick={() => window.electron!.closeWindow()} title="Fermer" aria-label="Fermer">
           <X size={16} />
         </button>
       </div>

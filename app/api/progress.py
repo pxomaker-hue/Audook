@@ -54,7 +54,7 @@ def update_book_progress(book_id):
 
         return jsonify({'status': 'ok', 'percentage': percent, 'is_finished': finished})
     except Exception as e:
-        logger.error(f"Failed to update book progress: {e}")
+        logger.exception(f"Failed to update book progress: {e}")
         return internal_error()
 
 @bp.route('/api/books/<book_id>/progress', methods=['DELETE'])
@@ -81,7 +81,7 @@ def delete_book_progress(book_id):
 
         return jsonify({'status': 'reset'})
     except Exception as e:
-        logger.error(f"Failed to reset book progress: {e}")
+        logger.exception(f"Failed to reset book progress: {e}")
         return internal_error()
 
 @bp.route('/api/progress', methods=['DELETE'])
@@ -92,7 +92,7 @@ def clear_all_progress():
         count = ReadingProgressRepository(session).delete_all()
         return jsonify({'status': 'cleared', 'deleted': count})
     except Exception as e:
-        logger.error(f"Failed to clear progress: {e}")
+        logger.exception(f"Failed to clear progress: {e}")
         return internal_error()
 
 @bp.route('/api/progress/dismissed-flags', methods=['DELETE'])
@@ -116,5 +116,5 @@ def clear_all_dismissed_flags():
         session.commit()
         return jsonify({'status': 'cleared', 'books_affected': cleared})
     except Exception as e:
-        logger.error(f"Failed to clear dismissed flags: {e}")
+        logger.exception(f"Failed to clear dismissed flags: {e}")
         return internal_error()
