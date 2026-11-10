@@ -8,3 +8,4 @@ requests==2.33.0
 mutagen==1.48.1
 pychromecast==14.0.10
 waitress==3.0.2
+cryptography==50.0.1

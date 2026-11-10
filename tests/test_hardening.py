@@ -60,3 +60,26 @@ def test_author_photo_token_is_hidden_behind_proxy(client, seed_book):
     body = client.get(f"/api/books/{book_id}").get_data(as_text=True)
     assert "SECRET" not in body
     assert f"/api/books/{book_id}/author-photo-proxy" in body
+
+
+def test_server_credentials_are_encrypted_at_rest(db):
+    from sqlalchemy import text
+    from app.database import ServerRepository
+    session = get_session()
+    ServerRepository(session).create("s9", "plex", "P", "http://p:32400", api_key="PLEXTOKEN", password="hunter2")
+    session.close()
+    with db.engine.connect() as conn:
+        raw = conn.execute(text("SELECT api_key, password FROM servers WHERE id='s9'")).fetchone()
+    assert "PLEXTOKEN" not in raw[0] and "hunter2" not in raw[1]
+    server = ServerRepository(get_session()).get_by_id("s9")
+    assert (server.api_key, server.password) == ("PLEXTOKEN", "hunter2")
+
+
+def test_legacy_plaintext_credentials_are_migrated(db):
+    from sqlalchemy import text
+    with db.engine.connect() as conn:
+        conn.execute(text("INSERT INTO servers (id, type, name, url, api_key) VALUES ('old','plex','O','http://o','LEGACY')"))
+        conn.commit()
+    db._run_lightweight_migrations()
+    with db.engine.connect() as conn:
+        assert "LEGACY" not in conn.execute(text("SELECT api_key FROM servers WHERE id='old'")).scalar()

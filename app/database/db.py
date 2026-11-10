@@ -9,6 +9,7 @@ from contextlib import contextmanager
 import logging
 
 from app.database.models import Base
+from app.utils import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,13 @@ class Database:
                 if "hidden" not in columns:
                     conn.execute(text("ALTER TABLE servers ADD COLUMN hidden BOOLEAN DEFAULT 0"))
                     logger.info("Migrated: added servers.hidden")
+                # Encrypt credentials stored in plaintext by older versions.
+                for row in conn.execute(text("SELECT id, api_key, password FROM servers")).fetchall():
+                    for col, value in (("api_key", row[1]), ("password", row[2])):
+                        if value and not value.startswith(secrets.PREFIX):
+                            conn.execute(text(f"UPDATE servers SET {col} = :v WHERE id = :i"),
+                                         {"v": secrets.encrypt(value), "i": row[0]})
+                            logger.info(f"Migrated: encrypted servers.{col} for {row[0]}")
                 conn.commit()
         except Exception as e:
             logger.error(f"Lightweight migration failed: {e}")

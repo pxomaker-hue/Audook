@@ -7,8 +7,24 @@ from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, DateTime, Boolean, ForeignKey, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
+
+from app.utils import secrets
 
 Base = declarative_base()
+
+
+class EncryptedString(TypeDecorator):
+    """String column stored encrypted (see app/utils/secrets.py); legacy
+    plaintext values still read fine and are encrypted on the next write."""
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return secrets.encrypt(value)
+
+    def process_result_value(self, value, dialect):
+        return secrets.decrypt(value)
 
 
 class Server(Base):
@@ -19,9 +35,9 @@ class Server(Base):
     type = Column(String(20), nullable=False)  # "plex" or "audiobookshelf"
     name = Column(String(255), nullable=False)
     url = Column(String(500), nullable=False)
-    api_key = Column(String(255), nullable=True)
+    api_key = Column(EncryptedString(1024), nullable=True)
     username = Column(String(255), nullable=True)
-    password = Column(String(255), nullable=True)
+    password = Column(EncryptedString(1024), nullable=True)
 
     # Audiobookshelf only: an optional second (remote-reachable) address,
     # manually toggled between local/remote via use_remote - see

@@ -135,6 +135,8 @@ Par défaut l'API du NAS est ouverte à tout le réseau local. Pour la protéger
 2. Mettez-le dans un fichier `.env` à côté de `docker-compose.yml` : `AUDOOK_API_TOKEN=votre-jeton` (ou remplacez la valeur dans le compose), puis redéployez
 
 > Le conteneur **refuse désormais de démarrer sans `AUDOOK_API_TOKEN`** (sauf `AUDOOK_ALLOW_NO_AUTH=1`), et les dossiers locaux doivent être sous `AUDOOK_LIBRARY_ROOT` (`/audiobooks` par défaut).
+>
+> Les identifiants des serveurs (jeton Plex, mot de passe Audiobookshelf) sont chiffrés en base. La clé est `secret.key` à côté de la base, ou `AUDOOK_SECRET_KEY` (clé Fernet) : sur un NAS, préférez cette variable pour ne pas garder la clé sur le même volume. Ne la perdez pas, sinon il faudra ressaisir les serveurs.
 3. Dans l'app, saisissez le même jeton dans l'écran de connexion (il s'affiche tout seul avec « Accès refusé ») ou dans Paramètres > Connexion au backend > Jeton d'accès
 
 Toutes les requêtes doivent alors porter `Authorization: Bearer <jeton>` (ou l'en-tête `X-Audook-Token`). Seul `/health` reste public (sonde de vie, sans donnée). Le flux audio `/api/cast/local-audio` accepte aussi `?token=` car ExoPlayer et les Chromecast ne peuvent pas envoyer d'en-têtes ; le jeton est masqué dans les logs. L'app Windows locale n'en a pas besoin (le backend n'écoute que sur 127.0.0.1) : ne définissez pas la variable côté desktop. Sans HTTPS, le jeton circule en clair sur le réseau local : il protège contre les accès non voulus, pas contre quelqu'un qui écoute le réseau (voir la section VPN ci-dessous pour l'accès distant).
