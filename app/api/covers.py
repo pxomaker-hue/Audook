@@ -31,17 +31,39 @@ def get_cover_proxy(book_id):
     finally:
         session.close()
 
+    return _fetch_image(cover_url, f"cover for {book_id}")
+
+
+@bp.route('/api/books/<book_id>/author-photo-proxy', methods=['GET'])
+def get_author_photo_proxy(book_id):
+    """Same as cover-proxy for the author photo stored in the book metadata
+    (Audiobookshelf photo URLs embed the server token)."""
+    session = get_session()
+    try:
+        book = BookRepository(session).get_by_id(book_id)
+        photo = (book.extra_metadata or {}).get('author_photo') if book else None
+    except Exception as e:
+        logger.error(f"Failed to read author photo for {book_id}: {e}")
+        return internal_error()
+    finally:
+        session.close()
+    if not photo:
+        return jsonify({'error': 'Photo not found'}), 404
+    return _fetch_image(photo, f"author photo for {book_id}")
+
+
+def _fetch_image(url, what):
     try:
         from urllib.parse import urlparse
         servers_by_host, _ = configured_sources()
-        host = urlparse(cover_url).netloc.lower()
+        host = urlparse(url).netloc.lower()
         server = servers_by_host.get(host)
-        if server is None and (urlparse(cover_url).scheme not in ('http', 'https')
+        if server is None and (urlparse(url).scheme not in ('http', 'https')
                                or not is_public_address(host)):
             return jsonify({'error': 'Cover not found'}), 404
         if server is not None:
-            cover_url = with_server_token(cover_url, server)
-        upstream = requests.get(cover_url, timeout=10, stream=True, allow_redirects=False)
+            url = with_server_token(url, server)
+        upstream = requests.get(url, timeout=10, stream=True, allow_redirects=False)
         try:
             content_type = upstream.headers.get('Content-Type', '')
             if upstream.status_code != 200 or not content_type.startswith('image/'):
@@ -55,8 +77,9 @@ def get_cover_proxy(book_id):
             upstream.close()
         return Response(data, content_type=content_type)
     except Exception as e:
-        logger.error(f"Failed to proxy cover for {book_id}: {e}")
+        logger.error(f"Failed to proxy {what}: {e}")
         return internal_error()
+
 
 @bp.route('/api/local-cover/<book_id>', methods=['GET'])
 def get_local_cover(book_id):

@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from app.api.context import services
 from app.api.errors import internal_error
-from app.api.sources import public_cover_url, redact_chapters
+from app.api.sources import public_cover_url, public_photo_url, redact_chapters
 from app.api.helpers import format_chapter_title
 from app.database import BookRepository, BookmarkRepository, ReadingProgressRepository, ServerRepository, get_session
 from app.database.models import Book as DbBook
@@ -65,7 +65,7 @@ def get_books():
                 'is_finished': book.id in finished_ids,
                 'has_bookmark': book.id in bookmarked_ids,
                 'author_bio': book.metadata.get('author_bio'),
-                'author_photo': book.metadata.get('author_photo')
+                'author_photo': public_photo_url(book.id, book.metadata.get('author_photo'))
             })
         return jsonify(result)
     except Exception as e:
@@ -102,7 +102,7 @@ def get_book_details(book_id):
             'series_sequence': book.metadata.get('series_sequence'),
             'genre': book.metadata.get('genre') or [],
             'author_bio': book.metadata.get('author_bio'),
-            'author_photo': book.metadata.get('author_photo'),
+            'author_photo': public_photo_url(book.id, book.metadata.get('author_photo')),
             'manual_overrides': book.metadata.get('manual_overrides', []),
             'progress': {
                 'position': progress.position_seconds,

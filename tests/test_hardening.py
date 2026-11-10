@@ -48,3 +48,15 @@ def test_player_rejects_invalid_numbers(client):
     assert client.post("/api/player/seek", json={}).status_code == 400
     assert client.post("/api/player/play", data="not json").status_code == 400
     assert client.post("/api/player/volume", json={"volume": 50}).status_code == 200
+
+
+def test_author_photo_token_is_hidden_behind_proxy(client, seed_book):
+    book_id = seed_book()
+    session = get_session()
+    from app.database.models import Book
+    book = session.query(Book).filter_by(id=book_id).first()
+    book.extra_metadata = {"author_photo": "http://nas/api/authors/1/image?token=SECRET"}
+    session.commit()
+    body = client.get(f"/api/books/{book_id}").get_data(as_text=True)
+    assert "SECRET" not in body
+    assert f"/api/books/{book_id}/author-photo-proxy" in body

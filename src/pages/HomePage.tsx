@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Play, RefreshCw, User, X, Bookmark, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
+import AuthorPhoto from '../components/AuthorPhoto';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getApiBase } from '../config';
 import CoverImage from '../components/CoverImage';
@@ -512,7 +513,7 @@ const HomePage: React.FC = () => {
                       className="author-avatar"
                       style={{ backgroundColor: photo ? undefined : AVATAR_COLORS[i % AVATAR_COLORS.length] }}
                     >
-                      {photo ? <img src={photo} alt={author} /> : (initials(author) || '?')}
+                      {photo ? <AuthorPhoto src={photo} alt={author} /> : (initials(author) || '?')}
                     </div>
                     <div className="author-name">{author}</div>
                     <div className="author-count">{count}</div>

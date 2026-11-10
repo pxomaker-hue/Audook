@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play, User, Pencil, RefreshCw, Bookmark, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
+import AuthorPhoto from '../components/AuthorPhoto';
 import { getApiBase } from '../config';
 import CoverImage from '../components/CoverImage';
 import { isCapacitorPlatform } from '../native/platform';
@@ -181,7 +182,7 @@ const AuthorPage: React.FC = () => {
           }}
         >
           {photo ? (
-            <img src={photo} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <AuthorPhoto src={photo} alt={authorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
             <User size={36} color="var(--text-tertiary)" />
           )}

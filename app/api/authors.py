@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.api.errors import internal_error
+from app.api.sources import strip_secret_params
 from app.database import BookRepository, get_session
 from app.utils import logger, online_metadata
 
@@ -19,7 +20,9 @@ def update_author(name):
         fields = {}
         if 'bio' in data:
             fields['author_bio'] = data['bio']
-        if 'photo' in data:
+        # The photo shown to clients may be this backend's own proxy URL
+        # (token hidden): saving it back unchanged must not replace the real one.
+        if 'photo' in data and '/author-photo-proxy' not in (data['photo'] or ''):
             fields['author_photo'] = data['photo']
         if not fields:
             return jsonify({'error': 'Aucun champ valide à mettre à jour'}), 400
@@ -63,7 +66,7 @@ def refresh_author(name):
         for book in books:
             book_repo.update_fields(book.id, fields, lock=True)
 
-        return jsonify({'status': 'updated', 'bio': info.get('bio'), 'photo': info.get('photo')})
+        return jsonify({'status': 'updated', 'bio': info.get('bio'), 'photo': strip_secret_params(info.get('photo'))})
     except Exception as e:
         logger.error(f"Failed to refresh author: {e}")
         return internal_error()

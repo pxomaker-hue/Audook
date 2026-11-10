@@ -104,3 +104,10 @@ def public_cover_url(book_id, url):
         from flask import request
         return f"{request.host_url.rstrip('/')}/api/books/{book_id}/cover-proxy"
     return url
+
+
+def public_photo_url(book_id, url):
+    if has_secret_param(url):
+        from flask import request
+        return f"{request.host_url.rstrip('/')}/api/books/{book_id}/author-photo-proxy"
+    return url
