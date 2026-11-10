@@ -4,4 +4,4 @@ Empty until the release key is generated: run `python scripts/release_update.py 
 (it writes the key pair's public half here). While empty, update checks report
 "not configured" and nothing is ever downloaded or installed."""
 
-UPDATE_PUBLIC_KEY = ""
+UPDATE_PUBLIC_KEY = "mvhSvpc8ojB0J+dOYtcp3SkOOerCdxUxPV4G9QU0J60="
