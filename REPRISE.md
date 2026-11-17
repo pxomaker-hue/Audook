@@ -13,8 +13,10 @@ la clé de signature des mises à jour. Écrit le 2026-11-17.
 - Sur le PC « principal », une 1.0.4 **corrigée** a été compilée et installée à la main
   (même numéro de version, donc pas passée par le système de mises à jour). L'appli
   fonctionne de nouveau.
-- Le dépôt est **toujours en 1.0.4** (`package.json`, `app/__init__.py`). Le passage en
-  **1.0.5** est à faire sur l'autre PC, car seul lui a la clé de signature du manifeste.
+- **Mise à jour du 2026-11-17 au soir** : le dépôt est passé en **1.0.5** sur l'autre PC, et
+  la 1.0.5 signée (installeur, APK, `latest.json` + `.sig`) y a été construite. Une copie de
+  `release-signing.key` est maintenant rangée avec les clés Android, dans
+  `Z:\Dev - Applications\Installations\key\audook\` (le même partage que `W:` ci-dessous).
 - `build-release.ps1` a maintenant deux garde-fous : il vérifie que les modules Python
   nécessaires sont installés avant de compiler, et il démarre le backend compilé pour
   vérifier que `/health` répond. Le build s'arrête sinon.
