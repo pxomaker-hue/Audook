@@ -54,6 +54,16 @@ if (-not $SkipWindows) {
     if (-not $hasPyInstaller) {
         throw "PyInstaller n'est pas installe pour ce Python : lance  `"$pyExe`" -m pip install pyinstaller -r requirements.txt"
     }
+
+    # PyInstaller n'embarque que ce qui est installe dans CE Python : un module
+    # absent donne un .exe qui plante au demarrage (ex. 'cryptography'), sans
+    # aucune erreur pendant le build. On verifie donc avant de compiler.
+    $ErrorActionPreference = 'Continue'
+    $missing = & $pyExe @pyArgs -c "import importlib.util as u; mods = ['flask', 'flask_cors', 'sqlalchemy', 'requests', 'pydantic', 'plexapi', 'mutagen', 'pychromecast', 'waitress', 'cryptography']; print(' '.join(m for m in mods if u.find_spec(m) is None))" 2>$null
+    $ErrorActionPreference = 'Stop'
+    if ($missing) {
+        throw "Modules Python manquants pour ce Python : $missing  -> lance  `"$pyExe`" -m pip install -r requirements.txt"
+    }
 }
 if (-not (Test-Path (Join-Path $root 'node_modules'))) {
     Step 'npm install'
@@ -114,8 +124,42 @@ if (-not $SkipWindows) {
         "--add-data=$root\assets;assets" `
         --hidden-import=flask --hidden-import=flask_cors --hidden-import=sqlalchemy --hidden-import=sqlalchemy.orm `
         --hidden-import=vlc --hidden-import=requests --hidden-import=pydantic --hidden-import=pydantic_core `
-        --collect-submodules=pychromecast --collect-submodules=zeroconf --collect-submodules=casttube
+        --collect-submodules=app.api --collect-submodules=pychromecast --collect-submodules=zeroconf --collect-submodules=casttube
     Check 'PyInstaller'
+
+    # Test de demarrage : lance l'exe fraichement compile (port et dossier
+    # utilisateur temporaires, pour ne pas toucher a la vraie base) et attend
+    # que /health reponde. Un module manquant ou un import casse le fait
+    # echouer ici, au lieu d'etre decouvert apres installation.
+    Step 'Test de demarrage du backend compile'
+    $backendExe = Join-Path $root 'dist\audook_backend\audook_backend.exe'
+    $smokePort = 5057
+    $smokeHome = Join-Path $env:TEMP 'audook-smoke-home'
+    New-Item -ItemType Directory -Force $smokeHome | Out-Null
+    $env:AUDOOK_PORT = "$smokePort"
+    $savedProfile = @{ USERPROFILE = $env:USERPROFILE; HOME = $env:HOME }
+    $env:USERPROFILE = $smokeHome; $env:HOME = $smokeHome
+    $smokeProc = Start-Process -FilePath $backendExe -PassThru -WindowStyle Hidden
+    $env:USERPROFILE = $savedProfile.USERPROFILE; $env:HOME = $savedProfile.HOME
+    Remove-Item Env:\AUDOOK_PORT -ErrorAction SilentlyContinue
+    $healthy = $false
+    try {
+        foreach ($i in 1..40) {
+            Start-Sleep -Milliseconds 750
+            if ($smokeProc.HasExited) { break }
+            try {
+                $r = Invoke-WebRequest "http://127.0.0.1:$smokePort/health" -UseBasicParsing -TimeoutSec 2
+                if ($r.StatusCode -eq 200) { $healthy = $true; break }
+            } catch { }
+        }
+    } finally {
+        if (-not $smokeProc.HasExited) { & taskkill /PID $smokeProc.Id /T /F | Out-Null }
+        Remove-Item $smokeHome -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $healthy) {
+        throw "Le backend compile ne demarre pas (pas de reponse sur /health). Lance dist\audook_backend\audook_backend.exe dans un terminal pour voir l'erreur."
+    }
+    Write-Host 'Backend compile : /health repond.'
 }
 
 # --- Frontend React (une seule fois pour les deux cibles) --------------------
